@@ -1,0 +1,108 @@
+import { RefreshCw } from 'lucide-react';
+
+export type ActiveTab = 'slate' | 'acca' | 'saved' | 'sources';
+
+interface TopBarProps {
+  activeTab: ActiveTab;
+  onSelectTab: (tab: ActiveTab) => void;
+  onRefresh: () => void;
+  isLoading: boolean;
+  savedCount: number;
+}
+
+export function TopBar({
+  activeTab,
+  onSelectTab,
+  onRefresh,
+  isLoading,
+  savedCount,
+}: TopBarProps) {
+  const navItems: { id: ActiveTab; label: string }[] = [
+    { id: 'slate', label: 'Matchday Slate' },
+    { id: 'acca', label: 'Curated Acca' },
+    {
+      id: 'saved',
+      label: savedCount > 0 ? `Saved Slips (${savedCount})` : 'Saved Slips',
+    },
+    { id: 'sources', label: 'Sources' },
+  ];
+
+  return (
+    <header className="bg-white border-b border-slate-200">
+      <div className="max-w-[1380px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-8">
+        {/* Zone 1: Single text element wordmark */}
+        <button
+          type="button"
+          onClick={() => onSelectTab('slate')}
+          className="text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
+        >
+          MatchSlip
+        </button>
+
+        {/* Zone 2: Clean single-line text navigation links */}
+        <nav
+          aria-label="Primary navigation"
+          className="hidden md:flex items-center gap-6 text-sm font-medium"
+        >
+          {navItems.map((item) => {
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onSelectTab(item.id)}
+                className={`py-5 border-b-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${
+                  isActive
+                    ? 'border-emerald-700 text-slate-900 font-semibold'
+                    : 'border-transparent text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Zone 3: 1 primary action */}
+        <div className="flex items-center shrink-0">
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={isLoading}
+            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-emerald-700 rounded-lg hover:bg-emerald-800 disabled:opacity-60 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
+          >
+            <RefreshCw
+              className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`}
+              aria-hidden="true"
+            />
+            <span>{isLoading ? 'Loading Slate' : 'Refresh Slate'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile navigation strip */}
+      <nav
+        aria-label="Mobile navigation"
+        className="flex md:hidden items-center gap-4 px-4 pb-2.5 overflow-x-auto text-xs font-medium border-t border-slate-100"
+      >
+        {navItems.map((item) => {
+          const isActive = activeTab === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onSelectTab(item.id)}
+              className={`pt-2 pb-1 border-b-2 transition-colors whitespace-nowrap shrink-0 ${
+                isActive
+                  ? 'border-emerald-700 text-slate-900 font-semibold'
+                  : 'border-transparent text-slate-600'
+              }`}
+            >
+              {item.label}
+            </button>
+          );
+        })}
+      </nav>
+    </header>
+  );
+}
