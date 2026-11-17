@@ -1,6 +1,6 @@
 {
   "name": "MatchSlip",
-  "description": "Today's football fixture board and 5.00+ odds accumulator ticket builder grounded in live match schedules.",
+  "description": "Today's football fixture board and 5.00+ odds accumulator ticket builder grounded in live match schedules and bookmaker prices.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }

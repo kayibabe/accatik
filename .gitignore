@@ -2,6 +2,8 @@ node_modules/
 build/
 dist/
 coverage/
+# Runtime slate archive: generated per matchday, never source.
+data/
 .DS_Store
 *.log
 .env*

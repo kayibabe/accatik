@@ -9,11 +9,16 @@ import {
   formatTicketForCopy,
   getFixtureMatchResultSummary,
 } from '../utils/accaMath.ts';
+import {
+  resolveFixturePool,
+  type FixtureSnapshots,
+} from '../utils/fixtureSnapshots.ts';
 import { SettlementLabel } from './SettlementLabel.tsx';
 
 interface SavedSlipsViewProps {
   savedTickets: SavedTicket[];
   fixtures: Fixture[];
+  fixtureSnapshots: FixtureSnapshots;
   onLoadTicket: (ticket: SavedTicket) => void;
   onDeleteTicket: (ticketId: string) => void;
   onGoToSlate: () => void;
@@ -22,17 +27,18 @@ interface SavedSlipsViewProps {
 export function SavedSlipsView({
   savedTickets,
   fixtures,
+  fixtureSnapshots,
   onLoadTicket,
   onDeleteTicket,
   onGoToSlate,
 }: SavedSlipsViewProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const fixtureMap = new Map(fixtures.map((f) => [f.id, f]));
 
   const handleCopy = async (ticket: SavedTicket) => {
     try {
+      const pool = resolveFixturePool(ticket, fixtureSnapshots, fixtures);
       await navigator.clipboard.writeText(
-        formatTicketForCopy(ticket.legs, ticket.stake, ticket.date, fixtures)
+        formatTicketForCopy(ticket.legs, ticket.stake, ticket.date, pool)
       );
       setCopiedId(ticket.id);
       setTimeout(() => setCopiedId(null), 2000);
@@ -80,13 +86,15 @@ export function SavedSlipsView({
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-200">
           {savedTickets.map((ticket) => {
+            const pool = resolveFixturePool(ticket, fixtureSnapshots, fixtures);
+            const fixtureMap = new Map(pool.map((f) => [f.id, f]));
             const estReturn = calculatePotentialReturn(
               ticket.stake,
               ticket.totalOdds
             );
             const settlement = evaluateTicketSettlement(
               ticket.legs,
-              fixtures,
+              pool,
               ticket.stake
             );
             return (
@@ -205,8 +213,18 @@ export function SavedSlipsView({
                           </span>
                           <div className="flex items-center gap-2 shrink-0">
                             {matched && <SettlementLabel status={legStatus} />}
-                            <span className="font-mono font-bold text-slate-900 tabular-nums">
-                              {leg.odds.toFixed(2)}
+                            <span className="text-right leading-tight">
+                              <span className="block font-mono font-bold text-slate-900 tabular-nums">
+                                {leg.odds.toFixed(2)}
+                              </span>
+                              {typeof leg.fairProbability === 'number' && (
+                                <span
+                                  className="block text-[10px] font-mono text-slate-400 tabular-nums"
+                                  title="Margin-adjusted win probability"
+                                >
+                                  {leg.fairProbability.toFixed(1)}%
+                                </span>
+                              )}
                             </span>
                           </div>
                         </div>

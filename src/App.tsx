@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import { TopBar, type ActiveTab } from './components/TopBar.tsx';
 import { DateNavigator } from './components/DateNavigator.tsx';
@@ -20,8 +20,15 @@ import type {
 import {
   buildLegsFromRefs,
   calculateTotalOdds,
-  completeAccaToTargetOdds,
 } from './utils/accaMath.ts';
+import { completeAccaToTargetOdds } from './utils/accaEngine.ts';
+import { describeStrategy } from './utils/strategy.ts';
+import {
+  loadFixtureSnapshots,
+  persistFixtureSnapshots,
+  withSnapshot,
+  type FixtureSnapshots,
+} from './utils/fixtureSnapshots.ts';
 
 const SAVED_STORAGE_KEY = 'matchslip_saved_tickets_v1';
 
@@ -55,6 +62,7 @@ export default function App() {
     {}
   );
   const [extraSources, setExtraSources] = useState<GroundingSource[]>([]);
+  const requestIdRef = useRef(0);
 
   const [savedTickets, setSavedTickets] = useState<SavedTicket[]>(() => {
     try {
@@ -66,6 +74,24 @@ export default function App() {
       return [];
     }
   });
+
+  const [fixtureSnapshots, setFixtureSnapshots] = useState<FixtureSnapshots>(() =>
+    loadFixtureSnapshots()
+  );
+
+  // Saved slips must keep their matchday even after the retention window.
+  const savedTicketDatesRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    savedTicketDatesRef.current = new Set(
+      savedTickets
+        .map((ticket) => ticket.dateIso)
+        .filter((date): date is string => Boolean(date))
+    );
+  }, [savedTickets]);
+
+  useEffect(() => {
+    persistFixtureSnapshots(fixtureSnapshots, savedTicketDatesRef.current);
+  }, [fixtureSnapshots]);
 
   useEffect(() => {
     try {
@@ -82,6 +108,8 @@ export default function App() {
       targetMinOdds: number,
       forceRefresh = false
     ) => {
+      // Ignore responses that land after a newer request (rapid date switching).
+      const requestId = ++requestIdRef.current;
       setIsLoading(true);
       setErrorMessage(null);
       try {
@@ -97,12 +125,21 @@ export default function App() {
         });
 
         const data = await res.json();
+        if (requestId !== requestIdRef.current) return;
         if (!res.ok) {
           throw new Error(data?.error || 'Failed to load fixtures.');
         }
 
         const typed = data as DailySlateResponse;
         setSlate(typed);
+        setFixtureSnapshots((prev) =>
+          withSnapshot(
+            prev,
+            typed.date,
+            typed.fixtures,
+            savedTicketDatesRef.current
+          )
+        );
 
         const initialLegs = buildLegsFromRefs(
           typed.fixtures,
@@ -116,13 +153,15 @@ export default function App() {
         );
         setSelectedLegs(guaranteedLegs);
       } catch (err) {
-        setErrorMessage(
-          err instanceof Error
-            ? err.message
-            : 'Unable to retrieve the football schedule for this date.'
-        );
+        if (requestId === requestIdRef.current) {
+          setErrorMessage(
+            err instanceof Error
+              ? err.message
+              : 'Unable to retrieve the football schedule for this date.'
+          );
+        }
       } finally {
-        setIsLoading(false);
+        if (requestId === requestIdRef.current) setIsLoading(false);
       }
     },
     []
@@ -185,6 +224,7 @@ export default function App() {
         marketType: market.marketType,
         odds: market.odds,
         impliedProbability: market.impliedProbability,
+        fairProbability: market.fairProbability,
         rationale: market.rationale,
         locked: existing?.locked ?? false,
       };
@@ -252,6 +292,7 @@ export default function App() {
       name: `${selectedLegs.length}-Leg ${strategy.charAt(0).toUpperCase() + strategy.slice(1)} Acca (${totalOdds.toFixed(2)} Odds)`,
       createdAt: new Date().toISOString(),
       date: slate?.displayDate || getClientLocalIsoDate(),
+      dateIso: slate?.date,
       stake: ticketStake,
       totalOdds,
       legs: selectedLegs,
@@ -320,6 +361,10 @@ export default function App() {
       (es) => !(slate?.sources ?? []).some((s) => s.uri === es.uri)
     ),
   ];
+
+  // Derived from current state, never from the last server payload, so the
+  // Curated Acca heading always matches the strategy actually applied to the legs.
+  const strategyCopy = describeStrategy(strategy, minOdds);
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
@@ -455,8 +500,11 @@ export default function App() {
                     displayDate={slate.displayDate}
                     timezoneLabel={slate.timezoneLabel}
                     dataProvider={slate.dataProvider || 'API-Football Pro'}
+                    slateSource={slate.slateSource}
+                    capturedAt={slate.capturedAt}
                     isFetchingDate={isLoading}
                     selectedLegs={selectedLegs}
+                    strategy={strategy}
                     onToggleMarket={handleToggleMarket}
                     deepAnalyses={deepAnalyses}
                     analyzingIds={analyzingIds}
@@ -489,8 +537,8 @@ export default function App() {
 
             {activeTab === 'acca' && (
               <CuratedAccaView
-                strategyName={slate.strategyName}
-                strategySummary={slate.strategySummary}
+                strategyName={strategyCopy.title}
+                strategySummary={strategyCopy.summary}
                 selectedDate={selectedDate}
                 displayDate={slate.displayDate}
                 isFetchingDate={isLoading}
@@ -508,6 +556,7 @@ export default function App() {
               <SavedSlipsView
                 savedTickets={savedTickets}
                 fixtures={slate.fixtures}
+                fixtureSnapshots={fixtureSnapshots}
                 onLoadTicket={handleLoadTicket}
                 onDeleteTicket={handleDeleteTicket}
                 onGoToSlate={() => setActiveTab('slate')}
@@ -529,7 +578,10 @@ export default function App() {
       <footer className="border-t border-slate-200 bg-white mt-12">
         <div className="max-w-[1380px] mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
           <span>MatchSlip · Grounded Daily Football Accumulator Workbench</span>
-          <span>Odds and match schedules should be verified with your sportsbook prior to placement.</span>
+          <span>
+            18+ only · Bet responsibly · Odds and match schedules should be
+            verified with your sportsbook prior to placement.
+          </span>
         </div>
       </footer>
     </div>

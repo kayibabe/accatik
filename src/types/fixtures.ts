@@ -5,7 +5,12 @@ export type MarketType =
   | 'BTTS'
   | 'Draw No Bet';
 
-export type AccaStrategy = 'balanced' | 'favorites' | 'goals' | 'high-yield';
+export type AccaStrategy =
+  | 'balanced'
+  | 'favorites'
+  | 'goals'
+  | 'high-yield'
+  | 'probability';
 
 export type SettlementStatus = 'Win' | 'Lost' | 'Void' | 'Live' | 'Pending';
 
@@ -14,8 +19,20 @@ export interface MarketOption {
   marketType: MarketType;
   label: string;
   odds: number;
+  /** Raw 1/odds percentage, still carrying the bookmaker's margin. */
   impliedProbability: number;
+  /** Margin-adjusted probability (percent) used for ranking picks. */
+  fairProbability?: number;
   rationale: string;
+  /** Bookmaker that actually published this price (may differ from the fixture's primary book). */
+  bookmaker?: string;
+}
+
+/** API-Football's own 1X2 model, in percent. Independent of the bookmaker book. */
+export interface ModelProbabilities {
+  home: number | null;
+  draw: number | null;
+  away: number | null;
 }
 
 export interface Fixture {
@@ -46,6 +63,12 @@ export interface Fixture {
   bookmakerName?: string;
   hasLiveOdds: boolean;
   markets: MarketOption[];
+  /** API-Football model's one-line pick, when the provider returned one. */
+  modelAdvice?: string;
+  /** API-Football model 1X2 percentages. Shown beside the de-vigged book, never merged into it. */
+  modelProbabilities?: ModelProbabilities;
+  /** ISO timestamp when these prices were captured into the permanent archive. */
+  pricedAt?: string;
 }
 
 export interface AccaLeg {
@@ -60,7 +83,10 @@ export interface AccaLeg {
   marketType: MarketType;
   odds: number;
   impliedProbability: number;
+  /** Margin-adjusted probability (percent) this leg was picked on. */
+  fairProbability?: number;
   rationale: string;
+  bookmaker?: string;
   locked?: boolean;
 }
 
@@ -87,6 +113,10 @@ export interface DailySlateResponse {
   recommendedLegIds: RecommendedPickRef[];
   sources: GroundingSource[];
   cachedAt: string;
+  /** `archive` means the slate came from disk without any API-Football call. */
+  slateSource?: 'live' | 'archive';
+  /** When this matchday's prices were first captured into the archive. */
+  capturedAt?: string;
 }
 
 export interface SavedTicket {
@@ -94,6 +124,8 @@ export interface SavedTicket {
   name: string;
   createdAt: string;
   date: string;
+  /** ISO match date, used to re-settle the slip without the live slate loaded. */
+  dateIso?: string;
   stake: number;
   totalOdds: number;
   legs: AccaLeg[];

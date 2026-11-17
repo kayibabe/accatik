@@ -21,6 +21,7 @@ import {
   formatTicketForCopy,
   getFixtureMatchResultSummary,
 } from '../utils/accaMath.ts';
+import { combinedFairProbability } from '../utils/probability.ts';
 import { SettlementLabel } from './SettlementLabel.tsx';
 
 interface AccaTicketSlipProps {
@@ -47,6 +48,7 @@ const STRATEGIES: { id: AccaStrategy; label: string }[] = [
   { id: 'favorites', label: 'Favorites' },
   { id: 'goals', label: 'Goals' },
   { id: 'high-yield', label: 'High-Yield' },
+  { id: 'probability', label: 'Most Likely' },
 ];
 
 const TARGET_ODDS_OPTIONS = [5, 8, 12];
@@ -74,7 +76,9 @@ export function AccaTicketSlip({
   const [savedFeedback, setSavedFeedback] = useState(false);
 
   const totalOdds = calculateTotalOdds(legs);
-  const combinedProb = calculateCombinedImpliedProbability(legs);
+  const fairProb = combinedFairProbability(legs);
+  const combinedProb =
+    fairProb ?? calculateCombinedImpliedProbability(legs);
   const potentialReturn = calculatePotentialReturn(stake, totalOdds);
   const netProfit = Math.max(0, Math.round((potentialReturn - stake) * 100) / 100);
   const meetsTarget = legs.length > 0 && totalOdds >= minOdds;
@@ -150,9 +154,9 @@ export function AccaTicketSlip({
 
         {/* Strategy & Minimum Odds Threshold */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
+          <div className="space-y-1">
             <span className="text-xs font-medium text-slate-600">Strategy</span>
-            <div className="flex items-center gap-1 p-0.5 bg-slate-100 rounded-lg">
+            <div className="flex flex-wrap items-center gap-1 p-0.5 bg-slate-100 rounded-lg">
               {STRATEGIES.map((s) => (
                 <button
                   key={s.id}
@@ -201,8 +205,17 @@ export function AccaTicketSlip({
               {totalOdds > 0 ? totalOdds.toFixed(2) : '0.00'}
             </p>
           </div>
-          <div className="text-right">
-            <p className="text-xs font-medium text-slate-500">Implied Hit Prob</p>
+          <div
+            className="text-right"
+            title={
+              fairProb !== null
+                ? 'Chance every leg lands, with the bookmaker margin removed from each price.'
+                : 'Chance every leg lands at the quoted prices (includes bookmaker margin).'
+            }
+          >
+            <p className="text-xs font-medium text-slate-500">
+              {fairProb !== null ? 'Win Chance (fair)' : 'Implied Hit Prob'}
+            </p>
             <p className="text-sm font-semibold font-mono text-slate-700 tabular-nums">
               {combinedProb > 0 ? `${combinedProb.toFixed(1)}%` : '0.0%'}
             </p>
@@ -297,6 +310,7 @@ export function AccaTicketSlip({
                       {String(index + 1).padStart(2, '0')} ·{' '}
                       {dateDisplay ? `${dateDisplay} · ` : ''}
                       {leg.kickoffTime} · {leg.competition}
+                      {leg.bookmaker ? ` · ${leg.bookmaker}` : ''}
                     </p>
                     <p className="text-sm font-semibold text-slate-900 truncate">
                       {leg.homeTeam} vs {leg.awayTeam}
@@ -343,8 +357,13 @@ export function AccaTicketSlip({
                       <SettlementLabel status={legStatus} />
                     )}
                   </div>
-                  <span className="text-sm font-mono font-bold text-slate-900 tabular-nums shrink-0">
+                  <span className="text-sm font-mono font-bold text-slate-900 tabular-nums shrink-0 text-right">
                     {leg.odds.toFixed(2)}
+                    <span className="block text-[10px] font-medium text-slate-400">
+                      {leg.fairProbability
+                        ? `${leg.fairProbability.toFixed(1)}%`
+                        : '—'}
+                    </span>
                   </span>
                 </div>
                 {resultText && (

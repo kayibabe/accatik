@@ -1,6 +1,5 @@
 import type {
   AccaLeg,
-  AccaStrategy,
   Fixture,
   MarketOption,
   MarketType,
@@ -272,141 +271,11 @@ export function buildLegsFromRefs(
       odds: market.odds,
       impliedProbability:
         market.impliedProbability || calculateImpliedProbability(market.odds),
+      fairProbability: market.fairProbability,
       rationale: market.rationale,
+      bookmaker: market.bookmaker,
       locked: false,
     });
-  }
-
-  return legs;
-}
-
-function scoreCandidateMarket(
-  fixture: Fixture,
-  market: MarketOption,
-  strategy: AccaStrategy
-): number {
-  const isRecommended = market.id === fixture.recommendedPickId ? 1.25 : 1.0;
-
-  if (strategy === 'favorites') {
-    const sweetSpot = market.odds >= 1.22 && market.odds <= 1.7 ? 1.3 : 0.9;
-    return (1 / Math.max(market.odds, 1.05)) * sweetSpot * isRecommended;
-  }
-
-  if (strategy === 'goals') {
-    const isGoalsMarket =
-      market.marketType === 'Goals' || market.marketType === 'BTTS' ? 1.55 : 0.8;
-    const sweetSpot = market.odds >= 1.3 && market.odds <= 2.15 ? 1.2 : 0.95;
-    return isGoalsMarket * sweetSpot * isRecommended;
-  }
-
-  if (strategy === 'high-yield') {
-    const yieldWeight = Math.min(market.odds, 3.0) / 2.2;
-    return yieldWeight * isRecommended;
-  }
-
-  const balancedBand =
-    market.odds >= 1.32 && market.odds <= 1.95 ? 1.35 : 0.9;
-  return (1 / Math.max(market.odds, 1.1)) * balancedBand * isRecommended;
-}
-
-export function completeAccaToTargetOdds(
-  fixtures: Fixture[],
-  existingLegs: AccaLeg[],
-  targetOdds: number,
-  strategy: AccaStrategy,
-  maxLegs = 8
-): AccaLeg[] {
-  const legs: AccaLeg[] = [...existingLegs];
-  const usedFixtureIds = new Set(legs.map((l) => l.fixtureId));
-
-  let currentProduct = legs.reduce((acc, l) => acc * l.odds, 1);
-  if (legs.length > 0 && currentProduct >= targetOdds) {
-    return legs;
-  }
-
-  const eligiblePool = fixtures.filter(
-    (f) => !usedFixtureIds.has(f.id) && f.status !== 'Void' && f.markets.length > 0
-  );
-  const trulyUpcoming = eligiblePool.filter(
-    (f) => f.status === 'Scheduled' && !f.awaitingResult
-  );
-  const liveOrFinished = eligiblePool.filter(
-    (f) => f.status === 'Live' || f.status === 'Finished'
-  );
-  const pool =
-    trulyUpcoming.length > 0
-      ? trulyUpcoming
-      : liveOrFinished.length > 0
-      ? liveOrFinished
-      : eligiblePool;
-
-  const candidates = pool
-    .map((fixture) => {
-      const rankedMarkets = [...fixture.markets].sort(
-        (a, b) =>
-          scoreCandidateMarket(fixture, b, strategy) -
-          scoreCandidateMarket(fixture, a, strategy)
-      );
-      const bestMarket = rankedMarkets[0];
-      return {
-        fixture,
-        market: bestMarket,
-        score: scoreCandidateMarket(fixture, bestMarket, strategy),
-      };
-    })
-    .sort((a, b) => b.score - a.score);
-
-  for (const candidate of candidates) {
-    if (legs.length >= maxLegs) break;
-    if (legs.length > 0 && currentProduct >= targetOdds) break;
-
-    const { fixture, market } = candidate;
-    legs.push({
-      fixtureId: fixture.id,
-      homeTeam: fixture.homeTeam,
-      awayTeam: fixture.awayTeam,
-      competition: fixture.competition,
-      matchDate: fixture.matchDate,
-      kickoffTime: fixture.kickoffTime,
-      marketId: market.id,
-      marketLabel: market.label,
-      marketType: market.marketType,
-      odds: market.odds,
-      impliedProbability:
-        market.impliedProbability || calculateImpliedProbability(market.odds),
-      rationale: market.rationale,
-      locked: false,
-    });
-    usedFixtureIds.add(fixture.id);
-    currentProduct *= market.odds;
-  }
-
-  if (currentProduct < targetOdds) {
-    for (let i = 0; i < legs.length && currentProduct < targetOdds; i++) {
-      if (legs[i].locked) continue;
-      const fixture = fixtures.find((f) => f.id === legs[i].fixtureId);
-      if (!fixture) continue;
-
-      const higherMarkets = fixture.markets
-        .filter((m) => m.odds > legs[i].odds && m.odds <= 3.4)
-        .sort((a, b) => a.odds - b.odds);
-
-      if (higherMarkets.length > 0) {
-        const upgrade = higherMarkets[0];
-        currentProduct = (currentProduct / legs[i].odds) * upgrade.odds;
-        legs[i] = {
-          ...legs[i],
-          marketId: upgrade.id,
-          marketLabel: upgrade.label,
-          marketType: upgrade.marketType,
-          odds: upgrade.odds,
-          impliedProbability:
-            upgrade.impliedProbability ||
-            calculateImpliedProbability(upgrade.odds),
-          rationale: upgrade.rationale,
-        };
-      }
-    }
   }
 
   return legs;
