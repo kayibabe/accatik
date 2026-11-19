@@ -63,7 +63,8 @@ export function ShadowLedgerPanel() {
           <p className="mt-0.5 max-w-2xl text-xs text-slate-500">
             Every ticket the engine would have built, recorded automatically at
             one-unit stakes. Only prices captured before kickoff enter ROI; the
-            ledger is never edited by hand.
+            ledger is never edited by hand. Tickets the EV gate would not
+            recommend are still recorded, so the gate itself can be graded.
           </p>
         </div>
         <button

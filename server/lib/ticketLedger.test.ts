@@ -73,6 +73,16 @@ test('records every engine variant once and rejects post-kickoff prices', async 
       ticket.legs.every((leg) => leg.fixtureId !== 'late')
     )
   );
+  // The gate is recorded alongside every budget so it can be graded later.
+  assert.ok(
+    ledger.tickets.every(
+      (ticket) =>
+        typeof ticket.guardRecommended === 'boolean' &&
+        typeof ticket.guardEdgePts === 'number' &&
+        typeof ticket.guardLegCap === 'number' &&
+        (ticket.guardLegCap as number) <= ticket.legCount
+    )
+  );
 });
 
 test('tracks closing-line value and settles every shadow ticket', async () => {

@@ -45,6 +45,16 @@ export interface LedgerTicket {
   closingTotalOdds?: number;
   /** Percent beat/miss versus the closing total: (placed ÷ closing) − 1. */
   clvPct?: number;
+  /**
+   * What the structural EV gate would have said about this ticket. The ledger
+   * still records every leg budget so the gate itself can be graded later;
+   * these fields let the summary separate "would recommend" from "measured".
+   */
+  guardRecommended?: boolean;
+  /** Fair chance minus break-even, in percentage points. */
+  guardEdgePts?: number;
+  /** Leg count the gate would have kept. */
+  guardLegCap?: number;
   legs: LedgerLeg[];
 }
 

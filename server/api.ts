@@ -8,6 +8,10 @@ import type {
 } from '../src/types/fixtures.ts';
 import type { LedgerSummary, LedgerTicket } from '../src/types/ledger.ts';
 import { buildRecommendedAcca } from '../src/utils/accaEngine.ts';
+import {
+  MAX_RECOMMENDED_LEGS,
+  guardTicket,
+} from '../src/utils/ticketGuard.ts';
 import { describeStrategy, isAccaStrategy } from '../src/utils/strategy.ts';
 import {
   getLedgerSummary,
@@ -475,7 +479,14 @@ export async function getTodayFixtures(
     // Shallow copies: prediction enrichment writes to these, not to the cache.
     const fixtures = loaded.fixtures.map((fixture) => ({ ...fixture }));
 
-    const legs = buildRecommendedAcca(fixtures, minOdds, strategy, maxLegs);
+    const rawLegs = buildRecommendedAcca(fixtures, minOdds, strategy, maxLegs);
+    // Structural gate: the headline ticket is capped at three legs (two when
+    // the average price is ultra-short) and is never labelled recommended when
+    // the de-vigged chance sits below the price's break-even rate.
+    const guard = guardTicket(rawLegs, {
+      maxLegs: Math.min(maxLegs, MAX_RECOMMENDED_LEGS),
+    });
+    const legs = guard.legs;
 
     // Sealed matchdays are served from disk with zero upstream calls, which
     // includes skipping the prediction feed: the match is already over.
@@ -528,6 +539,13 @@ export async function getTodayFixtures(
       strategySummary: strategyCopy.summary,
       fixtures,
       recommendedLegIds,
+      ticketGuard: {
+        recommended: guard.recommended,
+        reason: guard.reason,
+        originalLegCount: guard.originalLegCount,
+        trimmedCount: guard.trimmedCount,
+        economics: guard.economics,
+      },
       sources: SOURCE_LINKS(requestedDate),
       cachedAt: new Date().toISOString(),
       slateSource: loaded.source,

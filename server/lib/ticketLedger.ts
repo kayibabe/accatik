@@ -27,6 +27,7 @@ import {
   inferPriceQuality,
 } from '../../src/utils/priceQuality.ts';
 import { STRATEGY_LABELS } from '../../src/utils/strategy.ts';
+import { guardTicket } from '../../src/utils/ticketGuard.ts';
 import { TICKET_SHAPES } from '../../src/utils/ticketShapes.ts';
 import { readArchivedSlate } from './slateArchive.ts';
 
@@ -151,6 +152,9 @@ function makeTicket(
   nowIso: string
 ): LedgerTicket {
   const settlement = evaluateTicketSettlement(legs, fixtures, 1);
+  // The gate is measured, not enforced: the ledger must keep every leg budget
+  // so the "more legs = worse" claim stays falsifiable.
+  const guard = guardTicket(legs);
   return {
     id: ticketId(dateIso, kind, label, legs),
     dateIso,
@@ -170,6 +174,9 @@ function makeTicket(
       settlement.status === 'Win' || settlement.status === 'Void'
         ? settlement.settledReturn
         : undefined,
+    guardRecommended: guard.recommended,
+    guardEdgePts: guard.economics.edgePts,
+    guardLegCap: guard.legs.length,
     legs,
   };
 }

@@ -26,6 +26,7 @@ import {
   calculateTotalOdds,
 } from './utils/accaMath.ts';
 import { completeAccaToTargetOdds } from './utils/accaEngine.ts';
+import { MAX_RECOMMENDED_LEGS, guardTicket } from './utils/ticketGuard.ts';
 import { apiFetch } from './utils/api.ts';
 import { describeStrategy } from './utils/strategy.ts';
 import type { TicketShape } from './utils/ticketShapes.ts';
@@ -84,6 +85,11 @@ function getClientLocalIsoDate(): string {
     month: '2-digit',
     day: '2-digit',
   }).format(new Date());
+}
+
+/** Trim engine output to the structural guard, preserving explicit locks. */
+function guardLegs(legs: AccaLeg[]): AccaLeg[] {
+  return guardTicket(legs, { preserveLocked: true }).legs;
 }
 
 export default function App() {
@@ -217,7 +223,11 @@ export default function App() {
               setMinOdds(saved.minOdds);
             }
             if (typeof saved.maxLegs === 'number' && Number.isFinite(saved.maxLegs)) {
-              setMaxLegs(saved.maxLegs);
+              // Older preference payloads can hold 4/6/8; the structural cap
+              // applies on read as well as on write.
+              setMaxLegs(
+                Math.max(2, Math.min(saved.maxLegs, MAX_RECOMMENDED_LEGS))
+              );
             }
           }
         } catch {
@@ -299,12 +309,14 @@ export default function App() {
           typed.fixtures,
           typed.recommendedLegIds
         );
-        const guaranteedLegs = completeAccaToTargetOdds(
-          typed.fixtures,
-          initialLegs,
-          targetMinOdds,
-          targetStrategy,
-          targetMaxLegs
+        const guaranteedLegs = guardLegs(
+          completeAccaToTargetOdds(
+            typed.fixtures,
+            initialLegs,
+            targetMinOdds,
+            targetStrategy,
+            Math.min(targetMaxLegs, MAX_RECOMMENDED_LEGS)
+          )
         );
         setSelectedLegs(guaranteedLegs);
       } catch (err) {
@@ -343,12 +355,14 @@ export default function App() {
     setStrategy(nextStrategy);
     if (slate && slate.fixtures.length > 0) {
       const locked = selectedLegs.filter((l) => l.locked);
-      const rebuilt = completeAccaToTargetOdds(
-        slate.fixtures,
-        locked,
-        minOdds,
-        nextStrategy,
-        maxLegs
+      const rebuilt = guardLegs(
+        completeAccaToTargetOdds(
+          slate.fixtures,
+          locked,
+          minOdds,
+          nextStrategy,
+          maxLegs
+        )
       );
       setSelectedLegs(rebuilt);
     } else {
@@ -359,45 +373,53 @@ export default function App() {
   const handleChangeMinOdds = (nextMinOdds: number) => {
     setMinOdds(nextMinOdds);
     if (slate && slate.fixtures.length > 0) {
-      const updated = completeAccaToTargetOdds(
-        slate.fixtures,
-        selectedLegs,
-        nextMinOdds,
-        strategy,
-        maxLegs
+      const updated = guardLegs(
+        completeAccaToTargetOdds(
+          slate.fixtures,
+          selectedLegs,
+          nextMinOdds,
+          strategy,
+          maxLegs
+        )
       );
       setSelectedLegs(updated);
     }
   };
 
   const handleChangeMaxLegs = (nextMaxLegs: number) => {
-    setMaxLegs(nextMaxLegs);
+    const cappedMaxLegs = Math.min(nextMaxLegs, MAX_RECOMMENDED_LEGS);
+    setMaxLegs(cappedMaxLegs);
     if (slate && slate.fixtures.length > 0) {
-      const updated = completeAccaToTargetOdds(
-        slate.fixtures,
-        selectedLegs,
-        minOdds,
-        strategy,
-        nextMaxLegs
+      const updated = guardLegs(
+        completeAccaToTargetOdds(
+          slate.fixtures,
+          selectedLegs,
+          minOdds,
+          strategy,
+          cappedMaxLegs
+        )
       );
       setSelectedLegs(updated);
     }
   };
 
   const handleApplyShape = (shape: TicketShape) => {
+    const cappedMaxLegs = Math.min(shape.maxLegs, MAX_RECOMMENDED_LEGS);
     setStrategy(shape.strategy);
     setMinOdds(shape.targetOdds);
-    setMaxLegs(shape.maxLegs);
+    setMaxLegs(cappedMaxLegs);
 
     if (!slate) return;
     const locked = selectedLegs.filter((leg) => leg.locked);
     setSelectedLegs(
-      completeAccaToTargetOdds(
-        slate.fixtures,
-        locked,
-        shape.targetOdds,
-        shape.strategy,
-        shape.maxLegs
+      guardLegs(
+        completeAccaToTargetOdds(
+          slate.fixtures,
+          locked,
+          shape.targetOdds,
+          shape.strategy,
+          cappedMaxLegs
+        )
       )
     );
   };
@@ -451,7 +473,15 @@ export default function App() {
   const handleAutoCompleteToTarget = () => {
     if (!slate) return;
     setSelectedLegs((prev) =>
-      completeAccaToTargetOdds(slate.fixtures, prev, minOdds, strategy, maxLegs)
+      guardLegs(
+        completeAccaToTargetOdds(
+          slate.fixtures,
+          prev,
+          minOdds,
+          strategy,
+          maxLegs
+        )
+      )
     );
   };
 
@@ -469,12 +499,14 @@ export default function App() {
     ];
 
     setSelectedLegs(
-      completeAccaToTargetOdds(
-        rotatedFixtures,
-        locked,
-        minOdds,
-        strategy,
-        maxLegs
+      guardLegs(
+        completeAccaToTargetOdds(
+          rotatedFixtures,
+          locked,
+          minOdds,
+          strategy,
+          maxLegs
+        )
       )
     );
   };
@@ -486,14 +518,24 @@ export default function App() {
       slate.recommendedLegIds
     );
     setSelectedLegs(
-      completeAccaToTargetOdds(
-        slate.fixtures,
-        recommended,
-        minOdds,
-        strategy,
-        maxLegs
+      guardLegs(
+        completeAccaToTargetOdds(
+          slate.fixtures,
+          recommended,
+          minOdds,
+          strategy,
+          maxLegs
+        )
       )
     );
+  };
+
+  /**
+   * Manual escape hatch: a user can click past the cap, but the slip offers a
+   * single action that returns to the structurally sound shape.
+   */
+  const handleTrimToRecommended = () => {
+    setSelectedLegs((prev) => guardLegs(prev));
   };
 
   const handleSaveTicket = async (ticketStake: number) => {
@@ -919,6 +961,7 @@ export default function App() {
                     onAutoCompleteToTarget={handleAutoCompleteToTarget}
                     onRebuildUnlocked={handleRebuildUnlocked}
                     onResetRecommended={handleResetRecommended}
+                    onTrimToRecommended={handleTrimToRecommended}
                     onClearAll={() => setSelectedLegs([])}
                     onSaveTicket={handleSaveTicket}
                   />

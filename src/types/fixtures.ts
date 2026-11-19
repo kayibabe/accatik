@@ -112,6 +112,35 @@ export interface RecommendedPickRef {
   marketId: string;
 }
 
+/** Structural economics of a ticket, after removing the bookmaker margin. */
+export interface TicketEconomicsSummary {
+  legCount: number;
+  totalOdds: number;
+  /** Margin-adjusted chance every leg lands, as a percentage. */
+  fairChance: number;
+  /** Hit rate the quoted price needs to break even, as a percentage. */
+  breakEvenChance: number;
+  /** Fair chance minus break-even, in percentage points. */
+  edgePts: number;
+  /** Expected return per unit staked, as a percentage. */
+  expectedRoi: number;
+  /** How far the quoted price sits above fair (1.00 = no margin). */
+  combinedOverround: number;
+  /**
+   * `fair` when every leg had a de-vigged probability; `implied` when the
+   * guard had to fall back to the quoted prices, which understates the loss.
+   */
+  basis: 'fair' | 'implied';
+}
+
+export interface TicketGuardSummary {
+  recommended: boolean;
+  reason: string;
+  originalLegCount: number;
+  trimmedCount: number;
+  economics: TicketEconomicsSummary;
+}
+
 export interface DailySlateResponse {
   date: string;
   displayDate: string;
@@ -123,6 +152,8 @@ export interface DailySlateResponse {
   strategySummary: string;
   fixtures: Fixture[];
   recommendedLegIds: RecommendedPickRef[];
+  /** Present when the server applied the structural EV gate. */
+  ticketGuard?: TicketGuardSummary;
   sources: GroundingSource[];
   cachedAt: string;
   /** `archive` means the slate came from disk without any API-Football call. */

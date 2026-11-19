@@ -2,8 +2,9 @@ import type { AccaStrategy } from '../types/fixtures.ts';
 
 /**
  * Ticket shapes are the product-level answer to the accumulator maths:
- * every extra leg multiplies the bookmaker's margin, so a 6-leg ticket needs
- * a far higher hit rate than its own de-vigged chance can support.
+ * every extra leg multiplies the bookmaker's margin, so the old 6- and 8-leg
+ * presets needed a far higher hit rate than their own de-vigged chance could
+ * support. Every preset now tops out at three legs.
  *
  * Each preset fixes the leg budget as well as the target, which prevents the
  * builder from "helpfully" adding legs just to reach a big headline price.
@@ -42,21 +43,21 @@ export const TICKET_SHAPES: ReadonlyArray<TicketShape> = [
   },
   {
     id: 'value',
-    label: 'Value · 4 legs',
+    label: 'Value · 3 legs',
     targetOdds: 3.6,
-    maxLegs: 4,
+    maxLegs: 3,
     strategy: 'goals',
     description:
-      'Four goal-market angles. More price, but still a realistic combined hit chance.',
+      'Three goal-market angles. Capped at three legs because every extra leg multiplies the bookmaker margin.',
   },
   {
     id: 'lottery',
-    label: 'Lottery · 5.00+',
+    label: 'Long Shot · 5.00+',
     targetOdds: 5.0,
-    maxLegs: 6,
+    maxLegs: 3,
     strategy: 'high-yield',
     description:
-      'The old default. Treat it as entertainment: the bookmaker margin compounds on every leg.',
+      'Three longer prices chasing 5.00+. Still negative EV on average: treat it as entertainment, not a plan.',
   },
 ];
 

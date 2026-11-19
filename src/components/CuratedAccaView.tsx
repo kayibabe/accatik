@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { ArrowRight, Check, Copy, Bookmark, Wand2 } from 'lucide-react';
 import type { AccaLeg, Fixture } from '../types/fixtures.ts';
 import {
-  calculateCombinedImpliedProbability,
   calculatePotentialReturn,
   calculateTotalOdds,
   evaluateMarketSettlement,
@@ -11,8 +10,8 @@ import {
   formatTicketForCopy,
   getFixtureMatchResultSummary,
 } from '../utils/accaMath.ts';
-import { combinedFairProbability } from '../utils/probability.ts';
 import { isPreMatchFixture } from '../utils/priceQuality.ts';
+import { guardTicket } from '../utils/ticketGuard.ts';
 import type { SortDirection, SortState } from '../utils/tableSort.ts';
 import { SORT_ASC, sortRows, toggleSort } from '../utils/tableSort.ts';
 import { SettlementLabel } from './SettlementLabel.tsx';
@@ -56,8 +55,6 @@ export function CuratedAccaView({
   });
 
   const totalOdds = calculateTotalOdds(legs);
-  const fairProb = combinedFairProbability(legs);
-  const combinedProb = fairProb ?? calculateCombinedImpliedProbability(legs);
   const potentialReturn = calculatePotentialReturn(stake, totalOdds);
   const fixtureMap = new Map(fixtures.map((f) => [f.id, f]));
   const ticketSettlement = evaluateTicketSettlement(legs, fixtures, stake);
@@ -67,6 +64,7 @@ export function CuratedAccaView({
       return fixture ? !isPreMatchFixture(fixture) : false;
     }) ?? null;
   const canSave = legs.length > 0 && startedLeg === null;
+  const guard = guardTicket(legs);
 
   const handleCopy = async () => {
     if (legs.length === 0) return;
@@ -200,6 +198,16 @@ export function CuratedAccaView({
         </div>
       )}
 
+      {legs.length > 0 && !guard.recommended && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs leading-relaxed text-amber-800">
+          <span className="font-semibold">Not a recommended ticket.</span>{' '}
+          {guard.reason}{' '}
+          {guard.economics.basis === 'fair' && (
+            <>Expected return {guard.economics.expectedRoi.toFixed(1)}% at these prices.</>
+          )}
+        </div>
+      )}
+
       {/* Quantitative Summary Strip */}
       <div className="bg-white border border-slate-200 rounded-xl grid grid-cols-2 lg:grid-cols-5 divide-y lg:divide-y-0 lg:divide-x divide-slate-200">
         <div className="p-5">
@@ -225,15 +233,17 @@ export function CuratedAccaView({
           </p>
         </div>
         <div className="p-5" title={
-          fairProb !== null
+          guard.economics.basis === 'fair'
             ? 'Chance every leg lands, with the bookmaker margin removed from each price.'
             : 'Chance every leg lands at the quoted prices (includes bookmaker margin).'
         }>
           <p className="text-xs text-slate-500">
-            {fairProb !== null ? 'Combined Win Chance' : 'Combined Implied Prob'}
+            {guard.economics.basis === 'fair'
+              ? 'Combined Win Chance'
+              : 'Combined Implied Prob'}
           </p>
           <p className="mt-1 text-2xl font-bold font-mono text-slate-900 tabular-nums">
-            {combinedProb.toFixed(1)}%
+            {guard.economics.fairChance.toFixed(1)}%
           </p>
         </div>
         <div className="p-5 col-span-2 lg:col-span-1">

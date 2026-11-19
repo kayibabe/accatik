@@ -12,7 +12,6 @@ import {
 } from 'lucide-react';
 import type { AccaLeg, AccaStrategy, Fixture } from '../types/fixtures.ts';
 import {
-  calculateCombinedImpliedProbability,
   calculatePotentialReturn,
   calculateTotalOdds,
   evaluateMarketSettlement,
@@ -21,8 +20,11 @@ import {
   formatTicketForCopy,
   getFixtureMatchResultSummary,
 } from '../utils/accaMath.ts';
-import { combinedFairProbability } from '../utils/probability.ts';
 import { isPreMatchFixture } from '../utils/priceQuality.ts';
+import {
+  MAX_RECOMMENDED_LEGS,
+  guardTicket,
+} from '../utils/ticketGuard.ts';
 import {
   TICKET_SHAPES,
   matchTicketShape,
@@ -48,6 +50,7 @@ interface AccaTicketSlipProps {
   onAutoCompleteToTarget: () => void;
   onRebuildUnlocked: () => void;
   onResetRecommended: () => void;
+  onTrimToRecommended: () => void;
   onClearAll: () => void;
   onSaveTicket: (stake: number) => void;
 }
@@ -61,7 +64,12 @@ const STRATEGIES: { id: AccaStrategy; label: string }[] = [
 ];
 
 const TARGET_ODDS_OPTIONS = [2, 2.8, 3.6, 5, 8];
-const LEG_OPTIONS = [2, 3, 4, 6, 8];
+// The structural cap is three legs, so offering 4/6/8 here would only create
+// a control that silently rewrites the user's choice back to three.
+const LEG_OPTIONS = Array.from(
+  { length: MAX_RECOMMENDED_LEGS - 1 },
+  (_, index) => index + 2
+);
 
 export function AccaTicketSlip({
   legs,
@@ -81,6 +89,7 @@ export function AccaTicketSlip({
   onAutoCompleteToTarget,
   onRebuildUnlocked,
   onResetRecommended,
+  onTrimToRecommended,
   onClearAll,
   onSaveTicket,
 }: AccaTicketSlipProps) {
@@ -88,9 +97,7 @@ export function AccaTicketSlip({
   const [savedFeedback, setSavedFeedback] = useState(false);
 
   const totalOdds = calculateTotalOdds(legs);
-  const fairProb = combinedFairProbability(legs);
-  const combinedProb =
-    fairProb ?? calculateCombinedImpliedProbability(legs);
+  const guard = guardTicket(legs);
   const potentialReturn = calculatePotentialReturn(stake, totalOdds);
   const netProfit = Math.max(0, Math.round((potentialReturn - stake) * 100) / 100);
   const meetsTarget = legs.length > 0 && totalOdds >= minOdds;
@@ -103,10 +110,6 @@ export function AccaTicketSlip({
       ticketSettlement.liveCount >
     0;
   const breakEvenProb = totalOdds > 1 ? 100 / totalOdds : null;
-  const edge =
-    breakEvenProb !== null && legs.length > 0
-      ? Math.round((combinedProb - breakEvenProb) * 10) / 10
-      : null;
   const activeShape = matchTicketShape(strategy, minOdds, maxLegs);
   const startedLeg =
     legs.find((leg) => {
@@ -280,16 +283,20 @@ export function AccaTicketSlip({
           <div
             className="text-right"
             title={
-              fairProb !== null
+              guard.economics.basis === 'fair'
                 ? 'Chance every leg lands, with the bookmaker margin removed from each price.'
                 : 'Chance every leg lands at the quoted prices (includes bookmaker margin).'
             }
           >
             <p className="text-xs font-medium text-slate-500">
-              {fairProb !== null ? 'Win Chance (fair)' : 'Implied Hit Prob'}
+              {guard.economics.basis === 'fair'
+                ? 'Win Chance (fair)'
+                : 'Implied Hit Prob'}
             </p>
             <p className="text-sm font-semibold font-mono text-slate-700 tabular-nums">
-              {combinedProb > 0 ? `${combinedProb.toFixed(1)}%` : '0.0%'}
+              {guard.economics.fairChance > 0
+                ? `${guard.economics.fairChance.toFixed(1)}%`
+                : '0.0%'}
             </p>
           </div>
         </div>
@@ -301,25 +308,62 @@ export function AccaTicketSlip({
               <span className="font-semibold text-slate-700">
                 {breakEvenProb.toFixed(1)}%
               </span>
-              {edge !== null && (
-                <span
-                  className={`font-semibold ${
-                    edge >= 0 ? 'text-emerald-700' : 'text-red-600'
-                  }`}
-                  title="The system's own de-vigged win chance minus the break-even rate"
-                >
-                  {edge >= 0 ? '+' : ''}
-                  {edge.toFixed(1)} pts vs fair
-                </span>
-              )}
+              <span
+                className={`font-semibold ${
+                  guard.economics.edgePts >= 0
+                    ? 'text-emerald-700'
+                    : 'text-red-600'
+                }`}
+                title="The system's own de-vigged win chance minus the break-even rate"
+              >
+                {guard.economics.edgePts >= 0 ? '+' : ''}
+                {guard.economics.edgePts.toFixed(1)} pts vs fair
+              </span>
             </span>
           </div>
         )}
 
-        {legs.length > 0 && edge !== null && edge < 0 && (
-          <p className="mt-1.5 text-[11px] leading-snug text-amber-700">
-            Negative expected value: the fair win chance is{' '}
-            {Math.abs(edge).toFixed(1)} points below the rate this price needs.
+        {legs.length > 0 && guard.trimmedCount > 0 && (
+          <div
+            role="status"
+            className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-2 text-[11px] leading-snug text-amber-900"
+          >
+            <p className="font-semibold">
+              {legs.length} legs is past the {guard.legs.length}-leg structural
+              cap.
+            </p>
+            <p className="mt-0.5">
+              Every extra leg multiplies the bookmaker margin, so the added
+              price is paid for twice: once in stake, once in lost fair value.
+            </p>
+            <button
+              type="button"
+              onClick={onTrimToRecommended}
+              className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-md transition-colors cursor-pointer"
+            >
+              Trim to {guard.legs.length} legs
+            </button>
+          </div>
+        )}
+
+        {legs.length > 0 && guard.trimmedCount === 0 && !guard.recommended && (
+          <div
+            role="status"
+            className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-2 text-[11px] leading-snug text-amber-900"
+          >
+            <p className="font-semibold">Not a recommended ticket</p>
+            <p className="mt-0.5">
+              {guard.economics.basis === 'fair' && (
+                <>Expected return {guard.economics.expectedRoi.toFixed(1)}%. </>
+              )}
+              {guard.reason}
+            </p>
+          </div>
+        )}
+
+        {legs.length > 0 && guard.recommended && (
+          <p className="mt-2 text-[11px] leading-snug text-emerald-700">
+            Within the structural cap and priced above fair.
           </p>
         )}
 
@@ -335,7 +379,11 @@ export function AccaTicketSlip({
                 <div className="flex items-center justify-between gap-2 w-full">
                   <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700">
                     <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden="true" />
-                    <span>Below {minOdds.toFixed(2)} target</span>
+                    <span>
+                      {atLegCap
+                        ? `Below ${minOdds.toFixed(2)} — unreachable at the ${maxLegs}-leg cap`
+                        : `Below ${minOdds.toFixed(2)} target`}
+                    </span>
                   </span>
                   <button
                     type="button"
@@ -343,7 +391,7 @@ export function AccaTicketSlip({
                     disabled={atLegCap}
                     title={
                       atLegCap
-                        ? `Already at the ${maxLegs}-leg cap. Raise Max legs or lower the target.`
+                        ? `Already at the ${maxLegs}-leg structural cap. Lower the target instead of adding legs.`
                         : `Add selections (up to ${maxLegs} legs) until the target is met`
                     }
                     className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer"
