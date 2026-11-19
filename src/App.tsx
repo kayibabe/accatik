@@ -23,8 +23,11 @@ import {
 } from './utils/accaMath.ts';
 import { completeAccaToTargetOdds } from './utils/accaEngine.ts';
 import { describeStrategy } from './utils/strategy.ts';
+import type { TicketShape } from './utils/ticketShapes.ts';
+import { isPreMatchFixture } from './utils/priceQuality.ts';
 import {
   loadFixtureSnapshots,
+  mergeFixturesIntoSnapshots,
   persistFixtureSnapshots,
   withSnapshot,
   type FixtureSnapshots,
@@ -46,8 +49,9 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState<string>(todayDate);
   const [activeTab, setActiveTab] = useState<ActiveTab>('slate');
   const [strategy, setStrategy] = useState<AccaStrategy>('balanced');
-  const [minOdds, setMinOdds] = useState<number>(5.0);
-  const [stake, setStake] = useState<number>(2500);
+  const [minOdds, setMinOdds] = useState<number>(2.8);
+  const [maxLegs, setMaxLegs] = useState<number>(3);
+  const [stake, setStake] = useState<number>(1);
 
   const [slate, setSlate] = useState<DailySlateResponse | null>(null);
   const [selectedLegs, setSelectedLegs] = useState<AccaLeg[]>([]);
@@ -106,6 +110,7 @@ export default function App() {
       targetDate: string,
       targetStrategy: AccaStrategy,
       targetMinOdds: number,
+      targetMaxLegs: number,
       forceRefresh = false
     ) => {
       // Ignore responses that land after a newer request (rapid date switching).
@@ -120,6 +125,7 @@ export default function App() {
             date: targetDate,
             strategy: targetStrategy,
             minOdds: targetMinOdds,
+            maxLegs: targetMaxLegs,
             forceRefresh,
           }),
         });
@@ -149,7 +155,8 @@ export default function App() {
           typed.fixtures,
           initialLegs,
           targetMinOdds,
-          targetStrategy
+          targetStrategy,
+          targetMaxLegs
         );
         setSelectedLegs(guaranteedLegs);
       } catch (err) {
@@ -168,12 +175,12 @@ export default function App() {
   );
 
   useEffect(() => {
-    fetchSlateForDate(todayDate, 'balanced', 5.0, false);
+    fetchSlateForDate(todayDate, 'balanced', 2.8, 3, false);
   }, [fetchSlateForDate, todayDate]);
 
   const handleChangeDate = (nextDate: string) => {
     setSelectedDate(nextDate);
-    fetchSlateForDate(nextDate, strategy, minOdds, false);
+    fetchSlateForDate(nextDate, strategy, minOdds, maxLegs, false);
   };
 
   const handleChangeStrategy = (nextStrategy: AccaStrategy) => {
@@ -184,11 +191,12 @@ export default function App() {
         slate.fixtures,
         locked,
         minOdds,
-        nextStrategy
+        nextStrategy,
+        maxLegs
       );
       setSelectedLegs(rebuilt);
     } else {
-      fetchSlateForDate(selectedDate, nextStrategy, minOdds, false);
+      fetchSlateForDate(selectedDate, nextStrategy, minOdds, maxLegs, false);
     }
   };
 
@@ -199,13 +207,49 @@ export default function App() {
         slate.fixtures,
         selectedLegs,
         nextMinOdds,
-        strategy
+        strategy,
+        maxLegs
       );
       setSelectedLegs(updated);
     }
   };
 
+  const handleChangeMaxLegs = (nextMaxLegs: number) => {
+    setMaxLegs(nextMaxLegs);
+    if (slate && slate.fixtures.length > 0) {
+      const updated = completeAccaToTargetOdds(
+        slate.fixtures,
+        selectedLegs,
+        minOdds,
+        strategy,
+        nextMaxLegs
+      );
+      setSelectedLegs(updated);
+    }
+  };
+
+  const handleApplyShape = (shape: TicketShape) => {
+    setStrategy(shape.strategy);
+    setMinOdds(shape.targetOdds);
+    setMaxLegs(shape.maxLegs);
+
+    if (!slate) return;
+    const locked = selectedLegs.filter((leg) => leg.locked);
+    setSelectedLegs(
+      completeAccaToTargetOdds(
+        slate.fixtures,
+        locked,
+        shape.targetOdds,
+        shape.strategy,
+        shape.maxLegs
+      )
+    );
+  };
+
   const handleToggleMarket = (fixture: Fixture, market: MarketOption) => {
+    // A price on a live or finished match is not a bet that can be placed.
+    if (!isPreMatchFixture(fixture)) return;
+
     setSelectedLegs((prev) => {
       const existing = prev.find((l) => l.fixtureId === fixture.id);
       if (existing && existing.marketId === market.id) {
@@ -251,7 +295,7 @@ export default function App() {
   const handleAutoCompleteToTarget = () => {
     if (!slate) return;
     setSelectedLegs((prev) =>
-      completeAccaToTargetOdds(slate.fixtures, prev, minOdds, strategy)
+      completeAccaToTargetOdds(slate.fixtures, prev, minOdds, strategy, maxLegs)
     );
   };
 
@@ -269,7 +313,13 @@ export default function App() {
     ];
 
     setSelectedLegs(
-      completeAccaToTargetOdds(rotatedFixtures, locked, minOdds, strategy)
+      completeAccaToTargetOdds(
+        rotatedFixtures,
+        locked,
+        minOdds,
+        strategy,
+        maxLegs
+      )
     );
   };
 
@@ -280,12 +330,27 @@ export default function App() {
       slate.recommendedLegIds
     );
     setSelectedLegs(
-      completeAccaToTargetOdds(slate.fixtures, recommended, minOdds, strategy)
+      completeAccaToTargetOdds(
+        slate.fixtures,
+        recommended,
+        minOdds,
+        strategy,
+        maxLegs
+      )
     );
   };
 
   const handleSaveTicket = (ticketStake: number) => {
     if (selectedLegs.length === 0) return;
+
+    // Never save a slip containing a match that has already started: the
+    // price is no longer available and the settlement would be meaningless.
+    const hasStartedLeg = selectedLegs.some((leg) => {
+      const fixture = slate?.fixtures.find((entry) => entry.id === leg.fixtureId);
+      return fixture ? !isPreMatchFixture(fixture) : false;
+    });
+    if (hasStartedLeg) return;
+
     const totalOdds = calculateTotalOdds(selectedLegs);
     const ticket: SavedTicket = {
       id: `slip-${Date.now()}`,
@@ -309,6 +374,67 @@ export default function App() {
   const handleDeleteTicket = (ticketId: string) => {
     setSavedTickets((prev) => prev.filter((t) => t.id !== ticketId));
   };
+
+  /**
+   * Pulls fresh status/score for the fixtures behind saved slips, then folds
+   * them into the local snapshots so settled slips stay settled after reload.
+   */
+  const handleRefreshSavedResults = useCallback(
+    async (fixtureIds: string[], forceRefresh = false): Promise<Fixture[]> => {
+      if (fixtureIds.length === 0) return [];
+
+      const res = await fetch('/api/fixtures/results', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fixtureIds, forceRefresh }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.error || 'Could not refresh match results.');
+      }
+
+      const refreshed: Fixture[] = Array.isArray(data?.fixtures)
+        ? (data.fixtures as Fixture[])
+        : [];
+      if (refreshed.length > 0) {
+        setFixtureSnapshots((prev) =>
+          mergeFixturesIntoSnapshots(
+            prev,
+            refreshed,
+            savedTicketDatesRef.current
+          )
+        );
+      }
+      return refreshed;
+    },
+    []
+  );
+
+  /**
+   * Reads the archived board for a saved leg's matchday. Read-only: the
+   * archive keeps the prices, rationales, form, and model snapshot the slip
+   * was actually built from.
+   */
+  const handleLoadMatchDetails = useCallback(
+    async (dateIso: string, fixtureIds: string[]): Promise<Fixture[]> => {
+      if (!dateIso || fixtureIds.length === 0) return [];
+
+      const res = await fetch('/api/fixtures/detail', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dateIso, fixtureIds }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.error || 'Could not load the archived matchday.');
+      }
+
+      return Array.isArray(data?.fixtures)
+        ? (data.fixtures as Fixture[])
+        : [];
+    },
+    []
+  );
 
   const handleRequestDeepAnalysis = async (fixture: Fixture) => {
     setAnalyzingIds((prev) => ({ ...prev, [fixture.id]: true }));
@@ -371,7 +497,7 @@ export default function App() {
       <TopBar
         activeTab={activeTab}
         onSelectTab={setActiveTab}
-        onRefresh={() => fetchSlateForDate(selectedDate, strategy, minOdds, true)}
+        onRefresh={() => fetchSlateForDate(selectedDate, strategy, minOdds, maxLegs, true)}
         isLoading={isLoading}
         savedCount={savedTickets.length}
       />
@@ -464,7 +590,7 @@ export default function App() {
               />
               <button
                 type="button"
-                onClick={() => fetchSlateForDate(selectedDate, strategy, minOdds, true)}
+                onClick={() => fetchSlateForDate(selectedDate, strategy, minOdds, maxLegs, true)}
                 className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
               >
                 <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
@@ -482,7 +608,7 @@ export default function App() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => fetchSlateForDate(selectedDate, strategy, minOdds, true)}
+                  onClick={() => fetchSlateForDate(selectedDate, strategy, minOdds, maxLegs, true)}
                   className="font-semibold underline whitespace-nowrap cursor-pointer"
                 >
                   Retry
@@ -517,12 +643,15 @@ export default function App() {
                     legs={selectedLegs}
                     fixtures={slate.fixtures}
                     minOdds={minOdds}
+                    maxLegs={maxLegs}
                     strategy={strategy}
                     displayDate={slate.displayDate}
                     stake={stake}
                     onChangeStake={setStake}
                     onChangeStrategy={handleChangeStrategy}
                     onChangeMinOdds={handleChangeMinOdds}
+                    onChangeMaxLegs={handleChangeMaxLegs}
+                    onApplyShape={handleApplyShape}
                     onRemoveLeg={handleRemoveLeg}
                     onToggleLock={handleToggleLock}
                     onAutoCompleteToTarget={handleAutoCompleteToTarget}
@@ -557,9 +686,12 @@ export default function App() {
                 savedTickets={savedTickets}
                 fixtures={slate.fixtures}
                 fixtureSnapshots={fixtureSnapshots}
+                todayDate={todayDate}
                 onLoadTicket={handleLoadTicket}
                 onDeleteTicket={handleDeleteTicket}
                 onGoToSlate={() => setActiveTab('slate')}
+                onRefreshResults={handleRefreshSavedResults}
+                onLoadMatchDetails={handleLoadMatchDetails}
               />
             )}
 

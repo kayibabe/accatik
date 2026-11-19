@@ -7,6 +7,7 @@ import { resolveApiFootballBaseUrl, resolveApiFootballKey } from './server/lib/a
 import { createRateLimiter } from './server/lib/cache.ts';
 import { getTodayIsoDate } from './server/lib/time.ts';
 import { fixturesRouter } from './server/routes/fixtures.ts';
+import { ledgerRouter } from './server/routes/ledger.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -55,6 +56,8 @@ async function createServer() {
     }),
     fixturesRouter
   );
+
+  app.use('/api/ledger', ledgerRouter);
 
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Unknown API endpoint.' });

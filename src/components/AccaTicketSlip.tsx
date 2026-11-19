@@ -22,18 +22,27 @@ import {
   getFixtureMatchResultSummary,
 } from '../utils/accaMath.ts';
 import { combinedFairProbability } from '../utils/probability.ts';
+import { isPreMatchFixture } from '../utils/priceQuality.ts';
+import {
+  TICKET_SHAPES,
+  matchTicketShape,
+  type TicketShape,
+} from '../utils/ticketShapes.ts';
 import { SettlementLabel } from './SettlementLabel.tsx';
 
 interface AccaTicketSlipProps {
   legs: AccaLeg[];
   fixtures: Fixture[];
   minOdds: number;
+  maxLegs: number;
   strategy: AccaStrategy;
   displayDate: string;
   stake: number;
   onChangeStake: (stake: number) => void;
   onChangeStrategy: (strategy: AccaStrategy) => void;
   onChangeMinOdds: (minOdds: number) => void;
+  onChangeMaxLegs: (maxLegs: number) => void;
+  onApplyShape: (shape: TicketShape) => void;
   onRemoveLeg: (fixtureId: string) => void;
   onToggleLock: (fixtureId: string) => void;
   onAutoCompleteToTarget: () => void;
@@ -51,19 +60,22 @@ const STRATEGIES: { id: AccaStrategy; label: string }[] = [
   { id: 'probability', label: 'Most Likely' },
 ];
 
-const TARGET_ODDS_OPTIONS = [5, 8, 12];
-const STAKE_PRESETS = [500, 1000, 2500, 5000];
+const TARGET_ODDS_OPTIONS = [2, 2.8, 3.6, 5, 8];
+const LEG_OPTIONS = [2, 3, 4, 6, 8];
 
 export function AccaTicketSlip({
   legs,
   fixtures,
   minOdds,
+  maxLegs,
   strategy,
   displayDate,
   stake,
   onChangeStake,
   onChangeStrategy,
   onChangeMinOdds,
+  onChangeMaxLegs,
+  onApplyShape,
   onRemoveLeg,
   onToggleLock,
   onAutoCompleteToTarget,
@@ -90,6 +102,19 @@ export function AccaTicketSlip({
       ticketSettlement.voidCount +
       ticketSettlement.liveCount >
     0;
+  const breakEvenProb = totalOdds > 1 ? 100 / totalOdds : null;
+  const edge =
+    breakEvenProb !== null && legs.length > 0
+      ? Math.round((combinedProb - breakEvenProb) * 10) / 10
+      : null;
+  const activeShape = matchTicketShape(strategy, minOdds, maxLegs);
+  const startedLeg =
+    legs.find((leg) => {
+      const fixture = fixtureMap.get(leg.fixtureId);
+      return fixture ? !isPreMatchFixture(fixture) : false;
+    }) ?? null;
+  const canSave = legs.length > 0 && startedLeg === null;
+  const atLegCap = legs.length >= maxLegs;
 
   const handleCopy = async () => {
     if (legs.length === 0) return;
@@ -104,7 +129,7 @@ export function AccaTicketSlip({
   };
 
   const handleSave = () => {
-    if (legs.length === 0) return;
+    if (!canSave) return;
     onSaveTicket(stake);
     setSavedFeedback(true);
     setTimeout(() => setSavedFeedback(false), 2000);
@@ -124,7 +149,7 @@ export function AccaTicketSlip({
             </h2>
             <p className="text-xs text-slate-500 font-mono tabular-nums">
               {legs.length} {legs.length === 1 ? 'selection' : 'selections'} · Target{' '}
-              {minOdds.toFixed(2)}+ odds
+              {minOdds.toFixed(2)}+ · Max {maxLegs} legs
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs">
@@ -150,6 +175,33 @@ export function AccaTicketSlip({
               </>
             )}
           </div>
+        </div>
+
+        {/* Ticket shape: picks strategy, target and leg cap together */}
+        <div className="space-y-1">
+          <span className="text-xs font-medium text-slate-600">Ticket shape</span>
+          <div className="grid grid-cols-2 gap-1">
+            {TICKET_SHAPES.map((shape) => (
+              <button
+                key={shape.id}
+                type="button"
+                onClick={() => onApplyShape(shape)}
+                aria-pressed={activeShape?.id === shape.id}
+                title={shape.description}
+                className={`px-2 py-1.5 text-[11px] font-medium rounded-md border text-left transition-colors cursor-pointer ${
+                  activeShape?.id === shape.id
+                    ? 'bg-emerald-700 border-emerald-700 text-white'
+                    : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300'
+                }`}
+              >
+                {shape.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] leading-snug text-slate-400">
+            {activeShape?.description ??
+              'Custom shape. Presets keep the leg count honest, so the target cannot be reached by adding lottery legs.'}
+          </p>
         </div>
 
         {/* Strategy & Minimum Odds Threshold */}
@@ -193,10 +245,30 @@ export function AccaTicketSlip({
               ))}
             </div>
           </div>
+
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-medium text-slate-600">Max legs</span>
+            <div className="flex items-center gap-1 p-0.5 bg-slate-100 rounded-lg">
+              {LEG_OPTIONS.map((val) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => onChangeMaxLegs(val)}
+                  className={`px-2.5 py-1 text-[11px] font-mono font-medium rounded-md transition-colors whitespace-nowrap tabular-nums cursor-pointer ${
+                    maxLegs === val
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {val}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Combined Odds & 5.00+ Qualification Strip */}
+      {/* Combined Odds & Target Qualification Strip */}
       <div className="px-4 sm:px-5 py-3.5 bg-slate-50 border-b border-slate-200">
         <div className="flex items-baseline justify-between gap-4">
           <div>
@@ -222,6 +294,35 @@ export function AccaTicketSlip({
           </div>
         </div>
 
+        {legs.length > 0 && breakEvenProb !== null && (
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-slate-200/80 pt-2 text-[11px]">
+            <span className="text-slate-500">Break-even hit rate</span>
+            <span className="flex items-center gap-2 font-mono tabular-nums">
+              <span className="font-semibold text-slate-700">
+                {breakEvenProb.toFixed(1)}%
+              </span>
+              {edge !== null && (
+                <span
+                  className={`font-semibold ${
+                    edge >= 0 ? 'text-emerald-700' : 'text-red-600'
+                  }`}
+                  title="The system's own de-vigged win chance minus the break-even rate"
+                >
+                  {edge >= 0 ? '+' : ''}
+                  {edge.toFixed(1)} pts vs fair
+                </span>
+              )}
+            </span>
+          </div>
+        )}
+
+        {legs.length > 0 && edge !== null && edge < 0 && (
+          <p className="mt-1.5 text-[11px] leading-snug text-amber-700">
+            Negative expected value: the fair win chance is{' '}
+            {Math.abs(edge).toFixed(1)} points below the rate this price needs.
+          </p>
+        )}
+
         {legs.length > 0 && (
           <div className="mt-2.5 space-y-1.5">
             <div className="flex items-center justify-between gap-2">
@@ -239,7 +340,13 @@ export function AccaTicketSlip({
                   <button
                     type="button"
                     onClick={onAutoCompleteToTarget}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                    disabled={atLegCap}
+                    title={
+                      atLegCap
+                        ? `Already at the ${maxLegs}-leg cap. Raise Max legs or lower the target.`
+                        : `Add selections (up to ${maxLegs} legs) until the target is met`
+                    }
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                   >
                     <Wand2 className="w-3 h-3" aria-hidden="true" />
                     <span>Boost to {minOdds.toFixed(2)}+</span>
@@ -271,8 +378,9 @@ export function AccaTicketSlip({
             Your ticket slip is empty
           </p>
           <p className="text-xs text-slate-500 leading-relaxed">
-            Click any market odd from today&apos;s fixture board or auto-build a{' '}
-            {minOdds.toFixed(2)}+ odds accumulator.
+            Click any pre-match market odd from today&apos;s fixture board or
+            auto-build a {minOdds.toFixed(2)}+ accumulator of up to {maxLegs}{' '}
+            legs.
           </p>
           <button
             type="button"
@@ -383,29 +491,16 @@ export function AccaTicketSlip({
       {/* Stake, Return & Ticket Actions */}
       <div className="p-4 sm:p-5 border-t border-slate-200 bg-slate-50/70 space-y-4">
         <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-baseline justify-between gap-2">
             <label
               htmlFor="acca-stake-input"
               className="text-xs font-semibold text-slate-700 whitespace-nowrap"
             >
               Stake (MWK)
             </label>
-            <div className="flex items-center gap-1">
-              {STAKE_PRESETS.map((preset) => (
-                <button
-                  key={preset}
-                  type="button"
-                  onClick={() => onChangeStake(preset)}
-                  className={`px-2 py-0.5 text-[11px] font-mono rounded border transition-colors tabular-nums whitespace-nowrap cursor-pointer ${
-                    stake === preset
-                      ? 'bg-slate-900 text-white border-slate-900'
-                      : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  {preset.toLocaleString('en-US')}
-                </button>
-              ))}
-            </div>
+            <span className="text-[11px] text-slate-400">
+              Any amount · defaults to 1
+            </span>
           </div>
 
           <div className="relative">
@@ -415,14 +510,16 @@ export function AccaTicketSlip({
             <input
               id="acca-stake-input"
               type="number"
-              min={50}
-              step={100}
+              inputMode="decimal"
+              min={1}
+              step={1}
               value={stake || ''}
+              placeholder="Enter your stake"
               onChange={(e) => {
-                const v = Number(e.target.value);
+                const v = e.target.value === '' ? 0 : Number(e.target.value);
                 onChangeStake(Number.isFinite(v) && v >= 0 ? v : 0);
               }}
-              className="w-full h-10 pl-10 pr-3 text-sm font-mono font-semibold text-slate-900 bg-white border border-slate-200 rounded-lg tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700"
+              className="w-full h-10 pl-10 pr-3 text-sm font-mono font-semibold text-slate-900 bg-white border border-slate-200 rounded-lg tabular-nums placeholder:font-sans placeholder:font-normal placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700"
             />
           </div>
         </div>
@@ -441,6 +538,14 @@ export function AccaTicketSlip({
             </p>
           </div>
         </div>
+
+        {startedLeg && (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] leading-snug text-amber-800">
+            Save disabled — {startedLeg.homeTeam} vs {startedLeg.awayTeam} has
+            already kicked off. Remove the started selection to save a
+            pre-match slip.
+          </p>
+        )}
 
         <div className="grid grid-cols-2 gap-2">
           <button
@@ -465,8 +570,13 @@ export function AccaTicketSlip({
           <button
             type="button"
             onClick={handleSave}
-            disabled={legs.length === 0}
-            className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold text-slate-800 bg-white border border-slate-200 hover:bg-slate-100 disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+            disabled={!canSave}
+            title={
+              startedLeg
+                ? 'This slip contains a match that has already started.'
+                : 'Save this slip to the local archive'
+            }
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold text-slate-800 bg-white border border-slate-200 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors whitespace-nowrap cursor-pointer"
           >
             {savedFeedback ? (
               <>

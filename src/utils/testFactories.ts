@@ -3,6 +3,7 @@ import type {
   Fixture,
   MarketOption,
   MarketType,
+  SavedTicket,
 } from '../types/fixtures.ts';
 
 /** Test-only builders. Not imported by the app bundle. */
@@ -42,6 +43,23 @@ export function makeFixture(overrides: Partial<Fixture> & { id: string }): Fixtu
     ...overrides,
     score,
   };
+}
+
+export function makeTicket(
+  overrides: Partial<SavedTicket> & { id: string }
+): SavedTicket {
+  const base: SavedTicket = {
+    id: overrides.id,
+    name: 'Test Slip',
+    createdAt: '2026-11-18T08:00:00.000Z',
+    date: '18 Nov 2026',
+    dateIso: '2026-11-18',
+    stake: 1000,
+    totalOdds: 2,
+    legs: [],
+  };
+
+  return { ...base, ...overrides };
 }
 
 export function makeMarket(

@@ -119,29 +119,105 @@ export function persistFixtureSnapshots(
   }
 }
 
-function coversAllLegs(ticket: SavedTicket, pool: Fixture[]): boolean {
-  if (ticket.legs.length === 0) return false;
-  const ids = new Set(pool.map((fixture) => fixture.id));
-  return ticket.legs.every((leg) => ids.has(leg.fixtureId));
+/**
+ * How far a fixture has moved through the settlement lifecycle. A result with
+ * a score always outranks the same fixture seen earlier without one, so a slip
+ * saved pre-kickoff settles as soon as any copy of the fixture is final.
+ */
+function settlementProgress(fixture: Fixture): number {
+  const statusRank: Record<Fixture['status'], number> = {
+    Scheduled: 0,
+    Live: 1,
+    Finished: 2,
+    Void: 2,
+  };
+  const hasScore =
+    fixture.score?.home !== null &&
+    fixture.score?.home !== undefined &&
+    fixture.score?.away !== null &&
+    fixture.score?.away !== undefined;
+  return (statusRank[fixture.status] ?? 0) * 2 + (hasScore ? 1 : 0);
+}
+
+function isMoreAdvanced(candidate: Fixture, current: Fixture): boolean {
+  return settlementProgress(candidate) > settlementProgress(current);
+}
+
+/** Whichever copy has progressed furthest; ties keep the preferred copy. */
+export function pickMoreAdvancedFixture(
+  preferred: Fixture | null | undefined,
+  candidate: Fixture | null | undefined
+): Fixture | null {
+  if (!preferred) return candidate ?? null;
+  if (!candidate) return preferred;
+  return isMoreAdvanced(candidate, preferred) ? candidate : preferred;
 }
 
 /**
- * Picks the best available fixture pool for a saved slip: its own matchday
- * snapshot first, then the live slate, then any snapshot that contains all legs
- * (handles slips saved before `dateIso` existed).
+ * Builds the settlement pool for a slip by merging every copy of its fixtures.
+ *
+ * Pools are stacked freshest-first (live slate, then the slip's own matchday
+ * snapshot, then every other snapshot), and a later copy only replaces an
+ * earlier one when it carries a further-advanced result. A stale pre-kickoff
+ * snapshot therefore can never override a finished scoreline — or the reverse.
  */
-export function resolveFixturePool(
+export function resolveSettlementPool(
   ticket: SavedTicket,
   snapshots: FixtureSnapshots,
   liveFixtures: Fixture[]
 ): Fixture[] {
-  const ownSnapshot = ticket.dateIso ? snapshots[ticket.dateIso] : undefined;
-  if (ownSnapshot && ownSnapshot.length > 0) return ownSnapshot;
+  const byId = new Map<string, Fixture>();
 
-  if (coversAllLegs(ticket, liveFixtures)) return liveFixtures;
+  const consider = (pool: Fixture[] | undefined) => {
+    for (const fixture of pool ?? []) {
+      const current = byId.get(fixture.id);
+      if (!current || isMoreAdvanced(fixture, current)) byId.set(fixture.id, fixture);
+    }
+  };
 
-  for (const pool of Object.values(snapshots)) {
-    if (coversAllLegs(ticket, pool)) return pool;
+  consider(liveFixtures);
+  if (ticket.dateIso) consider(snapshots[ticket.dateIso]);
+  for (const [dateIso, pool] of Object.entries(snapshots)) {
+    if (dateIso !== ticket.dateIso) consider(pool);
   }
-  return liveFixtures;
+
+  const legIds = new Set(ticket.legs.map((leg) => leg.fixtureId));
+  return [...byId.values()].filter((fixture) => legIds.has(fixture.id));
+}
+
+/**
+ * Merges freshly fetched results back into the local snapshot archive, so a
+ * settled slip stays settled after the next reload instead of reverting to
+ * Pending. Results only ever move a fixture forward.
+ */
+export function mergeFixturesIntoSnapshots(
+  snapshots: FixtureSnapshots,
+  fixtures: Fixture[],
+  keepDates: Iterable<string> = []
+): FixtureSnapshots {
+  if (fixtures.length === 0) return snapshots;
+
+  const next: FixtureSnapshots = { ...snapshots };
+  let changed = false;
+
+  for (const fixture of fixtures) {
+    const dateIso = fixture.matchDateIso;
+    if (!dateIso) continue;
+
+    const pool = next[dateIso] ? [...next[dateIso]] : [];
+    const index = pool.findIndex((existing) => existing.id === fixture.id);
+
+    if (index === -1) {
+      pool.push(snapshotFixtures([fixture])[0]);
+    } else if (isMoreAdvanced(fixture, pool[index])) {
+      pool[index] = { ...pool[index], ...snapshotFixtures([fixture])[0] };
+    } else {
+      continue;
+    }
+
+    next[dateIso] = pool;
+    changed = true;
+  }
+
+  return changed ? pruneSnapshots(next, keepDates) : snapshots;
 }

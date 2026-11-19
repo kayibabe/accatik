@@ -40,27 +40,23 @@ function bestMarketFor(
 }
 
 /**
- * Builds the candidate pools in preference order: genuinely upcoming fixtures
- * first, then live/finished ones to top the ticket up, then anything priced.
+ * Builds the candidate pool for a pre-match accumulator.
+ *
+ * Only genuinely upcoming fixtures are eligible. Live and finished matches
+ * used to top up short tickets, which quietly turned a pre-match slip into a
+ * bet on a game that had already started (and whose archived price was often
+ * captured after kickoff). The builder now leaves the ticket short instead.
  */
 function selectPools(fixtures: Fixture[], usedFixtureIds: Set<string>): Fixture[][] {
-  const eligible = fixtures.filter(
+  const upcoming = fixtures.filter(
     (f) =>
-      !usedFixtureIds.has(f.id) && f.status !== 'Void' && f.markets.length > 0
+      !usedFixtureIds.has(f.id) &&
+      f.status === 'Scheduled' &&
+      !f.awaitingResult &&
+      f.markets.length > 0
   );
 
-  const upcoming = eligible.filter(
-    (f) => f.status === 'Scheduled' && !f.awaitingResult
-  );
-  const liveOrFinished = eligible.filter(
-    (f) => f.status === 'Live' || f.status === 'Finished'
-  );
-
-  if (upcoming.length >= 3) return [upcoming, liveOrFinished];
-  if (upcoming.length + liveOrFinished.length >= 3) {
-    return [[...upcoming, ...liveOrFinished]];
-  }
-  return [eligible];
+  return upcoming.length > 0 ? [upcoming] : [];
 }
 
 /**
@@ -132,35 +128,9 @@ export function completeAccaToTargetOdds(
     currentProduct *= candidate.market.odds;
   }
 
-  // Still short of target: upgrade unlocked legs to a longer price (<= 3.40)
-  if (currentProduct < targetOdds) {
-    for (let i = 0; i < legs.length && currentProduct < targetOdds; i++) {
-      if (legs[i].locked) continue;
-      const fixture = fixtures.find((f) => f.id === legs[i].fixtureId);
-      if (!fixture) continue;
-
-      const upgrade = fixture.markets
-        .filter((m) => m.odds > legs[i].odds && m.odds <= 3.4)
-        .sort((a, b) => a.odds - b.odds)[0];
-
-      if (!upgrade) continue;
-
-      currentProduct = (currentProduct / legs[i].odds) * upgrade.odds;
-      legs[i] = {
-        ...legs[i],
-        marketId: upgrade.id,
-        marketLabel: upgrade.label,
-        marketType: upgrade.marketType,
-        odds: upgrade.odds,
-        impliedProbability:
-          upgrade.impliedProbability || calculateImpliedProbability(upgrade.odds),
-        fairProbability: upgrade.fairProbability,
-        rationale: upgrade.rationale,
-        bookmaker: upgrade.bookmaker,
-      };
-    }
-  }
-
+  // Deliberately no "upgrade unlocked legs" pass here. Swapping a
+  // recommended 1.25 pick for a 3.00 longshot to reach a headline target is
+  // how a high-probability slip became a negative-EV lottery ticket.
   return rankForDisplay(legs, strategy);
 }
 

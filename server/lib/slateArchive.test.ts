@@ -55,6 +55,7 @@ test('an empty slate is never treated as settled', () => {
 test('a kicked-off fixture keeps the prices it was archived with', () => {
   const archived = priced('a', {
     recommendedPickId: 'a-ou-25',
+    priceQuality: 'prematch',
   });
   const fresh = priced('a', {
     status: 'Finished',
@@ -62,6 +63,7 @@ test('a kicked-off fixture keeps the prices it was archived with', () => {
     score: { home: 1, away: 1 },
     markets: [makeMarket('a-1x2-h', 1.2, '1X2', 'Home Win')],
     recommendedPickId: 'a-1x2-h',
+    priceQuality: 'live',
   });
 
   const [merged] = mergeArchivedPrices([archived], [fresh]);
@@ -73,6 +75,7 @@ test('a kicked-off fixture keeps the prices it was archived with', () => {
   assert.equal(merged.recommendedPickId, 'a-ou-25');
   assert.equal(merged.status, 'Finished');
   assert.equal(merged.score?.home, 1);
+  assert.equal(merged.priceQuality, 'prematch');
 });
 
 test('a scheduled fixture still takes the fresh book', () => {

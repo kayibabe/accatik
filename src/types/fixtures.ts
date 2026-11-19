@@ -14,6 +14,16 @@ export type AccaStrategy =
 
 export type SettlementStatus = 'Win' | 'Lost' | 'Void' | 'Live' | 'Pending';
 
+/**
+ * How the stored price block was captured.
+ *
+ * `prematch` means the book was first archived before kickoff and can be
+ * treated as a real betting price. `live` means the first capture happened
+ * after the match started (usually a backfilled archive) and must not be used
+ * for ROI or closing-line calculations.
+ */
+export type PriceQuality = 'prematch' | 'live' | 'unknown';
+
 export interface MarketOption {
   id: string;
   marketType: MarketType;
@@ -69,6 +79,8 @@ export interface Fixture {
   modelProbabilities?: ModelProbabilities;
   /** ISO timestamp when these prices were captured into the permanent archive. */
   pricedAt?: string;
+  /** Whether this price block was captured before or after kickoff. */
+  priceQuality?: PriceQuality;
 }
 
 export interface AccaLeg {

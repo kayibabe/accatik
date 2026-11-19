@@ -12,6 +12,7 @@ import {
   getFixtureMatchResultSummary,
 } from '../utils/accaMath.ts';
 import { combinedFairProbability } from '../utils/probability.ts';
+import { isPreMatchFixture } from '../utils/priceQuality.ts';
 import type { SortDirection, SortState } from '../utils/tableSort.ts';
 import { SORT_ASC, sortRows, toggleSort } from '../utils/tableSort.ts';
 import { SettlementLabel } from './SettlementLabel.tsx';
@@ -60,6 +61,12 @@ export function CuratedAccaView({
   const potentialReturn = calculatePotentialReturn(stake, totalOdds);
   const fixtureMap = new Map(fixtures.map((f) => [f.id, f]));
   const ticketSettlement = evaluateTicketSettlement(legs, fixtures, stake);
+  const startedLeg =
+    legs.find((leg) => {
+      const fixture = fixtureMap.get(leg.fixtureId);
+      return fixture ? !isPreMatchFixture(fixture) : false;
+    }) ?? null;
+  const canSave = legs.length > 0 && startedLeg === null;
 
   const handleCopy = async () => {
     if (legs.length === 0) return;
@@ -75,7 +82,7 @@ export function CuratedAccaView({
   };
 
   const handleSave = () => {
-    if (legs.length === 0) return;
+    if (!canSave) return;
     onSaveTicket(stake);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -156,7 +163,12 @@ export function CuratedAccaView({
           <button
             type="button"
             onClick={handleSave}
-            disabled={legs.length === 0 || isFetchingDate}
+            disabled={!canSave || isFetchingDate}
+            title={
+              startedLeg
+                ? 'This slip contains a match that has already started.'
+                : 'Save this slip to the local archive'
+            }
             className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-slate-800 bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
           >
             <Bookmark className="w-3.5 h-3.5" aria-hidden="true" />
@@ -177,6 +189,14 @@ export function CuratedAccaView({
       {isFetchingDate && (
         <div className="px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-600">
           Loading matches and building accumulator ticket for {selectedDate}...
+        </div>
+      )}
+
+      {startedLeg && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
+          Save disabled — {startedLeg.homeTeam} vs {startedLeg.awayTeam} has
+          already kicked off. Remove the started selection to save a pre-match
+          slip.
         </div>
       )}
 

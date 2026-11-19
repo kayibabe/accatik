@@ -330,6 +330,14 @@ export function toFixture(
       ? raw.score?.fulltime?.away ?? raw.goals?.away ?? null
       : raw.goals?.away ?? null;
   const roundPrefix = raw.league.round ? `${raw.league.round} · ` : '';
+  const priceQuality: Fixture['priceQuality'] =
+    markets.length === 0
+      ? 'unknown'
+      : status === 'Void'
+        ? 'unknown'
+        : status === 'Scheduled' && !awaitingResult
+          ? 'prematch'
+          : 'live';
 
   let tacticalSummary: string;
   if (awaitingResult) {
@@ -386,5 +394,6 @@ export function toFixture(
     bookmakerName,
     hasLiveOdds: markets.length > 0,
     markets,
+    priceQuality,
   };
 }

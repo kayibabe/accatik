@@ -50,7 +50,7 @@ test('skips void fixtures and fixtures without prices', () => {
   );
 });
 
-test('prefers upcoming fixtures and only then tops up with finished ones', () => {
+test('never tops up a pre-match ticket with live or finished fixtures', () => {
   const upcoming = ['u1', 'u2', 'u3'].map((id, index) =>
     pricedFixture(id, 1.5, { kickoffTimestamp: Date.UTC(2026, 10, 16, 16 + index) })
   );
@@ -66,13 +66,13 @@ test('prefers upcoming fixtures and only then tops up with finished ones', () =>
 
   const legs = buildRecommendedAcca([...finished, ...upcoming], 5, 'balanced', 8);
 
-  // 1.5^3 = 3.375 from the upcoming slate, then one finished leg to pass 5.00
+  // 1.5^3 = 3.375, so the target stays unmet. The old builder would have
+  // reached 5.00 by adding a match that had already kicked off.
   assert.deepEqual(
-    legs.slice(0, 3).map((leg) => leg.fixtureId),
+    legs.map((leg) => leg.fixtureId),
     ['u1', 'u2', 'u3']
   );
-  assert.ok(['p1', 'p2'].includes(legs[3].fixtureId));
-  assert.ok(calculateTotalOdds(legs) >= 5);
+  assert.ok(calculateTotalOdds(legs) < 5);
 });
 
 test('the goals strategy prefers goal markets over match winners', () => {
@@ -92,7 +92,7 @@ test('the goals strategy prefers goal markets over match winners', () => {
   assert.equal(legs[0].marketType, 'Goals');
 });
 
-test('locked legs are preserved, unlocked legs are upgraded to reach target', () => {
+test('an unreachable target never swaps a chosen market for a longer price', () => {
   const fixture = makeFixture({
     id: 'u',
     status: 'Scheduled',
@@ -118,8 +118,8 @@ test('locked legs are preserved, unlocked legs are upgraded to reach target', ()
     5,
     'balanced'
   );
-  assert.equal(unlocked[0].odds, 2);
-  assert.equal(unlocked[0].marketId, 'u-ou-25');
+  assert.equal(unlocked[0].odds, 1.2);
+  assert.equal(unlocked[0].marketId, 'u-1x2-h');
 });
 
 test('an existing ticket already past the target is returned untouched', () => {
@@ -227,8 +227,8 @@ test('the probability strategy orders legs from highest to lowest probability', 
   assert.deepEqual(probabilities, [...probabilities].sort((a, b) => b - a));
 });
 
-test('the most likely slip is still ranked after the target boost', () => {
-  const make = (id: string, likelyOdds: number, likelyFair: number, boostOdds: number, boostFair: number) =>
+test('the most likely picks are kept even when the target is unreachable', () => {
+  const make = (id: string, likelyOdds: number, likelyFair: number, longOdds: number, longFair: number) =>
     makeFixture({
       id,
       status: 'Scheduled',
@@ -240,13 +240,14 @@ test('the most likely slip is still ranked after the target boost', () => {
           fairProbability: likelyFair,
         },
         {
-          ...makeMarket(`${id}-ou-25`, boostOdds, 'Goals', 'Over 2.5 Goals'),
-          fairProbability: boostFair,
+          ...makeMarket(`${id}-ou-25`, longOdds, 'Goals', 'Over 2.5 Goals'),
+          fairProbability: longFair,
         },
       ],
     });
 
-  // Pick order is a, b, c; boosting to reach 12.00 inverts the probabilities.
+  // Pick order is a, b, c. The target is unreachable inside five legs, and
+  // the builder must leave it unmet rather than upgrading to 3.00 longshots.
   const fixtures = [
     make('a', 1.18, 80.9, 3.0, 33),
     make('b', 1.3, 73.5, 2.4, 40),
@@ -255,12 +256,17 @@ test('the most likely slip is still ranked after the target boost', () => {
 
   const legs = buildRecommendedAcca(fixtures, 12, 'probability', 5);
 
-  const probabilities = legs.map((leg) => leg.fairProbability ?? 0);
-  assert.deepEqual(probabilities, [...probabilities].sort((x, y) => y - x));
   assert.deepEqual(
     legs.map((leg) => leg.fixtureId),
-    ['c', 'b', 'a']
+    ['a', 'b', 'c']
   );
+  assert.deepEqual(
+    legs.map((leg) => leg.odds),
+    [1.18, 1.3, 1.42]
+  );
+  assert.ok(calculateTotalOdds(legs) < 12);
+  const probabilities = legs.map((leg) => leg.fairProbability ?? 0);
+  assert.deepEqual(probabilities, [...probabilities].sort((x, y) => y - x));
 });
 
 test('probability legs carry the de-vigged value through to the ticket', () => {

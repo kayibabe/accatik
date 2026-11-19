@@ -104,6 +104,7 @@ export function mergeArchivedPrices(
       bookmakerName: saved.bookmakerName,
       hasLiveOdds: saved.hasLiveOdds,
       pricedAt: saved.pricedAt,
+      priceQuality: saved.priceQuality,
     };
   });
 }

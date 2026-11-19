@@ -44,7 +44,16 @@ export function scoreMarket(
   }
 
   if (strategy === 'high-yield') {
-    return (Math.min(market.odds, 3.0) / 2.2) * isRecommended;
+    // "High-yield" used to climb to the longest price on the board (3.00+ in
+    // practice, and frequently 6.00+), which is precisely where the
+    // bookmaker margin compounds fastest. Prefer the 2.10–3.40 band and
+    // actively downgrade true longshots.
+    const inBand = market.odds >= 2.1 && market.odds <= 3.4;
+    const bandWeight = inBand ? 1.45 : market.odds > 4 ? 0.45 : 0.85;
+    return (
+      (bandWeight / (1 + Math.abs(market.odds - 2.75) * 0.25)) *
+      isRecommended
+    );
   }
 
   const balancedBand = market.odds >= 1.32 && market.odds <= 1.95 ? 1.35 : 0.9;

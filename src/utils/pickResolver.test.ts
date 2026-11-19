@@ -85,6 +85,27 @@ test('the angle card and the ticket resolve to the same market', () => {
   }
 });
 
+test('high-yield prefers the 2.10–3.40 band and rejects longshots', () => {
+  const fixture = makeFixture({
+    id: 'hy',
+    markets: [
+      makeMarket('hy-short', 1.4, '1X2', 'Short Win'),
+      makeMarket('hy-band', 2.5, '1X2', 'Band Win'),
+      makeMarket('hy-long', 6.0, '1X2', 'Longshot Win'),
+    ],
+    // Even with the recommendation bonus, a 6.00 shot must not win.
+    recommendedPickId: 'hy-long',
+  });
+
+  const picked = resolvePick(fixture, 'high-yield');
+
+  assert.equal(picked?.id, 'hy-band');
+  assert.ok(
+    scoreMarket(fixture, fixture.markets[1], 'high-yield') >
+      scoreMarket(fixture, fixture.markets[2], 'high-yield')
+  );
+});
+
 test('the shortest price is exposed as context, not as the pick', () => {
   const angle = buildRecommendedAngle(favouriteFixture(), 'balanced');
 

@@ -38,7 +38,7 @@ export function describeStrategy(
     case 'high-yield':
       return {
         title: `Today's ${target}+ High-Yield Value Acca`,
-        summary: `Selects higher-priced 1X2 and Over 2.5 angles across today's top competitions to exceed ${target}+ odds in fewer legs.`,
+        summary: `Targets the 2.10–3.40 price band where a pick still has a realistic chance, instead of chasing longshots whose margin makes ${target}+ odds negative value.`,
       };
     case 'probability':
       return {
