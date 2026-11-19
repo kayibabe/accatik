@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import type { Fixture } from '../../src/types/fixtures.ts';
 import {
   DEFAULT_MAX_LEGS,
   DEFAULT_TARGET_ODDS,
@@ -9,7 +10,66 @@ import {
   parseMaxLegs,
   parseResultFixtureIds,
   parseTargetOdds,
+  toPublicFixture,
 } from './fixtures.ts';
+
+test('public fixture projection exposes only guest-safe fields', () => {
+  const full = {
+    id: '101',
+    homeTeam: 'Team A',
+    awayTeam: 'Team B',
+    competition: 'League One',
+    country: 'Malawi',
+    matchDate: '19/11/2026',
+    matchDateIso: '2026-11-19',
+    kickoffTime: '20:00',
+    status: 'Scheduled',
+    venue: 'Private Stadium',
+    formHome: 'W-W-L',
+    formAway: 'L-D-W',
+    tacticalSummary: 'Secret tactical note',
+    recommendedPickId: '101-1x2-h',
+    hasLiveOdds: true,
+    markets: [
+      {
+        id: '101-1x2-h',
+        marketType: '1X2',
+        label: 'Home',
+        odds: 2.1,
+        impliedProbability: 47.6,
+        fairProbability: 52,
+        rationale: 'Model edge',
+      },
+    ],
+    modelAdvice: 'Home win',
+    modelProbabilities: { home: 52, draw: 26, away: 22 },
+  } as unknown as Fixture;
+
+  assert.deepEqual(toPublicFixture(full), {
+    id: '101',
+    homeTeam: 'Team A',
+    awayTeam: 'Team B',
+    competition: 'League One',
+    country: 'Malawi',
+    matchDate: '19/11/2026',
+    kickoffTime: '20:00',
+    status: 'Scheduled',
+  });
+
+  const serialized = JSON.stringify(toPublicFixture(full));
+  for (const leaked of [
+    'odds',
+    'rationale',
+    'bookmaker',
+    'model',
+    'tactical',
+    'form',
+    'recommended',
+    'venue',
+  ]) {
+    assert.equal(serialized.includes(leaked), false, `leaked ${leaked}`);
+  }
+});
 
 test('result IDs accept strings and numbers and drop duplicates', () => {
   assert.deepEqual(

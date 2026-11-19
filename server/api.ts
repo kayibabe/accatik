@@ -3,6 +3,8 @@ import type {
   DeepAnalysisResponse,
   Fixture,
   GroundingSource,
+  PublicFixture,
+  PublicSlateResponse,
   RecommendedPickRef,
   SettlementStatus,
 } from '../src/types/fixtures.ts';
@@ -445,6 +447,51 @@ export function getHealth(): ApiResult<{
     apiFootballHost: apiFootballHostLabel(),
     rateLimitPerMinute: Number(process.env.API_RATE_LIMIT_PER_MIN) || 60,
   });
+}
+
+/**
+ * Projects a full fixture onto the guest-safe shape. Use this for every public
+ * payload: adding a field here is an explicit decision, never a spread of the
+ * internal fixture.
+ */
+export function toPublicFixture(fixture: Fixture): PublicFixture {
+  return {
+    id: fixture.id,
+    homeTeam: fixture.homeTeam,
+    awayTeam: fixture.awayTeam,
+    competition: fixture.competition,
+    country: fixture.country,
+    matchDate: fixture.matchDate,
+    kickoffTime: fixture.kickoffTime,
+    status: fixture.status,
+  };
+}
+
+/**
+ * Guest-facing match list for the landing page. The full slate is still loaded
+ * through the shared cache/archive path, but prices, recommended picks,
+ * rationales and model output never cross the wire to an unauthenticated user.
+ */
+export async function getPublicTodayFixtures(): Promise<
+  ApiResult<PublicSlateResponse | ErrorBody>
+> {
+  const missing = missingApiKey();
+  if (missing) return missing;
+
+  try {
+    const dateIso = getTodayIsoDate();
+    const loaded = await getSlate(dateIso);
+    return ok({
+      date: dateIso,
+      displayDate: formatDisplayDate(dateIso),
+      timezoneLabel: 'CAT (GMT+2) Kickoff Times',
+      fixtures: loaded.fixtures.map(toPublicFixture),
+      cachedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Error fetching public match list:', error);
+    return fail(500, errorMessage(error, 'Failed to load today’s matches.'));
+  }
 }
 
 export async function getTodayFixtures(

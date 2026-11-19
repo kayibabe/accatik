@@ -10,6 +10,7 @@ import { MyActivityView } from './components/MyActivityView.tsx';
 import { SourcesView } from './components/SourcesView.tsx';
 import { AuthDialog } from './components/AuthDialog.tsx';
 import { AdminPanel } from './components/AdminPanel.tsx';
+import { LandingPage } from './components/LandingPage.tsx';
 import { useAuth } from './context/AuthContext.tsx';
 import type {
   AccaLeg,
@@ -19,6 +20,7 @@ import type {
   Fixture,
   GroundingSource,
   MarketOption,
+  PublicSlateResponse,
   SavedTicket,
 } from './types/fixtures.ts';
 import {
@@ -98,6 +100,7 @@ export default function App() {
     profile,
     loading: authLoading,
     notice,
+    noticeTone,
     openAuth,
     signOut,
     dismissNotice,
@@ -105,6 +108,7 @@ export default function App() {
     resendVerification,
   } = useAuth();
   const todayDate = getClientLocalIsoDate();
+  const isGuest = !authLoading && !user;
   const [selectedDate, setSelectedDate] = useState<string>(todayDate);
   const [activeTab, setActiveTab] = useState<ActiveTab>('slate');
   const [strategy, setStrategy] = useState<AccaStrategy>('balanced');
@@ -116,6 +120,12 @@ export default function App() {
   const [selectedLegs, setSelectedLegs] = useState<AccaLeg[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Guests only ever receive the sanitized match list; the full priced slate
+  // is fetched exclusively for signed-in users.
+  const [publicSlate, setPublicSlate] = useState<PublicSlateResponse | null>(null);
+  const [publicLoading, setPublicLoading] = useState<boolean>(true);
+  const [publicError, setPublicError] = useState<string | null>(null);
 
   const [deepAnalyses, setDeepAnalyses] = useState<
     Record<string, DeepAnalysisResponse>
@@ -185,6 +195,10 @@ export default function App() {
       setFilters(loadSlateFilterState());
       setImportPrompt(null);
       setAdminOpen(false);
+      // A guest must not keep a priced slate from a previous signed-in session.
+      setSlate(null);
+      setSelectedLegs([]);
+      setActiveTab('slate');
       setPrefsReady(true);
       return;
     }
@@ -338,7 +352,7 @@ export default function App() {
   );
 
   useEffect(() => {
-    if (authLoading || !prefsReady) return;
+    if (authLoading || !prefsReady || !user) return;
     const controls = slateControlsRef.current;
     fetchSlateForDate(
       todayDate,
@@ -347,7 +361,31 @@ export default function App() {
       controls.maxLegs,
       false
     );
-  }, [fetchSlateForDate, todayDate, authLoading, prefsReady]);
+  }, [fetchSlateForDate, todayDate, authLoading, prefsReady, user?.id]);
+
+  const fetchPublicMatches = useCallback(async () => {
+    setPublicLoading(true);
+    setPublicError(null);
+    try {
+      const data = await apiFetch<PublicSlateResponse>(
+        '/api/fixtures/public/today'
+      );
+      setPublicSlate(data);
+    } catch (err) {
+      setPublicError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to retrieve today’s match schedule.'
+      );
+    } finally {
+      setPublicLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isGuest) return;
+    void fetchPublicMatches();
+  }, [isGuest, fetchPublicMatches]);
 
   const handleChangeDate = (nextDate: string) => {
     setSelectedDate(nextDate);
@@ -762,22 +800,59 @@ export default function App() {
         profile={profile}
         onSignIn={openAuth}
         onSignOut={() => void signOut()}
+        onResendVerification={() => void handleResendVerification()}
         isAdmin={profile?.role === 'admin'}
         onAdmin={() => setAdminOpen((open) => !open)}
+        isGuest={isGuest}
       />
 
       {notice && (
-        <div className="bg-emerald-50 border-b border-emerald-200">
-          <div className="max-w-[1380px] mx-auto px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3 text-xs text-emerald-900">
+        <div
+          role={noticeTone === 'error' ? 'alert' : 'status'}
+          className={
+            noticeTone === 'error'
+              ? 'bg-amber-50 border-b border-amber-200'
+              : 'bg-emerald-50 border-b border-emerald-200'
+          }
+        >
+          <div
+            className={`max-w-[1380px] mx-auto px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3 text-xs ${
+              noticeTone === 'error' ? 'text-amber-900' : 'text-emerald-900'
+            }`}
+          >
             <span>{notice}</span>
-            <button
-              type="button"
-              onClick={dismissNotice}
-              aria-label="Dismiss"
-              className="text-emerald-700 hover:text-emerald-900 cursor-pointer"
-            >
-              <X className="w-4 h-4" aria-hidden="true" />
-            </button>
+            <div className="flex items-center gap-3 shrink-0">
+              {noticeTone === 'error' && user && (
+                <button
+                  type="button"
+                  onClick={() => void refreshAuth()}
+                  className="font-semibold text-amber-900 underline hover:text-amber-700 cursor-pointer"
+                >
+                  Retry
+                </button>
+              )}
+              {noticeTone === 'error' && !user && (
+                <button
+                  type="button"
+                  onClick={openAuth}
+                  className="font-semibold text-amber-900 underline hover:text-amber-700 cursor-pointer"
+                >
+                  Sign in
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={dismissNotice}
+                aria-label="Dismiss"
+                className={
+                  noticeTone === 'error'
+                    ? 'text-amber-800 hover:text-amber-950 cursor-pointer'
+                    : 'text-emerald-700 hover:text-emerald-900 cursor-pointer'
+                }
+              >
+                <X className="w-4 h-4" aria-hidden="true" />
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -843,8 +918,12 @@ export default function App() {
         </div>
       )}
 
-      {/* Universal Matchday Date Bar across all views */}
-      <div className="bg-white border-b border-slate-200">
+      {/* Universal Matchday Date Bar across all views (signed-in only) */}
+      <div
+        className={`bg-white border-b border-slate-200 ${
+          isGuest ? 'hidden' : ''
+        }`}
+      >
         <div className="max-w-[1380px] mx-auto px-4 sm:px-6 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
             <span className="font-semibold text-slate-900">
@@ -871,12 +950,28 @@ export default function App() {
         </div>
       </div>
 
-      <main className="flex-1 w-full max-w-[1380px] mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <main
+        className={`flex-1 w-full max-w-[1380px] mx-auto px-4 sm:px-6 ${
+          isGuest ? 'py-8 sm:py-12' : 'py-6 sm:py-8'
+        }`}
+      >
         {adminOpen && profile?.role === 'admin' && (
           <AdminPanel onClose={() => setAdminOpen(false)} />
         )}
 
-        {isLoading && !slate ? (
+        {isGuest ? (
+          <LandingPage
+            fixtures={publicSlate?.fixtures ?? []}
+            displayDate={publicSlate?.displayDate ?? todayDate}
+            timezoneLabel={
+              publicSlate?.timezoneLabel ?? 'CAT (GMT+2) Kickoff Times'
+            }
+            loading={publicLoading}
+            error={publicError}
+            onRetry={() => void fetchPublicMatches()}
+            onSignIn={openAuth}
+          />
+        ) : isLoading && !slate ? (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             <div className="lg:col-span-8 space-y-4">
               <div className="h-8 w-72 bg-slate-200 rounded-md animate-pulse" />

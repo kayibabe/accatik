@@ -224,6 +224,11 @@ export function AuthDialog() {
           </button>
         )}
 
+        <p className="text-[11px] leading-relaxed text-slate-500">
+          Signed up but didn&apos;t get a verification email? Sign in and use the
+          &quot;Resend verification&quot; button in the top bar.
+        </p>
+
         <p className="border-t border-slate-100 pt-3 text-[11px] leading-relaxed text-slate-500">
           18+ only. Analytics are informational, not betting advice. Past
           performance is not indicative of future results.

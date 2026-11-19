@@ -1,4 +1,4 @@
-import { getJwt } from '../lib/appwrite.ts';
+import { clearJwt, getJwt } from '../lib/appwrite.ts';
 
 /**
  * Browser API client.
@@ -9,7 +9,8 @@ import { getJwt } from '../lib/appwrite.ts';
  * JWT is attached when the user is signed in.
  */
 function apiBaseUrl(): string {
-  const configured = String(import.meta.env.VITE_API_BASE_URL || '')
+  const env = (import.meta as { env?: Record<string, string | undefined> }).env ?? {};
+  const configured = String(env.VITE_API_BASE_URL || '')
     .trim()
     .replace(/\/+$/, '');
 
@@ -33,20 +34,55 @@ function errorFromBody(data: unknown, status: number): string {
   return `The API request failed with HTTP ${status}.`;
 }
 
-export async function apiFetch<T>(
-  path: string,
-  init?: RequestInit
-): Promise<T> {
-  const headers = new Headers(init?.headers || {});
-  const jwt = await getJwt();
-  if (jwt) headers.set('Authorization', `Bearer ${jwt}`);
+/** A protected call failed after refreshing the JWT; the session must be re-established. */
+export class SessionExpiredError extends Error {
+  constructor() {
+    super('Your session has expired. Please sign in again.');
+    this.name = 'SessionExpiredError';
+  }
+}
 
-  let response: Response;
+/** Injectable so JWT refresh and the 401 retry can be tested in isolation. */
+export interface ApiDependencies {
+  getJwt: (force?: boolean) => Promise<string | null>;
+  clearJwt: () => void;
+  fetchFn?: typeof fetch;
+}
+
+const defaultDependencies: ApiDependencies = { getJwt, clearJwt };
+
+async function send(
+  path: string,
+  init: RequestInit | undefined,
+  jwt: string | null,
+  deps: ApiDependencies
+): Promise<Response> {
+  const headers = new Headers(init?.headers || {});
+  if (jwt) headers.set('Authorization', `Bearer ${jwt}`);
   try {
-    response = await fetch(apiUrl(path), { ...init, headers });
+    const doFetch = deps.fetchFn ?? fetch;
+    return await doFetch(apiUrl(path), { ...init, headers });
   } catch (err) {
     const detail = err instanceof Error ? err.message : 'Network error.';
     throw new Error(`Could not reach the API. ${detail}`);
+  }
+}
+
+export async function apiFetch<T>(
+  path: string,
+  init?: RequestInit,
+  deps: ApiDependencies = defaultDependencies
+): Promise<T> {
+  let response = await send(path, init, await deps.getJwt(), deps);
+
+  // A cached JWT can be invalidated by a sign-out or a replacement session.
+  // Discard it and retry once with a new one before blaming the user.
+  if (response.status === 401) {
+    deps.clearJwt();
+    const freshJwt = await deps.getJwt(true);
+    if (!freshJwt) throw new SessionExpiredError();
+    response = await send(path, init, freshJwt, deps);
+    if (response.status === 401) throw new SessionExpiredError();
   }
 
   const contentType = response.headers.get('content-type') || '';

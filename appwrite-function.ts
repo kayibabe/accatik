@@ -3,6 +3,7 @@ import {
   analyzeFixture,
   getLedgerSummaryResult,
   getMatchDetail,
+  getPublicTodayFixtures,
   getTodayFixtures,
   getHealth,
   listLedgerTicketsResult,
@@ -128,6 +129,11 @@ function readBody(req: AppwriteRequest): unknown {
 
 const routes: Route[] = [
   { method: 'GET', pattern: '/health', handler: () => getHealth() },
+  {
+    method: 'GET',
+    pattern: '/fixtures/public/today',
+    handler: () => getPublicTodayFixtures(),
+  },
   { method: 'POST', pattern: '/fixtures/today', handler: ({ body }) => getTodayFixtures(body) },
   { method: 'POST', pattern: '/fixtures/detail', handler: ({ body }) => getMatchDetail(body) },
   { method: 'POST', pattern: '/fixtures/results', handler: ({ body }) => refreshResults(body) },

@@ -83,6 +83,31 @@ export interface Fixture {
   priceQuality?: PriceQuality;
 }
 
+/**
+ * Guest-safe fixture shape. Deliberately excludes prices, picks, rationales,
+ * form and model output so none of the betting specifics leave the server for
+ * the public landing page.
+ */
+export interface PublicFixture {
+  id: string;
+  homeTeam: string;
+  awayTeam: string;
+  competition: string;
+  country: string;
+  matchDate: string;
+  kickoffTime: string;
+  status: Fixture['status'];
+}
+
+/** Response returned by GET /api/fixtures/public/today. */
+export interface PublicSlateResponse {
+  date: string;
+  displayDate: string;
+  timezoneLabel: string;
+  fixtures: PublicFixture[];
+  cachedAt: string;
+}
+
 export interface AccaLeg {
   fixtureId: string;
   homeTeam: string;
