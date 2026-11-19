@@ -82,6 +82,9 @@ interface FixtureBoardProps {
   analyzingIds: Record<string, boolean>;
   analysisErrors: Record<string, string>;
   onRequestDeepAnalysis: (fixture: Fixture) => void;
+  /** Optional controlled slate filters. When supplied, App owns the value. */
+  filters?: SlateFilterState;
+  onFiltersChange?: (next: SlateFilterState) => void;
 }
 
 type StatusFilter = 'all' | 'odds' | 'upcoming' | 'played' | 'void';
@@ -286,11 +289,17 @@ export function FixtureBoard({
   analyzingIds,
   analysisErrors,
   onRequestDeepAnalysis,
+  filters: controlledFilters,
+  onFiltersChange,
 }: FixtureBoardProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCompetition, setSelectedCompetition] = useState<string>('ALL');
   // One object so the chips, the saved copy and the storage write agree.
-  const [filters, setFilters] = useState<SlateFilterState>(loadSlateFilterState);
+  // App may own this value to sync filters to the signed-in user's account.
+  const [internalFilters, setInternalFilters] = useState<SlateFilterState>(
+    loadSlateFilterState
+  );
+  const filters = controlledFilters ?? internalFilters;
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [sortMode, setSortMode] = useState<SortMode>('board');
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
@@ -302,7 +311,9 @@ export function FixtureBoard({
   });
 
   const updateFilters = (patch: Partial<SlateFilterState>) => {
-    setFilters((prev) => ({ ...prev, ...patch }));
+    const next = { ...filters, ...patch };
+    if (onFiltersChange) onFiltersChange(next);
+    else setInternalFilters(next);
   };
 
   const {
@@ -366,7 +377,10 @@ export function FixtureBoard({
     minModelEdge > 0 ||
     kickoffWindowHours > 0;
 
-  const resetSlateFilters = () => setFilters(DEFAULT_SLATE_FILTER_STATE);
+  const resetSlateFilters = () => {
+    if (onFiltersChange) onFiltersChange(DEFAULT_SLATE_FILTER_STATE);
+    else setInternalFilters(DEFAULT_SLATE_FILTER_STATE);
+  };
 
   // What the sticky summary bar renders, one removable chip per active filter.
   const activeFilterChips: Array<{ key: string; label: string; clear: () => void }> = [];

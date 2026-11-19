@@ -8,10 +8,8 @@ import type {
 } from '../types/fixtures.ts';
 import {
   evaluateMarketSettlement,
-  evaluateTicketSettlement,
   formatTicketForCopy,
 } from '../utils/accaMath.ts';
-import type { TicketSettlementSummary } from '../utils/accaMath.ts';
 import {
   resolveSettlementPool,
   type FixtureSnapshots,
@@ -22,16 +20,7 @@ import {
   groupTicketsByDate,
   ticketDateIso,
 } from '../utils/savedTicketGroups.ts';
-import {
-  buildDailyPerformance,
-  buildMarketTypePerformance,
-  buildOddsBandPerformance,
-  buildSlipAnalytics,
-} from '../utils/slipAnalytics.ts';
-import type {
-  LegSettlementInput,
-  SlipSettlementInput,
-} from '../utils/slipAnalytics.ts';
+import { buildSlipActivityData } from '../utils/slipActivity.ts';
 import { SavedMatchDetailDialog } from './SavedMatchDetailDialog.tsx';
 import { SavedTicketCard } from './SavedTicketCard.tsx';
 import { ShadowLedgerPanel } from './ShadowLedgerPanel.tsx';
@@ -55,11 +44,6 @@ interface SavedSlipsViewProps {
     dateIso: string,
     fixtureIds: string[]
   ) => Promise<Fixture[]>;
-}
-
-interface TicketSettlementEntry {
-  pool: Fixture[];
-  settlement: TicketSettlementSummary;
 }
 
 const RESULT_REQUEST_BATCH = 20;
@@ -94,83 +78,21 @@ export function SavedSlipsView({
   const [matchDetailError, setMatchDetailError] = useState<string | null>(null);
   const matchDetailRequestRef = useRef(0);
 
-  const settlements = useMemo(() => {
-    const map = new Map<string, TicketSettlementEntry>();
-    for (const ticket of savedTickets) {
-      const pool = resolveSettlementPool(ticket, fixtureSnapshots, fixtures);
-      map.set(ticket.id, {
-        pool,
-        settlement: evaluateTicketSettlement(ticket.legs, pool, ticket.stake),
-      });
-    }
-    return map;
-  }, [savedTickets, fixtureSnapshots, fixtures]);
+  // Personal activity projection, shared with the My Activity view so both
+  // screens report identical settlement and performance numbers.
+  const activity = useMemo(
+    () => buildSlipActivityData(savedTickets, fixtures, fixtureSnapshots),
+    [savedTickets, fixtures, fixtureSnapshots]
+  );
+  const {
+    settlements,
+    analytics,
+    daily: dailyPerformance,
+    oddsBands: oddsBandPerformance,
+    marketTypes: marketTypePerformance,
+  } = activity;
 
   const groups = useMemo(() => groupTicketsByDate(savedTickets), [savedTickets]);
-
-  /**
-   * One flat row per saved slip for the analytics module. Settlement already
-   * knows the void-adjusted odds and the payout, so nothing is recomputed here.
-   */
-  const performanceRows = useMemo<SlipSettlementInput[]>(
-    () =>
-      savedTickets.map((ticket) => {
-        const settlement = settlements.get(ticket.id)?.settlement;
-        return {
-          id: ticket.id,
-          dateIso: ticket.dateIso ?? ticketDateIso(ticket),
-          createdAt: ticket.createdAt,
-          stake: ticket.stake,
-          effectiveOdds: settlement?.effectiveOdds ?? 0,
-          legCount: ticket.legs.length,
-          status: settlement?.status ?? 'Pending',
-          settledReturn: settlement?.settledReturn ?? 0,
-        };
-      }),
-    [savedTickets, settlements]
-  );
-
-  const legPerformanceRows = useMemo<LegSettlementInput[]>(() => {
-    const rows: LegSettlementInput[] = [];
-
-    for (const ticket of savedTickets) {
-      const pool = settlements.get(ticket.id)?.pool ?? [];
-      const byId = new Map(pool.map((fixture) => [fixture.id, fixture]));
-
-      for (const leg of ticket.legs) {
-        const fixture = byId.get(leg.fixtureId);
-        rows.push({
-          marketType: leg.marketType,
-          status: fixture
-            ? evaluateMarketSettlement(fixture, {
-                id: leg.marketId,
-                label: leg.marketLabel,
-                marketType: leg.marketType,
-              })
-            : 'Pending',
-        });
-      }
-    }
-
-    return rows;
-  }, [savedTickets, settlements]);
-
-  const analytics = useMemo(
-    () => buildSlipAnalytics(performanceRows),
-    [performanceRows]
-  );
-  const dailyPerformance = useMemo(
-    () => buildDailyPerformance(performanceRows),
-    [performanceRows]
-  );
-  const oddsBandPerformance = useMemo(
-    () => buildOddsBandPerformance(performanceRows),
-    [performanceRows]
-  );
-  const marketTypePerformance = useMemo(
-    () => buildMarketTypePerformance(legPerformanceRows),
-    [legPerformanceRows]
-  );
 
   /**
    * Legs that still need a scoreline. Only fixtures whose kickoff has passed

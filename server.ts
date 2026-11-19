@@ -3,31 +3,17 @@ import express from 'express';
 import type { NextFunction, Request, Response } from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolveApiFootballBaseUrl, resolveApiFootballKey } from './server/lib/apiFootball.ts';
+import { getHealth } from './server/api.ts';
 import { createRateLimiter } from './server/lib/cache.ts';
-import { getTodayIsoDate } from './server/lib/time.ts';
 import { fixturesRouter } from './server/routes/fixtures.ts';
 import { ledgerRouter } from './server/routes/ledger.ts';
+import { userRouter } from './server/routes/user.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = Number(process.env.PORT) || 3000;
 const RATE_LIMIT_PER_MIN = Number(process.env.API_RATE_LIMIT_PER_MIN) || 60;
-
-/**
- * Which API-Football host requests will hit, so a custom gateway can be
- * confirmed from /api/health without leaking the full URL.
- */
-function apiFootballHostLabel(): string {
-  try {
-    const custom = resolveApiFootballBaseUrl();
-    if (!custom) return 'default';
-    return new URL(custom).host;
-  } catch {
-    return 'invalid';
-  }
-}
 
 async function createServer() {
   const app = express();
@@ -37,13 +23,8 @@ async function createServer() {
   app.use(express.json({ limit: '32kb' }));
 
   app.get('/api/health', (_req, res) => {
-    res.json({
-      ok: true,
-      date: getTodayIsoDate(),
-      hasApiFootballKey: Boolean(resolveApiFootballKey()),
-      apiFootballHost: apiFootballHostLabel(),
-      rateLimitPerMinute: RATE_LIMIT_PER_MIN,
-    });
+    const result = getHealth();
+    res.status(result.status).json(result.body);
   });
 
   app.use(
@@ -58,6 +39,7 @@ async function createServer() {
   );
 
   app.use('/api/ledger', ledgerRouter);
+  app.use('/api', userRouter);
 
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Unknown API endpoint.' });

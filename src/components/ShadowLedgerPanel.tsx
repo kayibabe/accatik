@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { BarChart3, RefreshCw } from 'lucide-react';
 import type { LedgerBreakdownRow, LedgerSummary } from '../types/ledger.ts';
+import { apiFetch } from '../utils/api.ts';
 
 const percent = (value: number | null): string =>
   value === null ? '—' : `${value.toFixed(1)}%`;
@@ -34,12 +35,7 @@ export function ShadowLedgerPanel() {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/ledger/summary');
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        throw new Error(data?.error || 'Could not load the shadow ledger.');
-      }
-      setSummary(data as LedgerSummary);
+      setSummary(await apiFetch<LedgerSummary>('/api/ledger/summary'));
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Could not load the shadow ledger.'

@@ -44,5 +44,39 @@
                 "mockNumbers": []
             }
         }
-    }
+    },
+    "sites": [
+        {
+            "$id": "6afeebc60038894d8725",
+            "name": "accatik",
+            "enabled": true,
+            "logging": true,
+            "framework": "react",
+            "timeout": 30,
+            "installCommand": "npm install",
+            "buildCommand": "npm run build",
+            "outputDirectory": "./dist",
+            "buildRuntime": "node-22",
+            "adapter": "static",
+            "fallbackFile": "index.html",
+            "path": "."
+        }
+    ],
+    "functions": [
+        {
+            "$id": "accatik-api",
+            "name": "AccaTik API",
+            "runtime": "node-22",
+            "path": ".",
+            "entrypoint": "appwrite-function.ts",
+            "commands": "npm install",
+            "execute": ["any"],
+            "events": [],
+            "schedule": "",
+            "interval": 0,
+            "timeout": 60,
+            "enabled": true,
+            "logging": true
+        }
+    ]
 }

@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertCircle, RefreshCw } from 'lucide-react';
+import { AlertCircle, RefreshCw, X } from 'lucide-react';
 import { TopBar, type ActiveTab } from './components/TopBar.tsx';
 import { DateNavigator } from './components/DateNavigator.tsx';
 import { FixtureBoard } from './components/FixtureBoard.tsx';
 import { AccaTicketSlip } from './components/AccaTicketSlip.tsx';
 import { CuratedAccaView } from './components/CuratedAccaView.tsx';
 import { SavedSlipsView } from './components/SavedSlipsView.tsx';
+import { MyActivityView } from './components/MyActivityView.tsx';
 import { SourcesView } from './components/SourcesView.tsx';
+import { AuthDialog } from './components/AuthDialog.tsx';
+import { AdminPanel } from './components/AdminPanel.tsx';
+import { useAuth } from './context/AuthContext.tsx';
 import type {
   AccaLeg,
   AccaStrategy,
@@ -22,9 +26,16 @@ import {
   calculateTotalOdds,
 } from './utils/accaMath.ts';
 import { completeAccaToTargetOdds } from './utils/accaEngine.ts';
+import { apiFetch } from './utils/api.ts';
 import { describeStrategy } from './utils/strategy.ts';
 import type { TicketShape } from './utils/ticketShapes.ts';
 import { isPreMatchFixture } from './utils/priceQuality.ts';
+import {
+  loadSlateFilterState,
+  parseSlateFilterState,
+} from './utils/slateFilterState.ts';
+import type { SlateFilterState } from './utils/slateFilterState.ts';
+import type { UserPreferences } from './types/user.ts';
 import {
   loadFixtureSnapshots,
   mergeFixturesIntoSnapshots,
@@ -34,6 +45,37 @@ import {
 } from './utils/fixtureSnapshots.ts';
 
 const SAVED_STORAGE_KEY = 'matchslip_saved_tickets_v1';
+
+type TicketSource = 'local' | 'server';
+
+function loadLocalTickets(): SavedTicket[] {
+  try {
+    const raw = localStorage.getItem(SAVED_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function clearLocalTickets(): void {
+  try {
+    localStorage.removeItem(SAVED_STORAGE_KEY);
+  } catch {
+    // Storage unavailable; nothing to clear.
+  }
+}
+
+function isAccaStrategy(value: unknown): value is AccaStrategy {
+  return (
+    value === 'balanced' ||
+    value === 'favorites' ||
+    value === 'goals' ||
+    value === 'high-yield' ||
+    value === 'probability'
+  );
+}
 
 function getClientLocalIsoDate(): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -45,6 +87,16 @@ function getClientLocalIsoDate(): string {
 }
 
 export default function App() {
+  const {
+    user,
+    profile,
+    loading: authLoading,
+    notice,
+    openAuth,
+    signOut,
+    dismissNotice,
+    refresh: refreshAuth,
+  } = useAuth();
   const todayDate = getClientLocalIsoDate();
   const [selectedDate, setSelectedDate] = useState<string>(todayDate);
   const [activeTab, setActiveTab] = useState<ActiveTab>('slate');
@@ -68,16 +120,18 @@ export default function App() {
   const [extraSources, setExtraSources] = useState<GroundingSource[]>([]);
   const requestIdRef = useRef(0);
 
-  const [savedTickets, setSavedTickets] = useState<SavedTicket[]>(() => {
-    try {
-      const raw = localStorage.getItem(SAVED_STORAGE_KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  });
+  const [savedTickets, setSavedTickets] = useState<SavedTicket[]>(loadLocalTickets);
+  const [ticketSource, setTicketSource] = useState<TicketSource>('local');
+  const [importPrompt, setImportPrompt] = useState<SavedTicket[] | null>(null);
+  const [importBusy, setImportBusy] = useState(false);
+  const [filters, setFilters] = useState<SlateFilterState>(loadSlateFilterState);
+  const [prefsReady, setPrefsReady] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
+
+  // Slate controls are read at fetch time from a ref so applying saved
+  // preferences does not add them as refetch dependencies.
+  const slateControlsRef = useRef({ strategy, minOdds, maxLegs });
+  slateControlsRef.current = { strategy, minOdds, maxLegs };
 
   const [fixtureSnapshots, setFixtureSnapshots] = useState<FixtureSnapshots>(() =>
     loadFixtureSnapshots()
@@ -97,13 +151,114 @@ export default function App() {
     persistFixtureSnapshots(fixtureSnapshots, savedTicketDatesRef.current);
   }, [fixtureSnapshots]);
 
+  // Browser storage mirrors guest slips only. Once signed in, the server is
+  // the source of truth and localStorage is left untouched (ready for import).
   useEffect(() => {
+    if (ticketSource !== 'local') return;
     try {
       localStorage.setItem(SAVED_STORAGE_KEY, JSON.stringify(savedTickets));
     } catch {
       // Ignore storage quota errors
     }
-  }, [savedTickets]);
+  }, [savedTickets, ticketSource]);
+
+  /**
+   * Loads account-owned tickets and preferences on sign-in, and reverts to
+   * browser-local state on sign-out. Guest browsing stays fully functional.
+   */
+  useEffect(() => {
+    if (authLoading) return;
+    let cancelled = false;
+
+    if (!user) {
+      setTicketSource('local');
+      setSavedTickets(loadLocalTickets());
+      setFilters(loadSlateFilterState());
+      setImportPrompt(null);
+      setAdminOpen(false);
+      setPrefsReady(true);
+      return;
+    }
+
+    setTicketSource('server');
+    setPrefsReady(false);
+    void (async () => {
+      try {
+        const [ticketsResult, prefsResult] = await Promise.all([
+          apiFetch<{ tickets: SavedTicket[] }>('/api/tickets'),
+          apiFetch<UserPreferences>('/api/preferences'),
+        ]);
+        if (cancelled) return;
+
+        const serverTickets = Array.isArray(ticketsResult.tickets)
+          ? ticketsResult.tickets
+          : [];
+        setSavedTickets(serverTickets);
+        if (serverTickets.length > 0) clearLocalTickets();
+
+        try {
+          setFilters(
+            prefsResult.filtersJson
+              ? parseSlateFilterState(JSON.parse(prefsResult.filtersJson))
+              : loadSlateFilterState()
+          );
+        } catch {
+          setFilters(loadSlateFilterState());
+        }
+
+        try {
+          if (prefsResult.slateJson) {
+            const saved = JSON.parse(prefsResult.slateJson) as Record<
+              string,
+              unknown
+            >;
+            if (isAccaStrategy(saved.strategy)) setStrategy(saved.strategy);
+            if (typeof saved.minOdds === 'number' && Number.isFinite(saved.minOdds)) {
+              setMinOdds(saved.minOdds);
+            }
+            if (typeof saved.maxLegs === 'number' && Number.isFinite(saved.maxLegs)) {
+              setMaxLegs(saved.maxLegs);
+            }
+          }
+        } catch {
+          // Corrupt preference payload: keep the defaults.
+        }
+
+        setPrefsReady(true);
+
+        if (serverTickets.length === 0) {
+          const local = loadLocalTickets();
+          if (local.length > 0) setImportPrompt(local);
+        }
+      } catch {
+        if (!cancelled) {
+          setTicketSource('local');
+          setSavedTickets(loadLocalTickets());
+          setPrefsReady(true);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, authLoading]);
+
+  // Debounced sync of slate filters and controls to the signed-in account.
+  useEffect(() => {
+    if (!user || ticketSource !== 'server' || !prefsReady) return;
+    const timer = window.setTimeout(() => {
+      void apiFetch('/api/preferences', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filtersJson: JSON.stringify(filters),
+          slateJson: JSON.stringify({ strategy, minOdds, maxLegs }),
+        }),
+      }).catch(() => undefined);
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [user?.id, ticketSource, prefsReady, filters, strategy, minOdds, maxLegs]);
 
   const fetchSlateForDate = useCallback(
     async (
@@ -118,7 +273,7 @@ export default function App() {
       setIsLoading(true);
       setErrorMessage(null);
       try {
-        const res = await fetch('/api/fixtures/today', {
+        const typed = await apiFetch<DailySlateResponse>('/api/fixtures/today', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -129,14 +284,7 @@ export default function App() {
             forceRefresh,
           }),
         });
-
-        const data = await res.json();
         if (requestId !== requestIdRef.current) return;
-        if (!res.ok) {
-          throw new Error(data?.error || 'Failed to load fixtures.');
-        }
-
-        const typed = data as DailySlateResponse;
         setSlate(typed);
         setFixtureSnapshots((prev) =>
           withSnapshot(
@@ -175,8 +323,16 @@ export default function App() {
   );
 
   useEffect(() => {
-    fetchSlateForDate(todayDate, 'balanced', 2.8, 3, false);
-  }, [fetchSlateForDate, todayDate]);
+    if (authLoading || !prefsReady) return;
+    const controls = slateControlsRef.current;
+    fetchSlateForDate(
+      todayDate,
+      controls.strategy,
+      controls.minOdds,
+      controls.maxLegs,
+      false
+    );
+  }, [fetchSlateForDate, todayDate, authLoading, prefsReady]);
 
   const handleChangeDate = (nextDate: string) => {
     setSelectedDate(nextDate);
@@ -340,7 +496,7 @@ export default function App() {
     );
   };
 
-  const handleSaveTicket = (ticketStake: number) => {
+  const handleSaveTicket = async (ticketStake: number) => {
     if (selectedLegs.length === 0) return;
 
     // Never save a slip containing a match that has already started: the
@@ -362,6 +518,26 @@ export default function App() {
       totalOdds,
       legs: selectedLegs,
     };
+
+    if (user && ticketSource === 'server') {
+      try {
+        await apiFetch('/api/tickets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tickets: [ticket] }),
+        });
+        setSavedTickets((prev) => [
+          ticket,
+          ...prev.filter((entry) => entry.id !== ticket.id),
+        ]);
+      } catch (err) {
+        setErrorMessage(
+          err instanceof Error ? err.message : 'Could not save your slip.'
+        );
+      }
+      return;
+    }
+
     setSavedTickets((prev) => [ticket, ...prev]);
   };
 
@@ -371,8 +547,41 @@ export default function App() {
     setActiveTab('slate');
   };
 
-  const handleDeleteTicket = (ticketId: string) => {
+  const handleDeleteTicket = async (ticketId: string) => {
+    if (user && ticketSource === 'server') {
+      try {
+        await apiFetch(`/api/tickets/${encodeURIComponent(ticketId)}`, {
+          method: 'DELETE',
+        });
+      } catch {
+        // Remove locally regardless; the next reload reconciles with server.
+      }
+    }
     setSavedTickets((prev) => prev.filter((t) => t.id !== ticketId));
+  };
+
+  const handleImportLocal = async () => {
+    if (!importPrompt || importPrompt.length === 0) return;
+    setImportBusy(true);
+    setErrorMessage(null);
+    try {
+      await apiFetch('/api/account/migrate-local', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tickets: importPrompt }),
+      });
+      const data = await apiFetch<{ tickets: SavedTicket[] }>('/api/tickets');
+      setSavedTickets(Array.isArray(data.tickets) ? data.tickets : []);
+      clearLocalTickets();
+      setImportPrompt(null);
+      void refreshAuth();
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error ? err.message : 'Could not import your saved slips.'
+      );
+    } finally {
+      setImportBusy(false);
+    }
   };
 
   /**
@@ -383,18 +592,17 @@ export default function App() {
     async (fixtureIds: string[], forceRefresh = false): Promise<Fixture[]> => {
       if (fixtureIds.length === 0) return [];
 
-      const res = await fetch('/api/fixtures/results', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fixtureIds, forceRefresh }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        throw new Error(data?.error || 'Could not refresh match results.');
-      }
+      const data = await apiFetch<{ fixtures: Fixture[] }>(
+        '/api/fixtures/results',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fixtureIds, forceRefresh }),
+        }
+      );
 
       const refreshed: Fixture[] = Array.isArray(data?.fixtures)
-        ? (data.fixtures as Fixture[])
+        ? data.fixtures
         : [];
       if (refreshed.length > 0) {
         setFixtureSnapshots((prev) =>
@@ -419,19 +627,16 @@ export default function App() {
     async (dateIso: string, fixtureIds: string[]): Promise<Fixture[]> => {
       if (!dateIso || fixtureIds.length === 0) return [];
 
-      const res = await fetch('/api/fixtures/detail', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dateIso, fixtureIds }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        throw new Error(data?.error || 'Could not load the archived matchday.');
-      }
+      const data = await apiFetch<{ fixtures: Fixture[] }>(
+        '/api/fixtures/detail',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dateIso, fixtureIds }),
+        }
+      );
 
-      return Array.isArray(data?.fixtures)
-        ? (data.fixtures as Fixture[])
-        : [];
+      return Array.isArray(data?.fixtures) ? data.fixtures : [];
     },
     []
   );
@@ -445,7 +650,7 @@ export default function App() {
     });
 
     try {
-      const res = await fetch('/api/fixtures/analyze', {
+      const typed = await apiFetch<DeepAnalysisResponse>('/api/fixtures/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -456,12 +661,6 @@ export default function App() {
           date: slate?.date || getClientLocalIsoDate(),
         }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data?.error || 'Failed to analyze match.');
-      }
-
-      const typed = data as DeepAnalysisResponse;
       setDeepAnalyses((prev) => ({ ...prev, [fixture.id]: typed }));
       if (typed.sources?.length) {
         setExtraSources((prev) => {
@@ -500,7 +699,64 @@ export default function App() {
         onRefresh={() => fetchSlateForDate(selectedDate, strategy, minOdds, maxLegs, true)}
         isLoading={isLoading}
         savedCount={savedTickets.length}
+        user={user}
+        profile={profile}
+        onSignIn={openAuth}
+        onSignOut={() => void signOut()}
+        isAdmin={profile?.role === 'admin'}
+        onAdmin={() => setAdminOpen((open) => !open)}
       />
+
+      {notice && (
+        <div className="bg-emerald-50 border-b border-emerald-200">
+          <div className="max-w-[1380px] mx-auto px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3 text-xs text-emerald-900">
+            <span>{notice}</span>
+            <button
+              type="button"
+              onClick={dismissNotice}
+              aria-label="Dismiss"
+              className="text-emerald-700 hover:text-emerald-900 cursor-pointer"
+            >
+              <X className="w-4 h-4" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {importPrompt && (
+        <div className="bg-indigo-50 border-b border-indigo-200">
+          <div className="max-w-[1380px] mx-auto px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="text-xs text-indigo-900">
+              <span className="font-semibold">
+                Bring your {importPrompt.length} saved slip
+                {importPrompt.length === 1 ? '' : 's'} with you?
+              </span>{' '}
+              <span className="text-indigo-700">
+                Import them into your account so they sync across devices. Your
+                local copy stays until the import succeeds.
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                disabled={importBusy}
+                onClick={() => setImportPrompt(null)}
+                className="px-3 py-1.5 text-xs font-semibold text-indigo-800 hover:bg-indigo-100 rounded-lg cursor-pointer disabled:opacity-60"
+              >
+                Not now
+              </button>
+              <button
+                type="button"
+                disabled={importBusy}
+                onClick={() => void handleImportLocal()}
+                className="px-3 py-1.5 text-xs font-semibold text-white bg-indigo-700 hover:bg-indigo-800 rounded-lg cursor-pointer disabled:opacity-60"
+              >
+                {importBusy ? 'Importing…' : 'Import slips'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Universal Matchday Date Bar across all views */}
       <div className="bg-white border-b border-slate-200">
@@ -531,6 +787,10 @@ export default function App() {
       </div>
 
       <main className="flex-1 w-full max-w-[1380px] mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        {adminOpen && profile?.role === 'admin' && (
+          <AdminPanel onClose={() => setAdminOpen(false)} />
+        )}
+
         {isLoading && !slate ? (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             <div className="lg:col-span-8 space-y-4">
@@ -636,6 +896,8 @@ export default function App() {
                     analyzingIds={analyzingIds}
                     analysisErrors={analysisErrors}
                     onRequestDeepAnalysis={handleRequestDeepAnalysis}
+                    filters={filters}
+                    onFiltersChange={setFilters}
                   />
                 </div>
                 <div className="lg:col-span-4 min-w-0">
@@ -695,6 +957,16 @@ export default function App() {
               />
             )}
 
+            {activeTab === 'activity' && (
+              <MyActivityView
+                savedTickets={savedTickets}
+                fixtures={slate.fixtures}
+                fixtureSnapshots={fixtureSnapshots}
+                signedIn={Boolean(user)}
+                onGoToSlate={() => setActiveTab('slate')}
+              />
+            )}
+
             {activeTab === 'sources' && (
               <SourcesView
                 sources={allSources}
@@ -716,6 +988,8 @@ export default function App() {
           </span>
         </div>
       </footer>
+
+      <AuthDialog />
     </div>
   );
 }

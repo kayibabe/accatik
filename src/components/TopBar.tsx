@@ -1,6 +1,7 @@
-import { RefreshCw } from 'lucide-react';
+import { LogOut, RefreshCw, ShieldCheck, UserRound } from 'lucide-react';
+import type { AppUser, UserProfile } from '../types/user.ts';
 
-export type ActiveTab = 'slate' | 'acca' | 'saved' | 'sources';
+export type ActiveTab = 'slate' | 'acca' | 'saved' | 'activity' | 'sources';
 
 interface TopBarProps {
   activeTab: ActiveTab;
@@ -8,6 +9,12 @@ interface TopBarProps {
   onRefresh: () => void;
   isLoading: boolean;
   savedCount: number;
+  user?: AppUser | null;
+  profile?: UserProfile | null;
+  onSignIn?: () => void;
+  onSignOut?: () => void;
+  isAdmin?: boolean;
+  onAdmin?: () => void;
 }
 
 export function TopBar({
@@ -16,6 +23,12 @@ export function TopBar({
   onRefresh,
   isLoading,
   savedCount,
+  user,
+  profile,
+  onSignIn,
+  onSignOut,
+  isAdmin,
+  onAdmin,
 }: TopBarProps) {
   const navItems: { id: ActiveTab; label: string }[] = [
     { id: 'slate', label: 'Matchday Slate' },
@@ -24,6 +37,7 @@ export function TopBar({
       id: 'saved',
       label: savedCount > 0 ? `Saved Slips (${savedCount})` : 'Saved Slips',
     },
+    { id: 'activity', label: 'My Activity' },
     { id: 'sources', label: 'Sources' },
   ];
 
@@ -63,8 +77,50 @@ export function TopBar({
           })}
         </nav>
 
-        {/* Zone 3: 1 primary action */}
-        <div className="flex items-center shrink-0">
+        {/* Zone 3: account + primary action */}
+        <div className="flex items-center gap-2 shrink-0">
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={onAdmin}
+              title="Admin · manage user roles"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 cursor-pointer"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" aria-hidden="true" />
+              Admin
+            </button>
+          )}
+          {user ? (
+            <div className="hidden sm:flex items-center gap-2">
+              <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs">
+                <UserRound className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
+                <span className="max-w-[140px] truncate text-slate-700">
+                  {user.name}
+                </span>
+                <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-800">
+                  {profile?.role || 'free'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={onSignOut}
+                title="Sign out"
+                aria-label="Sign out"
+                className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-50 cursor-pointer"
+              >
+                <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={onSignIn}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+            >
+              <UserRound className="w-3.5 h-3.5" aria-hidden="true" />
+              Sign in
+            </button>
+          )}
           <button
             type="button"
             onClick={onRefresh}
@@ -102,6 +158,13 @@ export function TopBar({
             </button>
           );
         })}
+        <button
+          type="button"
+          onClick={user ? onSignOut : onSignIn}
+          className="ml-auto pt-2 pb-1 text-emerald-700 font-semibold whitespace-nowrap shrink-0 cursor-pointer"
+        >
+          {user ? 'Sign out' : 'Sign in'}
+        </button>
       </nav>
     </header>
   );
