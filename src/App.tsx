@@ -102,6 +102,7 @@ export default function App() {
     signOut,
     dismissNotice,
     refresh: refreshAuth,
+    resendVerification,
   } = useAuth();
   const todayDate = getClientLocalIsoDate();
   const [selectedDate, setSelectedDate] = useState<string>(todayDate);
@@ -130,6 +131,8 @@ export default function App() {
   const [ticketSource, setTicketSource] = useState<TicketSource>('local');
   const [importPrompt, setImportPrompt] = useState<SavedTicket[] | null>(null);
   const [importBusy, setImportBusy] = useState(false);
+  const [verificationBusy, setVerificationBusy] = useState(false);
+  const [verificationError, setVerificationError] = useState<string | null>(null);
   const [filters, setFilters] = useState<SlateFilterState>(loadSlateFilterState);
   const [prefsReady, setPrefsReady] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
@@ -626,6 +629,20 @@ export default function App() {
     }
   };
 
+  const handleResendVerification = async () => {
+    setVerificationBusy(true);
+    setVerificationError(null);
+    try {
+      await resendVerification();
+    } catch (err) {
+      setVerificationError(
+        err instanceof Error ? err.message : 'Could not send the verification email.'
+      );
+    } finally {
+      setVerificationBusy(false);
+    }
+  };
+
   /**
    * Pulls fresh status/score for the fixtures behind saved slips, then folds
    * them into the local snapshots so settled slips stay settled after reload.
@@ -760,6 +777,32 @@ export default function App() {
               className="text-emerald-700 hover:text-emerald-900 cursor-pointer"
             >
               <X className="w-4 h-4" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {user && !user.emailVerified && (
+        <div className="bg-amber-50 border-b border-amber-200" role="status">
+          <div className="max-w-[1380px] mx-auto px-4 sm:px-6 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-amber-900">
+            <div>
+              <span className="font-semibold">Verify your email address.</span>{' '}
+              <span className="text-amber-800">
+                Check your inbox for the verification link, or send it again.
+              </span>
+              {verificationError && (
+                <span className="block mt-1 text-red-700" role="alert">
+                  {verificationError}
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleResendVerification()}
+              disabled={verificationBusy}
+              className="shrink-0 rounded-lg border border-amber-300 bg-white px-3 py-1.5 font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-60 cursor-pointer"
+            >
+              {verificationBusy ? 'Sending…' : 'Resend verification email'}
             </button>
           </div>
         </div>

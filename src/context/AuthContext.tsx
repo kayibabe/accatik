@@ -11,6 +11,7 @@ import {
   completeVerification,
   currentUser,
   requestPasswordReset,
+  sendVerification as appwriteSendVerification,
   signIn as appwriteSignIn,
   signOut as appwriteSignOut,
   signUp as appwriteSignUp,
@@ -32,6 +33,7 @@ interface AuthValue {
   signIn: (credentials: Credentials) => Promise<void>;
   signUp: (credentials: Credentials) => Promise<void>;
   signOut: () => Promise<void>;
+  resendVerification: () => Promise<void>;
   requestReset: (email: string) => Promise<void>;
 }
 
@@ -105,12 +107,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAuthOpen(false);
       },
       signUp: async (credentials) => {
-        await appwriteSignUp(credentials);
+        const { verificationSent } = await appwriteSignUp(credentials);
         await refresh();
         setAuthOpen(false);
         setNotice(
-          'Account created. Check your inbox to verify your email address.'
+          verificationSent
+            ? 'Account created. Check your inbox to verify your email address.'
+            : 'Account created, but the verification email could not be sent. Use the resend button to try again.'
         );
+      },
+      resendVerification: async () => {
+        await appwriteSendVerification();
+        setNotice('Verification email sent. Check your inbox.');
       },
       signOut: async () => {
         await appwriteSignOut();

@@ -81,7 +81,13 @@ export function passwordProblem(password: string): string | null {
   return null;
 }
 
-export async function signUp({ email, password, name }: Credentials): Promise<AppUser> {
+export interface SignUpResult {
+  user: AppUser;
+  /** False when the verification email could not be dispatched. */
+  verificationSent: boolean;
+}
+
+export async function signUp({ email, password, name }: Credentials): Promise<SignUpResult> {
   const problem = passwordProblem(password);
   if (problem) throw new Error(problem);
 
@@ -93,10 +99,20 @@ export async function signUp({ email, password, name }: Credentials): Promise<Ap
   });
   await account.createEmailPasswordSession({ email: email.trim(), password });
   clearJwt();
-  return currentUser().then((user) => {
-    if (!user) throw new Error('Account created, but sign-in failed. Please sign in.');
-    return user;
-  });
+  const user = await currentUser();
+  if (!user) throw new Error('Account created, but sign-in failed. Please sign in.');
+
+  let verificationSent = false;
+  if (!user.emailVerified) {
+    try {
+      await sendVerification();
+      verificationSent = true;
+    } catch {
+      // Account creation still succeeded; the UI offers a resend action.
+      console.warn('Sign-up verification email could not be sent; resend is available.');
+    }
+  }
+  return { user, verificationSent };
 }
 
 export async function signIn({ email, password }: Credentials): Promise<AppUser> {
