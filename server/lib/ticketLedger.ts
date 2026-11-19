@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { Query, type Databases } from 'node-appwrite';
 import type {
   AccaLeg,
   AccaStrategy,
@@ -30,6 +31,13 @@ import { STRATEGY_LABELS } from '../../src/utils/strategy.ts';
 import { guardTicket } from '../../src/utils/ticketGuard.ts';
 import { TICKET_SHAPES } from '../../src/utils/ticketShapes.ts';
 import { readArchivedSlate } from './slateArchive.ts';
+import { APPWRITE_DATABASE_ID } from './auth.ts';
+import {
+  getDataDatabases,
+  listAllDocuments,
+  mapWithConcurrency,
+  upsertDocument,
+} from './appwriteData.ts';
 
 /**
  * Shadow ticket ledger storage.
@@ -63,7 +71,70 @@ function emptyLedger(): LedgerFile {
   return { version: 1, updatedAt: new Date().toISOString(), tickets: [] };
 }
 
+async function readLedgerFromAppwrite(
+  databases: Databases
+): Promise<LedgerFile> {
+  const documents = await listAllDocuments(databases, 'ledger_tickets');
+  const tickets = documents.map(
+    (document) => JSON.parse(String(document.payloadJson)) as LedgerTicket
+  );
+  let updatedAt = new Date().toISOString();
+  try {
+    const meta = await databases.getDocument({
+      databaseId: APPWRITE_DATABASE_ID,
+      collectionId: 'ledger_meta',
+      documentId: 'state',
+    });
+    updatedAt = String(meta.updatedAt);
+  } catch {
+    updatedAt = new Date().toISOString();
+  }
+  return { version: 1, updatedAt, tickets };
+}
+
+async function writeLedgerToAppwrite(
+  databases: Databases,
+  ledger: LedgerFile
+): Promise<void> {
+  await upsertDocument(databases, 'ledger_meta', 'state', {
+    updatedAt: ledger.updatedAt,
+  });
+
+  const wanted = new Set(ledger.tickets.map((ticket) => ticket.id));
+  await mapWithConcurrency(ledger.tickets, 8, async (ticket) => {
+    await upsertDocument(databases, 'ledger_tickets', ticket.id, {
+      ticketId: ticket.id,
+      dateIso: ticket.dateIso,
+      kind: ticket.kind,
+      status: ticket.status,
+      createdAt: ticket.createdAt,
+      payloadJson: JSON.stringify(ticket),
+    });
+  });
+
+  // Never prune from a failed/empty read: an API hiccup must not erase the ledger.
+  if (ledger.tickets.length === 0) return;
+  const existing = await listAllDocuments(databases, 'ledger_tickets');
+  for (const document of existing) {
+    if (wanted.has(document.$id)) continue;
+    await databases.deleteDocument({
+      databaseId: APPWRITE_DATABASE_ID,
+      collectionId: 'ledger_tickets',
+      documentId: document.$id,
+    });
+  }
+}
+
 async function readLedgerFile(): Promise<LedgerFile> {
+  const databases = getDataDatabases();
+  if (databases) {
+    try {
+      return await readLedgerFromAppwrite(databases);
+    } catch (error) {
+      console.warn('[ledger] could not read Appwrite ledger', error);
+      return emptyLedger();
+    }
+  }
   try {
     const raw = await fs.readFile(ledgerFile(), 'utf8');
     const parsed = JSON.parse(raw) as LedgerFile;
@@ -82,6 +153,11 @@ async function readLedgerFile(): Promise<LedgerFile> {
 }
 
 async function writeLedgerFile(ledger: LedgerFile): Promise<void> {
+  const databases = getDataDatabases();
+  if (databases) {
+    await writeLedgerToAppwrite(databases, ledger);
+    return;
+  }
   const target = ledgerFile();
   await fs.mkdir(path.dirname(target), { recursive: true });
   const temp = `${target}.${process.pid}.tmp`;
@@ -190,11 +266,19 @@ function makeTicket(
  * them. Any leg whose price was not captured before kickoff is rejected, so
  * the ledger never inherits the contaminated backfill.
  */
-export async function recordShadowTickets(
+interface ShadowTicketResult {
+  added: number;
+  skipped: number;
+  eligible: number;
+}
+
+/** Pure ledger mutation: callers own the read/write through `withLedger`. */
+function addShadowTickets(
+  ledger: LedgerFile,
   dateIso: string,
   fixtures: Fixture[],
-  nowMs = Date.now()
-): Promise<{ added: number; skipped: number; eligible: number }> {
+  nowMs: number
+): ShadowTicketResult {
   const eligible = fixtures.filter(
     (fixture) =>
       fixture.status === 'Scheduled' &&
@@ -260,44 +344,51 @@ export async function recordShadowTickets(
     });
   }
 
-  return withLedger((ledger) => {
-    const existing = new Set(ledger.tickets.map((ticket) => ticket.id));
-    let added = 0;
-    let skipped = 0;
+  const existing = new Set(ledger.tickets.map((ticket) => ticket.id));
+  let added = 0;
+  let skipped = 0;
 
-    for (const draft of drafts) {
-      const legs = asLedgerLegs(draft.legs, fixturesById);
-      if (legs.some((leg) => leg.priceQuality !== 'prematch')) {
-        skipped++;
-        continue;
-      }
-
-      const ticket = makeTicket(
-        dateIso,
-        draft.kind,
-        draft.strategy,
-        draft.label,
-        draft.targetOdds,
-        draft.maxLegs,
-        legs,
-        eligible,
-        nowIso
-      );
-
-      // Keep the first observation: it is the actual opening price, not a
-      // later quote that would flatter closing-line value.
-      if (existing.has(ticket.id)) {
-        skipped++;
-        continue;
-      }
-
-      ledger.tickets.push(ticket);
-      existing.add(ticket.id);
-      added++;
+  for (const draft of drafts) {
+    const legs = asLedgerLegs(draft.legs, fixturesById);
+    if (legs.some((leg) => leg.priceQuality !== 'prematch')) {
+      skipped++;
+      continue;
     }
 
-    return { added, skipped, eligible: eligible.length };
-  });
+    const ticket = makeTicket(
+      dateIso,
+      draft.kind,
+      draft.strategy,
+      draft.label,
+      draft.targetOdds,
+      draft.maxLegs,
+      legs,
+      eligible,
+      nowIso
+    );
+
+    // Keep the first observation: it is the actual opening price, not a
+    // later quote that would flatter closing-line value.
+    if (existing.has(ticket.id)) {
+      skipped++;
+      continue;
+    }
+
+    ledger.tickets.push(ticket);
+    existing.add(ticket.id);
+    added++;
+  }
+
+  return { added, skipped, eligible: eligible.length };
+}
+
+/** Backwards-compatible single-purpose mutation for direct callers and tests. */
+export async function recordShadowTickets(
+  dateIso: string,
+  fixtures: Fixture[],
+  nowMs = Date.now()
+): Promise<ShadowTicketResult> {
+  return withLedger((ledger) => addShadowTickets(ledger, dateIso, fixtures, nowMs));
 }
 
 function recomputeClosing(ticket: LedgerTicket): void {
@@ -326,96 +417,133 @@ function recomputeClosing(ticket: LedgerTicket): void {
  * Once a fixture is live or finished, the archived price block wins and the
  * closing quote is frozen.
  */
+function applyClosingPrices(
+  ledger: LedgerFile,
+  fixtures: Fixture[],
+  nowMs: number
+): number {
+  const byId = new Map(fixtures.map((fixture) => [fixture.id, fixture]));
+  const nowIso = new Date(nowMs).toISOString();
+  let updated = 0;
+
+  for (const ticket of ledger.tickets) {
+    if (!OPEN_STATUSES.includes(ticket.status)) continue;
+
+    let changed = false;
+    for (const leg of ticket.legs) {
+      const fixture = byId.get(leg.fixtureId);
+      if (!fixture || fixture.status !== 'Scheduled' || fixture.awaitingResult) {
+        continue;
+      }
+      // A stale "Scheduled" status can arrive after kickoff. Any quote seen
+      // once the match has started is an in-play price, not a closing price.
+      if (
+        fixture.kickoffTimestamp !== undefined &&
+        fixture.kickoffTimestamp <= nowMs
+      ) {
+        continue;
+      }
+      if (inferPriceQuality(fixture) !== 'prematch') continue;
+
+      const market = fixture.markets.find(
+        (candidate) => candidate.id === leg.marketId
+      );
+      if (!market) continue;
+
+      if (leg.closingOdds !== market.odds) {
+        leg.closingOdds = market.odds;
+        leg.closingPricedAt = nowIso;
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      recomputeClosing(ticket);
+      updated++;
+    }
+  }
+
+  return updated;
+}
+
+/** Backwards-compatible single-purpose mutation for direct callers and tests. */
 export async function updateClosingPrices(
   fixtures: Fixture[],
   nowMs = Date.now()
 ): Promise<number> {
-  const byId = new Map(fixtures.map((fixture) => [fixture.id, fixture]));
-  const nowIso = new Date(nowMs).toISOString();
-
-  return withLedger((ledger) => {
-    let updated = 0;
-
-    for (const ticket of ledger.tickets) {
-      if (!OPEN_STATUSES.includes(ticket.status)) continue;
-
-      let changed = false;
-      for (const leg of ticket.legs) {
-        const fixture = byId.get(leg.fixtureId);
-        if (!fixture || fixture.status !== 'Scheduled' || fixture.awaitingResult) {
-          continue;
-        }
-        // A stale "Scheduled" status can arrive after kickoff. Any quote seen
-        // once the match has started is an in-play price, not a closing price.
-        if (
-          fixture.kickoffTimestamp !== undefined &&
-          fixture.kickoffTimestamp <= nowMs
-        ) {
-          continue;
-        }
-        if (inferPriceQuality(fixture) !== 'prematch') continue;
-
-        const market = fixture.markets.find(
-          (candidate) => candidate.id === leg.marketId
-        );
-        if (!market) continue;
-
-        if (leg.closingOdds !== market.odds) {
-          leg.closingOdds = market.odds;
-          leg.closingPricedAt = nowIso;
-          changed = true;
-        }
-      }
-
-      if (changed) {
-        recomputeClosing(ticket);
-        updated++;
-      }
-    }
-
-    return updated;
-  });
+  return withLedger((ledger) => applyClosingPrices(ledger, fixtures, nowMs));
 }
 
 /**
  * Settles open tickets from a freshly loaded matchday. Tickets whose fixtures
  * are not all present are left untouched rather than partially settled.
  */
+function applySettlements(
+  ledger: LedgerFile,
+  fixtures: Fixture[],
+  dateIso?: string
+): number {
+  const byId = new Map(fixtures.map((fixture) => [fixture.id, fixture]));
+  let changed = 0;
+
+  for (const ticket of ledger.tickets) {
+    if (!OPEN_STATUSES.includes(ticket.status)) continue;
+    if (dateIso && ticket.dateIso !== dateIso) continue;
+    if (!ticket.legs.every((leg) => byId.has(leg.fixtureId))) continue;
+
+    const settlement = evaluateTicketSettlement(ticket.legs, fixtures, 1);
+    if (
+      settlement.status !== 'Win' &&
+      settlement.status !== 'Lost' &&
+      settlement.status !== 'Void'
+    ) {
+      continue;
+    }
+
+    ticket.status = settlement.status;
+    ticket.settledReturn =
+      settlement.status === 'Win' || settlement.status === 'Void'
+        ? settlement.settledReturn
+        : 0;
+    ticket.settledAt = new Date().toISOString();
+
+    // Never backfill a missing closing quote with the placed price: that
+    // would make unobserved legs look like exactly zero CLV.
+    recomputeClosing(ticket);
+    changed++;
+  }
+
+  return changed;
+}
+
+/** Backwards-compatible single-purpose mutation for direct callers and tests. */
 export async function settleTicketsWithFixtures(
   fixtures: Fixture[]
 ): Promise<number> {
-  const byId = new Map(fixtures.map((fixture) => [fixture.id, fixture]));
+  return withLedger((ledger) => applySettlements(ledger, fixtures));
+}
 
+export interface SlateLedgerUpdate extends ShadowTicketResult {
+  closingPricesUpdated: number;
+  settled: number;
+}
+
+/**
+ * One read/write pass per slate delivery. `updateClosingPrices`,
+ * `settleTicketsWithFixtures` and `recordShadowTickets` used to be called in
+ * sequence by the slate handler, each rewriting the whole ledger. Keeping the
+ * same order here preserves the behaviour while paying the I/O cost once.
+ */
+export async function applySlateToLedger(
+  dateIso: string,
+  fixtures: Fixture[],
+  nowMs = Date.now()
+): Promise<SlateLedgerUpdate> {
   return withLedger((ledger) => {
-    let changed = 0;
-
-    for (const ticket of ledger.tickets) {
-      if (!OPEN_STATUSES.includes(ticket.status)) continue;
-      if (!ticket.legs.every((leg) => byId.has(leg.fixtureId))) continue;
-
-      const settlement = evaluateTicketSettlement(ticket.legs, fixtures, 1);
-      if (
-        settlement.status !== 'Win' &&
-        settlement.status !== 'Lost' &&
-        settlement.status !== 'Void'
-      ) {
-        continue;
-      }
-
-      ticket.status = settlement.status;
-      ticket.settledReturn =
-        settlement.status === 'Win' || settlement.status === 'Void'
-          ? settlement.settledReturn
-          : 0;
-      ticket.settledAt = new Date().toISOString();
-
-      // Never backfill a missing closing quote with the placed price: that
-      // would make unobserved legs look like exactly zero CLV.
-      recomputeClosing(ticket);
-      changed++;
-    }
-
-    return changed;
+    const closingPricesUpdated = applyClosingPrices(ledger, fixtures, nowMs);
+    const settled = applySettlements(ledger, fixtures);
+    const recorded = addShadowTickets(ledger, dateIso, fixtures, nowMs);
+    return { closingPricesUpdated, settled, ...recorded };
   });
 }
 

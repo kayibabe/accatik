@@ -1,5 +1,7 @@
 import type { ApiResult } from './server/api.ts';
 import {
+  PUBLIC_SLATE_CACHE_CONTROL,
+  SLATE_CACHE_CONTROL,
   analyzeFixture,
   getLedgerSummaryResult,
   getMatchDetail,
@@ -11,6 +13,10 @@ import {
   settleLedger,
 } from './server/api.ts';
 import { resolveAuth, type AuthContext } from './server/lib/auth.ts';
+import {
+  databasesFromHeaders,
+  setDataDatabases,
+} from './server/lib/appwriteData.ts';
 import {
   adminListUsers,
   adminSetRole,
@@ -219,6 +225,14 @@ export default async function main({
   const headers = corsHeaders(
     typeof req.headers?.origin === 'string' ? req.headers.origin : undefined
   );
+  if (path === '/fixtures/public/today') {
+    headers['cache-control'] = PUBLIC_SLATE_CACHE_CONTROL;
+  } else if (path === '/fixtures/today') {
+    headers['cache-control'] = SLATE_CACHE_CONTROL;
+  }
+  // Public slate/ledger routes use the same Appwrite-backed store as protected
+  // routes; the per-execution key is injected in the request headers.
+  setDataDatabases(databasesFromHeaders(req.headers));
 
   if (method === 'OPTIONS') {
     return res.text('', 204, headers);

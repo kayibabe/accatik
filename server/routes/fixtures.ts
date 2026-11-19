@@ -15,6 +15,8 @@ import {
   MAX_LEG_LIMIT,
   MAX_TARGET_ODDS,
   MIN_TARGET_ODDS,
+  PUBLIC_SLATE_CACHE_CONTROL,
+  SLATE_CACHE_CONTROL,
 } from '../api.ts';
 
 export {
@@ -36,11 +38,13 @@ export const fixturesRouter = Router();
 
 fixturesRouter.get('/public/today', async (_req: Request, res: Response) => {
   const result = await getPublicTodayFixtures();
+  res.setHeader('Cache-Control', PUBLIC_SLATE_CACHE_CONTROL);
   res.status(result.status).json(result.body);
 });
 
 fixturesRouter.post('/today', async (req: Request, res: Response) => {
   const result = await getTodayFixtures(req.body);
+  res.setHeader('Cache-Control', SLATE_CACHE_CONTROL);
   res.status(result.status).json(result.body);
 });
 

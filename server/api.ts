@@ -16,12 +16,10 @@ import {
 } from '../src/utils/ticketGuard.ts';
 import { describeStrategy, isAccaStrategy } from '../src/utils/strategy.ts';
 import {
+  applySlateToLedger,
   getLedgerSummary,
   listLedgerTickets,
-  recordShadowTickets,
   settleLedgerFromArchives,
-  settleTicketsWithFixtures,
-  updateClosingPrices,
 } from './lib/ticketLedger.ts';
 import type {
   RawApiFixture,
@@ -40,6 +38,7 @@ import {
   mergeArchivedPrices,
   readArchivedSlate,
   writeArchivedSlate,
+  type ArchivedSlate,
 } from './lib/slateArchive.ts';
 import {
   isAwaitingFeedResult,
@@ -64,7 +63,17 @@ interface ErrorBody {
   error: string;
 }
 
+/** Short browser lifetime; the JS client map and durable archive do the heavy lifting. */
+export const SLATE_CACHE_CONTROL = 'private, max-age=60, stale-while-revalidate=300';
+export const PUBLIC_SLATE_CACHE_CONTROL =
+  'public, max-age=60, stale-while-revalidate=300';
+
 const SLATE_TTL_MS = 1000 * 60 * 5;
+/** How old an archived slate may be before a background refresh is worthwhile. */
+const ARCHIVE_FRESH_MS = 1000 * 60 * 5;
+const ARCHIVE_REFRESH_COOLDOWN_MS = 1000 * 60 * 2;
+/** Ledger bookkeeping is cheap to skip and expensive to repeat per request. */
+const LEDGER_REFRESH_INTERVAL_MS = 1000 * 60 * 5;
 const PREDICTION_TTL_MS = 1000 * 60 * 30;
 const ANALYSIS_TTL_MS = 1000 * 60 * 10;
 const FIXTURE_INDEX_TTL_MS = 1000 * 60 * 60 * 6;
@@ -81,6 +90,8 @@ interface LoadedSlate {
   fixtures: Fixture[];
   capturedAt: string;
   source: 'live' | 'archive';
+  /** Only the request that rebuilt the slate needs to write the archive. */
+  needsArchive?: boolean;
 }
 
 const slateCache = createTtlCache<LoadedSlate>(SLATE_TTL_MS, 60);
@@ -97,7 +108,137 @@ const fixtureIndex = createTtlCache<{
 }>(FIXTURE_INDEX_TTL_MS, 4000);
 
 const slateFlight = createSingleFlight<LoadedSlate>();
+const archiveFlight = createSingleFlight<void>();
+const ledgerFlight = createSingleFlight<void>();
 const predictionFlight = createSingleFlight<RawApiPrediction | null>();
+
+/** Per-date markers so a burst of slate requests runs bookkeeping at most once. */
+const lastLedgerRefreshAt = new Map<string, number>();
+const lastArchiveRefreshAt = new Map<string, number>();
+
+/**
+ * Ledger upkeep is a single read/write pass, time-gated to one run per date per
+ * interval. A failed pass leaves the marker unset so the next request retries.
+ */
+async function refreshLedgerForSlate(
+  dateIso: string,
+  fixtures: Fixture[]
+): Promise<void> {
+  const now = Date.now();
+  if (
+    now - (lastLedgerRefreshAt.get(dateIso) ?? Number.NEGATIVE_INFINITY) <
+    LEDGER_REFRESH_INTERVAL_MS
+  ) {
+    return;
+  }
+
+  await ledgerFlight.run(dateIso, async () => {
+    try {
+      await applySlateToLedger(dateIso, fixtures, now);
+      lastLedgerRefreshAt.set(dateIso, Date.now());
+    } catch (error) {
+      console.warn(`[ledger] could not refresh bookkeeping for ${dateIso}`, error);
+    }
+  });
+}
+
+/** Writes a freshly built slate exactly once, after any per-request enrichment. */
+async function persistSlate(dateIso: string, slate: LoadedSlate): Promise<void> {
+  if (!slate.needsArchive) return;
+  await archiveFlight.run(dateIso, async () => {
+    try {
+      await writeArchivedSlate({
+        dateIso,
+        capturedAt: slate.capturedAt,
+        updatedAt: new Date().toISOString(),
+        fixtures: slate.fixtures,
+      });
+    } catch (error) {
+      // A read-only archive must not take the app down.
+      console.warn(`[slate] could not archive ${dateIso}`, error);
+    }
+  });
+}
+
+/** Overlays fresh results without touching the archived prices or picks. */
+function overlayResults(archived: Fixture[], fresh: Fixture[]): Fixture[] {
+  const byId = new Map(fresh.map((fixture) => [fixture.id, fixture]));
+  return archived.map((fixture) => {
+    const update = byId.get(fixture.id);
+    if (!update) return fixture;
+    return {
+      ...fixture,
+      status: update.status,
+      statusShort: update.statusShort,
+      statusLong: update.statusLong,
+      awaitingResult: update.awaitingResult,
+      score: update.score,
+    };
+  });
+}
+
+/**
+ * A past matchday is never rebuilt from `/fixtures?date=`. Only its results can
+ * change, so a bounded `/fixtures?ids=` merge is enough to keep the archive
+ * current while preserving the exact book the user was shown.
+ */
+async function refreshArchivedResults(
+  dateIso: string,
+  archived: ArchivedSlate
+): Promise<void> {
+  const ids = archived.fixtures
+    .map((fixture) => fixture.id)
+    .filter((id) => /^\d+$/.test(id));
+  const fresh: Fixture[] = [];
+
+  for (let offset = 0; offset < ids.length; offset += 20) {
+    const response = await fetchApiFootball<RawApiFixture>('/fixtures', {
+      ids: ids.slice(offset, offset + 20).join('-'),
+    });
+    const nowMs = Date.now();
+    for (const raw of response.response ?? []) {
+      fresh.push(toFixture(raw, undefined, dateIso, nowMs));
+    }
+  }
+
+  const fixtures = overlayResults(archived.fixtures, fresh);
+  await writeArchivedSlate({
+    dateIso,
+    capturedAt: archived.capturedAt,
+    updatedAt: new Date().toISOString(),
+    fixtures,
+  });
+  indexFixtures(fixtures);
+  slateCache.set(dateIso, {
+    fixtures,
+    capturedAt: archived.capturedAt,
+    source: 'archive',
+  });
+}
+
+/**
+ * Serves happen first; the refresh is deliberately fire-and-forget. If a
+ * serverless runtime freezes the container before it finishes, the next visit
+ * simply tries again — correctness never depends on the background work.
+ */
+function scheduleArchiveRefresh(dateIso: string, archived: ArchivedSlate): void {
+  const now = Date.now();
+  const updatedAt = Date.parse(archived.updatedAt);
+  if (!Number.isFinite(updatedAt) || now - updatedAt < ARCHIVE_FRESH_MS) return;
+  if (isSlateSettled(archived.fixtures, now)) return;
+  if (now - (lastArchiveRefreshAt.get(dateIso) ?? 0) < ARCHIVE_REFRESH_COOLDOWN_MS) {
+    return;
+  }
+
+  lastArchiveRefreshAt.set(dateIso, now);
+  void archiveFlight.run(dateIso, async () => {
+    try {
+      await refreshArchivedResults(dateIso, archived);
+    } catch (error) {
+      console.warn(`[slate] background refresh failed for ${dateIso}`, error);
+    }
+  });
+}
 
 const MISSING_KEY_MESSAGE =
   'API_FOOTBALL_KEY is not configured. Please add your API-Football Pro key as API_FOOTBALL_KEY in Settings > Secrets.';
@@ -284,23 +425,31 @@ function indexFixtures(fixtures: Fixture[]): void {
  *   archived for a kicked-off fixture are preserved.
  * - If the API fails, an archived slate is served instead of an error page.
  */
-async function getSlate(dateIso: string): Promise<LoadedSlate> {
-  const cached = slateCache.get(dateIso);
-  if (cached) return cached;
+async function getSlate(dateIso: string, force = false): Promise<LoadedSlate> {
+  if (!force) {
+    const cached = slateCache.get(dateIso);
+    if (cached) return cached;
+  }
 
-  return slateFlight.run(dateIso, async () => {
+  return slateFlight.run(`${dateIso}:${force ? 'force' : 'normal'}`, async () => {
     const archived = await readArchivedSlate(dateIso);
     const nowMs = Date.now();
 
-    if (archived && isSlateSettled(archived.fixtures, nowMs)) {
+    // Stale-while-revalidate: a saved matchday is served immediately. A stale
+    // one also schedules a cheap results-only refresh for the next visit.
+    // `forceRefresh` is the only path that pays for a full rebuild.
+    if (archived && !force) {
       indexFixtures(archived.fixtures);
-      const sealed: LoadedSlate = {
+      const served: LoadedSlate = {
         fixtures: archived.fixtures,
         capturedAt: archived.capturedAt,
         source: 'archive',
       };
-      slateCache.set(dateIso, sealed);
-      return sealed;
+      slateCache.set(dateIso, served);
+      if (!isSlateSettled(archived.fixtures, nowMs)) {
+        scheduleArchiveRefresh(dateIso, archived);
+      }
+      return served;
     }
 
     let fixtures: Fixture[];
@@ -339,20 +488,14 @@ async function getSlate(dateIso: string): Promise<LoadedSlate> {
     }
 
     indexFixtures(fixtures);
-    await writeArchivedSlate({
-      dateIso,
-      capturedAt,
-      updatedAt: new Date().toISOString(),
-      fixtures,
-    }).catch((error) => {
-      // A read-only disk must not take the app down.
-      console.warn(`[slate] could not archive ${dateIso}`, error);
-    });
 
+    // The caller persists after per-request enrichment, so the archive is
+    // written once with the same fixtures the user actually received.
     const loaded: LoadedSlate = {
       fixtures,
       capturedAt,
       source: 'live',
+      needsArchive: true,
     };
     slateCache.set(dateIso, loaded);
     return loaded;
@@ -481,6 +624,7 @@ export async function getPublicTodayFixtures(): Promise<
   try {
     const dateIso = getTodayIsoDate();
     const loaded = await getSlate(dateIso);
+    await persistSlate(dateIso, loaded);
     return ok({
       date: dateIso,
       displayDate: formatDisplayDate(dateIso),
@@ -518,11 +662,18 @@ export async function getTodayFixtures(
       ? source.strategy
       : 'balanced';
 
-    if (Boolean(source.forceRefresh)) {
+    const forceRefresh = Boolean(source.forceRefresh);
+    if (forceRefresh) {
       slateCache.delete(requestedDate);
+      lastLedgerRefreshAt.delete(requestedDate);
+      lastArchiveRefreshAt.delete(requestedDate);
+      // An explicit refresh pays the full upstream cost, including fresh
+      // predictions and results rather than the TTL-cached copies.
+      predictionCache.clear();
+      resultCache.clear();
     }
 
-    const loaded = await getSlate(requestedDate);
+    const loaded = await getSlate(requestedDate, forceRefresh);
     // Shallow copies: prediction enrichment writes to these, not to the cache.
     const fixtures = loaded.fixtures.map((fixture) => ({ ...fixture }));
 
@@ -535,38 +686,22 @@ export async function getTodayFixtures(
     });
     const legs = guard.legs;
 
-    // Sealed matchdays are served from disk with zero upstream calls, which
-    // includes skipping the prediction feed: the match is already over.
-    if (loaded.source === 'live') {
+    // Sealed matchdays skip the prediction feed entirely: the match is over.
+    // A stale archive served by SWR still gets model data for unsettled games.
+    if (!isSlateSettled(fixtures, Date.now())) {
       await enrichWithPredictions(
         fixtures,
         legs.map((leg) => leg.fixtureId)
       );
 
-      if (fixtures.some((f) => f.modelProbabilities || f.modelAdvice)) {
-        await writeArchivedSlate({
-          dateIso: requestedDate,
-          capturedAt: loaded.capturedAt,
-          updatedAt: new Date().toISOString(),
-          fixtures,
-        }).catch((error) => {
-          console.warn(`[slate] could not archive models for ${requestedDate}`, error);
-        });
       }
-    }
 
-    // Shadow ledger: pull the latest pre-kickoff closing prices, settle
-    // anything the archive now knows, then record today's engine tickets.
-    // Ledger failures must never break the slate response.
-    await updateClosingPrices(fixtures).catch((error) => {
-      console.warn(`[ledger] could not update closing prices for ${requestedDate}`, error);
-    });
-    await settleTicketsWithFixtures(fixtures).catch((error) => {
-      console.warn(`[ledger] could not settle tickets for ${requestedDate}`, error);
-    });
-    await recordShadowTickets(requestedDate, fixtures).catch((error) => {
-      console.warn(`[ledger] could not record shadow tickets for ${requestedDate}`, error);
-    });
+    // A rebuilt slate is archived once, carrying the model data added above.
+    await persistSlate(requestedDate, { ...loaded, fixtures });
+
+    // Closing prices, settlement and shadow recording share one ledger pass,
+    // time-gated so repeated slate requests do not pay for it again.
+    await refreshLedgerForSlate(requestedDate, fixtures);
 
     const recommendedLegIds: RecommendedPickRef[] = legs.map((leg) => ({
       fixtureId: leg.fixtureId,

@@ -13,7 +13,8 @@
     "preview": "vite preview",
     "clean": "node scripts/clean.mjs",
     "lint": "tsc --noEmit",
-    "test": "node --test src/context/authRefresh.test.ts src/lib/appwrite.test.ts src/utils/accaMath.test.ts src/utils/accaEngine.test.ts src/utils/api.test.ts src/utils/fixtureSnapshots.test.ts src/utils/probability.test.ts src/utils/pickResolver.test.ts src/utils/priceQuality.test.ts src/utils/recommendedAngle.test.ts src/utils/savedTicketGroups.test.ts src/utils/slateFilters.test.ts src/utils/slateFilterState.test.ts src/utils/slipAnalytics.test.ts src/utils/tableSort.test.ts src/utils/ticketGuard.test.ts server/lib/apiFootball.test.ts server/lib/slateArchive.test.ts server/lib/ticketLedger.test.ts server/routes/fixtures.test.ts",
+    "import:local-data": "tsx scripts/import-local-data.ts",
+    "test": "node --test src/context/authRefresh.test.ts src/lib/appwrite.test.ts src/utils/accaMath.test.ts src/utils/accaEngine.test.ts src/utils/api.test.ts src/utils/fixtureSnapshots.test.ts src/utils/probability.test.ts src/utils/pickResolver.test.ts src/utils/priceQuality.test.ts src/utils/recommendedAngle.test.ts src/utils/savedTicketGroups.test.ts src/utils/slateFilters.test.ts src/utils/slateFilterState.test.ts src/utils/slipAnalytics.test.ts src/utils/tableSort.test.ts src/utils/ticketGuard.test.ts server/lib/apiFootball.test.ts server/lib/slateArchive.test.ts server/lib/ticketLedger.test.ts server/lib/ticketLedgerBatch.test.ts server/routes/fixtures.test.ts",
     "backtest": "tsx scripts/acca-backtest.ts"
   },
   "dependencies": {

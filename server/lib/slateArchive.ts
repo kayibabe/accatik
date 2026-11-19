@@ -1,6 +1,14 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { Query, type Databases } from 'node-appwrite';
 import type { Fixture } from '../../src/types/fixtures.ts';
+import {
+  getDataDatabases,
+  listAllDocuments,
+  mapWithConcurrency,
+  upsertDocument,
+} from './appwriteData.ts';
+import { APPWRITE_DATABASE_ID } from './auth.ts';
 
 /**
  * Permanent, on-disk slate archive.
@@ -43,9 +51,86 @@ export function archivePathFor(dateIso: string): string {
   return fileFor(dateIso);
 }
 
+async function readSlateFromAppwrite(
+  databases: Databases,
+  dateIso: string
+): Promise<ArchivedSlate | null> {
+  try {
+    const meta = await databases.getDocument({
+      databaseId: APPWRITE_DATABASE_ID,
+      collectionId: 'slates',
+      documentId: dateIso,
+    });
+    const documents = await listAllDocuments(databases, 'slate_fixtures', [
+      Query.equal('dateIso', dateIso),
+    ]);
+    const fixtures = documents.map(
+      (document) => JSON.parse(String(document.payloadJson)) as Fixture
+    );
+    fixtures.sort(
+      (a, b) =>
+        (a.kickoffTimestamp ?? 0) - (b.kickoffTimestamp ?? 0) ||
+        String(a.id).localeCompare(String(b.id))
+    );
+    return {
+      dateIso,
+      capturedAt: String(meta.capturedAt),
+      updatedAt: String(meta.updatedAt),
+      fixtures,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function writeSlateToAppwrite(
+  databases: Databases,
+  slate: ArchivedSlate
+): Promise<void> {
+  const { dateIso, capturedAt, updatedAt, fixtures } = slate;
+  await upsertDocument(databases, 'slates', dateIso, {
+    dateIso,
+    capturedAt,
+    updatedAt,
+    fixtureCount: fixtures.length,
+  });
+
+  const wanted = new Set(fixtures.map((fixture) => `${dateIso}_${fixture.id}`));
+  await mapWithConcurrency(fixtures, 8, async (fixture) => {
+    await upsertDocument(
+      databases,
+      'slate_fixtures',
+      `${dateIso}_${fixture.id}`,
+      {
+        dateIso,
+        fixtureId: String(fixture.id),
+        capturedAt,
+        updatedAt,
+        payloadJson: JSON.stringify(fixture),
+      }
+    );
+  });
+
+  // Never prune from an empty slate: a partial write must not erase the archive.
+  if (fixtures.length === 0) return;
+  const existing = await listAllDocuments(databases, 'slate_fixtures', [
+    Query.equal('dateIso', dateIso),
+  ]);
+  for (const document of existing) {
+    if (wanted.has(document.$id)) continue;
+    await databases.deleteDocument({
+      databaseId: APPWRITE_DATABASE_ID,
+      collectionId: 'slate_fixtures',
+      documentId: document.$id,
+    });
+  }
+}
+
 export async function readArchivedSlate(
   dateIso: string
 ): Promise<ArchivedSlate | null> {
+  const databases = getDataDatabases();
+  if (databases) return readSlateFromAppwrite(databases, dateIso);
   try {
     const raw = await fs.readFile(fileFor(dateIso), 'utf8');
     const parsed = JSON.parse(raw) as ArchivedSlate;
@@ -59,6 +144,11 @@ export async function readArchivedSlate(
 
 /** Atomic write so a crash mid-save can never truncate an existing archive. */
 export async function writeArchivedSlate(slate: ArchivedSlate): Promise<void> {
+  const databases = getDataDatabases();
+  if (databases) {
+    await writeSlateToAppwrite(databases, slate);
+    return;
+  }
   const dir = archiveDir();
   await fs.mkdir(dir, { recursive: true });
   const target = fileFor(slate.dateIso);

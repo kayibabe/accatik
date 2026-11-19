@@ -33,7 +33,7 @@ interface AuthValue {
   openAuth: () => void;
   closeAuth: () => void;
   dismissNotice: () => void;
-  refresh: () => Promise<void>;
+  refresh: (knownUser?: AppUser | null) => Promise<void>;
   signIn: (credentials: Credentials) => Promise<void>;
   signUp: (credentials: Credentials) => Promise<void>;
   signOut: () => Promise<void>;
@@ -60,11 +60,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setNoticeTone(tone);
   }, []);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (knownUser?: AppUser | null) => {
     const generation = ++refreshGeneration.current;
     const isCurrent = () => refreshGeneration.current === generation;
 
-    const current = await currentUser();
+    // Sign-in has just resolved the account; asking Appwrite again here was a
+    // redundant round trip on the login path.
+    const current = knownUser !== undefined ? knownUser : await currentUser();
     if (!isCurrent()) return;
 
     if (!current) {
@@ -151,13 +153,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       refresh,
       signIn: async (credentials) => {
-        await appwriteSignIn(credentials);
-        await refresh();
+        const signedInUser = await appwriteSignIn(credentials);
+        await refresh(signedInUser);
         setAuthOpen(false);
       },
       signUp: async (credentials) => {
-        const { verificationSent } = await appwriteSignUp(credentials);
-        await refresh();
+        const { user: newUser, verificationSent } = await appwriteSignUp(credentials);
+        await refresh(newUser);
         setAuthOpen(false);
         showNotice(
           verificationSent

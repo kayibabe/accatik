@@ -1,6 +1,33 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveApiFootballBaseUrl } from './apiFootball.ts';
+import {
+  resolveApiFootballBaseUrl,
+  resolveApiFootballKey,
+} from './apiFootball.ts';
+
+const KEY_ENV_NAMES = [
+  'API_FOOTBALL_KEY',
+  'API_FOOTBALL_API_KEY',
+  'APIFOOTBALL_KEY',
+  'FOOTBALL_API_KEY',
+  'APISPORTS_KEY',
+  'X_APISPORTS_KEY',
+  'RAPIDAPI_KEY',
+  'VITE_API_FOOTBALL_KEY',
+];
+
+function withoutKeyEnv(run: () => void): void {
+  const saved = KEY_ENV_NAMES.map((name) => [name, process.env[name]] as const);
+  for (const name of KEY_ENV_NAMES) delete process.env[name];
+  try {
+    run();
+  } finally {
+    for (const [name, value] of saved) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+}
 
 const BASE_URL_ENV_NAMES = [
   'API_FOOTBALL_BASE_URL',
@@ -80,5 +107,28 @@ test('a non-http base URL is rejected', () => {
       () => resolveApiFootballBaseUrl(),
       /must start with http:\/\/ or https:\/\//
     );
+  });
+});
+
+test('the canonical API key name wins over an alias', () => {
+  withoutKeyEnv(() => {
+    process.env.APIFOOTBALL_KEY = 'alias-key';
+    process.env.API_FOOTBALL_KEY = 'canonical-key';
+    assert.equal(resolveApiFootballKey(), 'canonical-key');
+  });
+});
+
+test('a VITE_* variable is never used as the API key', () => {
+  withoutKeyEnv(() => {
+    process.env.VITE_API_FOOTBALL_KEY = 'client-exposed-key';
+    assert.equal(resolveApiFootballKey(), undefined);
+  });
+});
+
+test('blank API key values are ignored', () => {
+  withoutKeyEnv(() => {
+    process.env.API_FOOTBALL_KEY = '   ';
+    process.env.RAPIDAPI_KEY = 'rapid-key';
+    assert.equal(resolveApiFootballKey(), 'rapid-key');
   });
 });

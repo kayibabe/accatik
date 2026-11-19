@@ -47,6 +47,25 @@ interface SavedSlipsViewProps {
 }
 
 const RESULT_REQUEST_BATCH = 20;
+const RESULT_REFRESH_CONCURRENCY = 3;
+
+async function runWithConcurrency<T>(
+  items: T[],
+  limit: number,
+  worker: (item: T) => Promise<void>
+): Promise<void> {
+  let next = 0;
+  const runners = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      while (next < items.length) {
+        const item = items[next++];
+        await worker(item);
+      }
+    }
+  );
+  await Promise.all(runners);
+}
 
 function isOpen(status: SettlementStatus): boolean {
   return status === 'Pending' || status === 'Live';
@@ -68,6 +87,7 @@ export function SavedSlipsView({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const requestedResultsRef = useRef<Set<string>>(new Set());
+  const refreshInFlightRef = useRef(0);
 
   const [selectedMatch, setSelectedMatch] = useState<{
     ticket: SavedTicket;
@@ -137,6 +157,7 @@ export function SavedSlipsView({
   const requestResults = useCallback(
     async (fixtureIds: string[], forceRefresh = false) => {
       if (fixtureIds.length === 0) return;
+      refreshInFlightRef.current += 1;
       setIsRefreshing(true);
       setRefreshError(null);
       try {
@@ -148,7 +169,8 @@ export function SavedSlipsView({
             : 'Could not refresh match results.'
         );
       } finally {
-        setIsRefreshing(false);
+        refreshInFlightRef.current -= 1;
+        if (refreshInFlightRef.current === 0) setIsRefreshing(false);
       }
     },
     [onRefreshResults]
@@ -261,12 +283,13 @@ export function SavedSlipsView({
 
   const handleManualRefresh = async () => {
     requestedResultsRef.current = new Set(pendingFixtureIds);
+    const batches: string[][] = [];
     for (let i = 0; i < pendingFixtureIds.length; i += RESULT_REQUEST_BATCH) {
-      await requestResults(
-        pendingFixtureIds.slice(i, i + RESULT_REQUEST_BATCH),
-        true
-      );
+      batches.push(pendingFixtureIds.slice(i, i + RESULT_REQUEST_BATCH));
     }
+    await runWithConcurrency(batches, RESULT_REFRESH_CONCURRENCY, (batch) =>
+      requestResults(batch, true)
+    );
   };
 
   return (

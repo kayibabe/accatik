@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { Account, Client, Databases, ID } from 'node-appwrite';
 import type { AppUser, UserProfile } from '../../src/types/user.ts';
+import { createTtlCache } from './cache.ts';
 
 /**
  * Server-side identity.
@@ -155,6 +156,19 @@ async function ensureProfile(
   }
 }
 
+interface VerifiedIdentity {
+  user: AppUser;
+  profile: UserProfile;
+}
+
+/**
+ * The three calls a login makes (/account/me, /tickets, /preferences) all carry
+ * the same JWT. Re-verifying it and reloading the profile for each one costs two
+ * Appwrite round trips apiece, so cache the verified identity briefly. Only the
+ * identity is cached: the Databases client is rebuilt with this request's key.
+ */
+const identityCache = createTtlCache<VerifiedIdentity>(60_000, 200);
+
 /**
  * Resolves a verified user from request headers, or null for a public request.
  * The privileged client uses the function's ephemeral Appwrite key; local
@@ -176,19 +190,24 @@ export async function resolveAuth(
     );
   }
 
+  const cacheKey = createHash('sha256').update(jwt).digest('hex');
+  const privilegedClient = new Client()
+    .setEndpoint(appwriteEndpoint())
+    .setProject(appwriteProjectId())
+    .setKey(apiKey);
+  const databases = new Databases(privilegedClient);
+
+  const cached = identityCache.get(cacheKey);
+  if (cached) return { ...cached, databases, jwt };
+
   const userClient = new Client()
     .setEndpoint(appwriteEndpoint())
     .setProject(appwriteProjectId())
     .setJWT(jwt);
   const account = await new Account(userClient).get();
   const user = toAppUser(account);
-
-  const privilegedClient = new Client()
-    .setEndpoint(appwriteEndpoint())
-    .setProject(appwriteProjectId())
-    .setKey(apiKey);
-  const databases = new Databases(privilegedClient);
   const profile = await ensureProfile(databases, user);
 
+  identityCache.set(cacheKey, { user, profile });
   return { user, profile, databases, jwt };
 }

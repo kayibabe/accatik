@@ -101,12 +101,8 @@ async function openEmailPasswordSession(email: string, password: string): Promis
 }
 
 async function createJwt(): Promise<string | null> {
-  try {
-    await account.get();
-  } catch {
-    jwtCache = null;
-    return null;
-  }
+  // createJWT() already validates the session. A separate account.get() here
+  // added a full round trip to every authenticated request.
   try {
     const { jwt } = await account.createJWT();
     // Appwrite JWTs live for 15 minutes. Keep a one-minute safety margin so

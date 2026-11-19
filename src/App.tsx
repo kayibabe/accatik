@@ -49,6 +49,24 @@ import {
 
 const SAVED_STORAGE_KEY = 'matchslip_saved_tickets_v1';
 
+// Micro-cache for instant revisits. The durable archive remains the real cache;
+// this only saves a round trip while the page is open.
+const SLATE_CLIENT_TTL_MS = 1000 * 60 * 5;
+const SLATE_CLIENT_MAX_ENTRIES = 30;
+const slateResponseCache = new Map<
+  string,
+  { response: DailySlateResponse; expiresAt: number }
+>();
+
+function slateCacheKey(
+  dateIso: string,
+  strategy: AccaStrategy,
+  minOdds: number,
+  maxLegs: number
+): string {
+  return `${dateIso}|${strategy}|${minOdds}|${maxLegs}`;
+}
+
 type TicketSource = 'local' | 'server';
 
 function loadLocalTickets(): SavedTicket[] {
@@ -136,6 +154,10 @@ export default function App() {
   );
   const [extraSources, setExtraSources] = useState<GroundingSource[]>([]);
   const requestIdRef = useRef(0);
+  const slateAbortRef = useRef<AbortController | null>(null);
+  // Slate requests can start before saved controls arrive; this marks which
+  // slate has already been reconciled with them.
+  const prefRecomputedSlateRef = useRef('');
 
   const [savedTickets, setSavedTickets] = useState<SavedTicket[]>(loadLocalTickets);
   const [ticketSource, setTicketSource] = useState<TicketSource>('local');
@@ -196,6 +218,7 @@ export default function App() {
       setImportPrompt(null);
       setAdminOpen(false);
       // A guest must not keep a priced slate from a previous signed-in session.
+      slateResponseCache.clear();
       setSlate(null);
       setSelectedLegs([]);
       setActiveTab('slate');
@@ -287,6 +310,43 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [user?.id, ticketSource, prefsReady, filters, strategy, minOdds, maxLegs]);
 
+  const applySlateResponse = useCallback(
+    (
+      typed: DailySlateResponse,
+      targetStrategy: AccaStrategy,
+      targetMinOdds: number,
+      targetMaxLegs: number
+    ) => {
+      prefRecomputedSlateRef.current = '';
+      setSlate(typed);
+      setFixtureSnapshots((prev) =>
+        withSnapshot(
+          prev,
+          typed.date,
+          typed.fixtures,
+          savedTicketDatesRef.current
+        )
+      );
+
+      const initialLegs = buildLegsFromRefs(
+        typed.fixtures,
+        typed.recommendedLegIds
+      );
+      setSelectedLegs(
+        guardLegs(
+          completeAccaToTargetOdds(
+            typed.fixtures,
+            initialLegs,
+            targetMinOdds,
+            targetStrategy,
+            Math.min(targetMaxLegs, MAX_RECOMMENDED_LEGS)
+          )
+        )
+      );
+    },
+    []
+  );
+
   const fetchSlateForDate = useCallback(
     async (
       targetDate: string,
@@ -295,6 +355,32 @@ export default function App() {
       targetMaxLegs: number,
       forceRefresh = false
     ) => {
+      // A rapid date change cancels the previous request instead of merely
+      // ignoring its response after it has consumed server work.
+      slateAbortRef.current?.abort();
+
+      const key = slateCacheKey(
+        targetDate,
+        targetStrategy,
+        targetMinOdds,
+        targetMaxLegs
+      );
+      const cached = slateResponseCache.get(key);
+      if (!forceRefresh && cached && cached.expiresAt > Date.now()) {
+        ++requestIdRef.current;
+        setErrorMessage(null);
+        setIsLoading(false);
+        applySlateResponse(
+          cached.response,
+          targetStrategy,
+          targetMinOdds,
+          targetMaxLegs
+        );
+        return;
+      }
+
+      const controller = new AbortController();
+      slateAbortRef.current = controller;
       // Ignore responses that land after a newer request (rapid date switching).
       const requestId = ++requestIdRef.current;
       setIsLoading(true);
@@ -310,32 +396,27 @@ export default function App() {
             maxLegs: targetMaxLegs,
             forceRefresh,
           }),
+          signal: controller.signal,
         });
         if (requestId !== requestIdRef.current) return;
-        setSlate(typed);
-        setFixtureSnapshots((prev) =>
-          withSnapshot(
-            prev,
-            typed.date,
-            typed.fixtures,
-            savedTicketDatesRef.current
-          )
-        );
 
-        const initialLegs = buildLegsFromRefs(
-          typed.fixtures,
-          typed.recommendedLegIds
-        );
-        const guaranteedLegs = guardLegs(
-          completeAccaToTargetOdds(
-            typed.fixtures,
-            initialLegs,
-            targetMinOdds,
-            targetStrategy,
-            Math.min(targetMaxLegs, MAX_RECOMMENDED_LEGS)
-          )
-        );
-        setSelectedLegs(guaranteedLegs);
+        if (forceRefresh) {
+          for (const existing of [...slateResponseCache.keys()]) {
+            if (existing.startsWith(`${targetDate}|`)) {
+              slateResponseCache.delete(existing);
+            }
+          }
+        }
+        slateResponseCache.delete(key);
+        if (slateResponseCache.size >= SLATE_CLIENT_MAX_ENTRIES) {
+          const oldest = slateResponseCache.keys().next().value;
+          if (oldest !== undefined) slateResponseCache.delete(oldest);
+        }
+        slateResponseCache.set(key, {
+          response: typed,
+          expiresAt: Date.now() + SLATE_CLIENT_TTL_MS,
+        });
+        applySlateResponse(typed, targetStrategy, targetMinOdds, targetMaxLegs);
       } catch (err) {
         if (requestId === requestIdRef.current) {
           setErrorMessage(
@@ -348,11 +429,15 @@ export default function App() {
         if (requestId === requestIdRef.current) setIsLoading(false);
       }
     },
-    []
+    [applySlateResponse]
   );
 
+  useEffect(() => () => slateAbortRef.current?.abort(), []);
+
+  // The priced slate does not depend on preferences, so start it as soon as
+  // auth resolves instead of waiting for /tickets and /preferences to finish.
   useEffect(() => {
-    if (authLoading || !prefsReady || !user) return;
+    if (authLoading || !user) return;
     const controls = slateControlsRef.current;
     fetchSlateForDate(
       todayDate,
@@ -361,7 +446,29 @@ export default function App() {
       controls.maxLegs,
       false
     );
-  }, [fetchSlateForDate, todayDate, authLoading, prefsReady, user?.id]);
+  }, [fetchSlateForDate, todayDate, authLoading, user?.id]);
+
+  // Saved controls may land while that request is in flight. Rebuild the legs
+  // from the slate we already have rather than fetching the same date twice.
+  useEffect(() => {
+    if (!prefsReady || !user || !slate) return;
+    const key = `${user.id}:${slate.cachedAt}`;
+    if (prefRecomputedSlateRef.current === key) return;
+    prefRecomputedSlateRef.current = key;
+
+    const initialLegs = buildLegsFromRefs(slate.fixtures, slate.recommendedLegIds);
+    setSelectedLegs(
+      guardLegs(
+        completeAccaToTargetOdds(
+          slate.fixtures,
+          initialLegs,
+          minOdds,
+          strategy,
+          Math.min(maxLegs, MAX_RECOMMENDED_LEGS)
+        )
+      )
+    );
+  }, [prefsReady, slate, user, strategy, minOdds, maxLegs]);
 
   const fetchPublicMatches = useCallback(async () => {
     setPublicLoading(true);

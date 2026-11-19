@@ -6,7 +6,8 @@ const API_KEY_ENV_ALIASES = [
   'APISPORTS_KEY',
   'X_APISPORTS_KEY',
   'RAPIDAPI_KEY',
-  'VITE_API_FOOTBALL_KEY',
+  // VITE_* variables are baked into the client bundle, so the server must
+  // never treat one as a source for this secret.
 ];
 
 export function resolveApiFootballKey(): string | undefined {
