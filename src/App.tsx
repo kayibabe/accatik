@@ -1162,7 +1162,7 @@ export default function App() {
 
       <footer className="border-t border-slate-200 bg-white mt-12">
         <div className="max-w-[1380px] mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
-          <span>MatchSlip · Grounded Daily Football Accumulator Workbench</span>
+          <span>MatchSlip · Built on evidence, not hunches.</span>
           <span>
             18+ only · Bet responsibly · Odds and match schedules should be
             verified with your sportsbook prior to placement.
