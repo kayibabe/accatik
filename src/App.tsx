@@ -1098,7 +1098,7 @@ export default function App() {
           />
         ) : isLoading && !slate ? (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            <div className="lg:col-span-6 space-y-4">
+            <div className="lg:col-span-7 space-y-4">
               <div className="h-8 w-72 bg-slate-200 rounded-md animate-pulse" />
               <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
                 {[1, 2, 3, 4, 5].map((i) => (
@@ -1120,7 +1120,7 @@ export default function App() {
                 ))}
               </div>
             </div>
-            <div className="lg:col-span-6 bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+            <div className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-5 space-y-4">
               <div className="h-6 w-44 bg-slate-200 rounded animate-pulse" />
               <div className="h-16 bg-slate-100 rounded-lg animate-pulse" />
               {[1, 2, 3, 4].map((i) => (
@@ -1183,7 +1183,7 @@ export default function App() {
 
             {activeTab === 'slate' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                <div className="lg:col-span-6 min-w-0">
+                <div className="lg:col-span-7 min-w-0">
                   <FixtureBoard
                     fixtures={slate.fixtures}
                     selectedDate={selectedDate}
@@ -1205,7 +1205,7 @@ export default function App() {
                     onFiltersChange={setFilters}
                   />
                 </div>
-                <div className="lg:col-span-6 min-w-0">
+                <div className="lg:col-span-5 min-w-0">
                   <AccaTicketSlip
                     legs={selectedLegs}
                     fixtures={slate.fixtures}
