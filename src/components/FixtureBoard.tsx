@@ -10,6 +10,7 @@ import {
   AlertCircle,
   TrendingUp,
   X,
+  NotebookPen,
 } from 'lucide-react';
 import type {
   AccaLeg,
@@ -19,11 +20,18 @@ import type {
   MarketOption,
   MarketType,
   ModelProbabilities,
+  PickRecordsResponse,
+  SettlementStatus,
 } from '../types/fixtures.ts';
 import {
   evaluateMarketSettlement,
   getFixtureMatchResultSummary,
 } from '../utils/accaMath.ts';
+import {
+  getAnalystNote,
+  resolveAnalystNoteMarket,
+} from '../utils/analystNote.ts';
+import { apiFetch } from '../utils/api.ts';
 import {
   marketProbability,
   sortFixturesByProbability,
@@ -209,6 +217,98 @@ function BriefToggle({
   );
 }
 
+/** Compact Win/Lost/Void badge used beside each per-match pick. */
+function PickResultChip({
+  status,
+  label,
+}: {
+  status: SettlementStatus | null;
+  label: string;
+}) {
+  if (!status) return null;
+  return <SettlementLabel status={status} prefix={label} />;
+}
+
+/**
+ * The analyst note gets its own annotation surface. Violet is deliberately
+ * different from the emerald angle card, amber warnings and sky model figures.
+ */
+function AnalystNoteStrip({
+  note,
+  resultStatus,
+  compact = false,
+}: {
+  note: string;
+  resultStatus: SettlementStatus | null;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-md border border-violet-200 border-l-2 border-l-violet-500 bg-violet-50 px-2.5 py-1.5 text-[11px] leading-snug text-violet-900 ${
+        compact ? 'mt-1.5' : 'mt-2'
+      }`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+        <p className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+          <NotebookPen className="w-3 h-3 shrink-0 text-violet-600" aria-hidden="true" />
+          <span className="font-semibold uppercase tracking-wide text-violet-700">
+            Analyst note:
+          </span>
+          <span>{note}</span>
+        </p>
+        <PickResultChip status={resultStatus} label="Note" />
+      </div>
+    </div>
+  );
+}
+
+/** Archive-backed hit rates for the three picks, rebuilt for the active strategy. */
+function PickRecordSummary({
+  records,
+  sampleDates,
+  sampleFixtures,
+}: PickRecordsResponse) {
+  return (
+    <div className="rounded-xl border border-violet-200 bg-violet-50/50 px-3 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-800">
+          Historical pick record
+        </p>
+        <span
+          className="text-[10px] text-violet-700"
+          title="Rebuilt from archived prices with the active strategy, then settled from each finished match's final score. Voids are excluded from the percentage."
+        >
+          {sampleFixtures} finished matches · {sampleDates} matchdays
+        </span>
+      </div>
+      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {records.map((entry) => (
+          <div
+            key={entry.key}
+            className="flex items-center justify-between gap-2 rounded-md border border-violet-100 bg-white/80 px-2.5 py-1.5"
+          >
+            <div className="min-w-0">
+              <p className="truncate text-[11px] font-medium text-slate-700">
+                {entry.label}
+              </p>
+              <p className="font-mono text-[10px] text-slate-500 tabular-nums">
+                {entry.settled === 0
+                  ? 'Collecting data'
+                  : `${entry.wins}W / ${entry.losses}L${
+                      entry.voids > 0 ? ` / ${entry.voids}V` : ''
+                    }`}
+              </p>
+            </div>
+            <span className="font-mono text-sm font-semibold text-violet-900 tabular-nums">
+              {entry.hitRate === null ? '—' : `${entry.hitRate.toFixed(1)}%`}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 interface FilterChipGroupProps<T extends string> {
   label: string;
   ariaLabel: string;
@@ -309,6 +409,28 @@ export function FixtureBoard({
     key: 'fair',
     direction: 'desc',
   });
+  const [pickRecords, setPickRecords] = useState<PickRecordsResponse | null>(
+    null
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<PickRecordsResponse>('/api/fixtures/pick-records', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ strategy }),
+    })
+      .then((data) => {
+        if (!cancelled) setPickRecords(data);
+      })
+      .catch(() => {
+        // The board works without history; never block fixtures on a stat.
+        if (!cancelled) setPickRecords(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [strategy]);
 
   const updateFilters = (patch: Partial<SlateFilterState>) => {
     const next = { ...filters, ...patch };
@@ -583,6 +705,10 @@ export function FixtureBoard({
           Showing {filteredFixtures.length} of {fixtures.length} matches
         </span>
       </div>
+
+      {pickRecords && pickRecords.sampleFixtures > 0 && (
+        <PickRecordSummary {...pickRecords} />
+      )}
 
       {/* Filter & Search Toolbar */}
       <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
@@ -995,6 +1121,26 @@ export function FixtureBoard({
             const resultSummary = getFixtureMatchResultSummary(fixture);
             // The green card below reads the same precomputed angle as the filters.
             const angle = anglesByFixture.get(fixture.id) ?? null;
+            const isSettled =
+              fixture.status === 'Finished' || fixture.status === 'Void';
+            const angleOutcome =
+              angle && isSettled
+                ? evaluateMarketSettlement(fixture, angle.market)
+                : null;
+            const coverOutcome =
+              angle?.cover && isSettled
+                ? evaluateMarketSettlement(fixture, angle.cover)
+                : null;
+            // Persisted model advice is the default note; the on-demand API
+            // result is only a fresher override, never a gate.
+            const analystNote = getAnalystNote(fixture, deepAnalysis?.bestAngle);
+            const noteMarket = analystNote
+              ? resolveAnalystNoteMarket(fixture, analystNote)
+              : null;
+            const noteOutcome =
+              noteMarket && isSettled
+                ? evaluateMarketSettlement(fixture, noteMarket)
+                : null;
             // Fixture-level context: the highest-probability price on the book,
             // shown only when it is not already the pick or the card's cover.
             const shortestPrice = angle?.shortestPrice ?? null;
@@ -1163,6 +1309,7 @@ export function FixtureBoard({
                         >
                           {angle.confidence}
                         </span>
+                        <PickResultChip status={angleOutcome} label="Angle" />
                         {marketChipsActive &&
                           !displayMarkets.some(
                             (market) => market.id === angle.market.id
@@ -1185,7 +1332,7 @@ export function FixtureBoard({
                       <p className="mt-0.5 text-[11px] text-slate-600 leading-snug">
                         {angle.note}
                       </p>
-                      {(angle.cover || deepAnalysis?.bestAngle) && (
+                      {angle.cover && (
                         <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
                           {angle.cover && (
                             <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] leading-snug text-slate-600 shadow-sm">
@@ -1208,22 +1355,18 @@ export function FixtureBoard({
                               <span className="font-mono text-slate-600 tabular-nums">
                                 {angle.coverProbability.toFixed(0)}% fair
                               </span>
-                            </span>
-                          )}
-                          {/* Read-only copy of the brief's analyst note, kept in sync
-                              by sharing the same deepAnalysis value. The original in
-                              the Tactical Brief stays where it is. */}
-                          {deepAnalysis?.bestAngle && (
-                            <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded border border-sky-200 bg-sky-50 px-2 py-1 text-[11px] leading-snug text-sky-900">
-                              <span className="font-semibold uppercase tracking-wide text-sky-800">
-                                Analyst note:{' '}
-                              </span>
-                              {deepAnalysis.bestAngle}
+                              <PickResultChip status={coverOutcome} label="Cover" />
                             </span>
                           )}
                         </div>
                       )}
                     </div>
+                  )}
+
+                  {/* Always-on analyst note. Model advice is captured with the
+                      slate, so the Load button is no longer a gate. */}
+                  {analystNote && (
+                    <AnalystNoteStrip note={analystNote} resultStatus={noteOutcome} compact />
                   )}
 
                   {/* Expandable Tactical Brief & On-Demand API-Football Predictions */}
@@ -1251,10 +1394,10 @@ export function FixtureBoard({
                           <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
                           <span>
                             {isAnalyzing
-                              ? 'Loading Predictions & Injuries...'
+                              ? 'Loading Team News & Full Brief...'
                               : deepAnalysis
-                              ? 'Refresh Predictions & Team News'
-                              : 'Load Predictions & Team News'}
+                              ? 'Refresh Team News & Full Brief'
+                              : 'Load Team News & Full Brief'}
                           </span>
                         </button>
                       </div>
@@ -1424,12 +1567,12 @@ export function FixtureBoard({
                               ))}
                             </ul>
                           )}
-                          <p>
-                            <span className="font-semibold text-slate-900">
-                              Analyst note:{' '}
-                            </span>
-                            {deepAnalysis.bestAngle}
-                          </p>
+                          {analystNote && (
+                            <AnalystNoteStrip
+                              note={analystNote}
+                              resultStatus={noteOutcome}
+                            />
+                          )}
                         </div>
                       )}
 

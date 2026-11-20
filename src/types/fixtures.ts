@@ -75,6 +75,11 @@ export interface Fixture {
   markets: MarketOption[];
   /** API-Football model's one-line pick, when the provider returned one. */
   modelAdvice?: string;
+  /**
+   * The priced market the analyst note maps to. Captured alongside `modelAdvice`
+   * so the note can carry a Win/Lost qualifier exactly like the angle and cover.
+   */
+  analystNoteMarketId?: string;
   /** API-Football model 1X2 percentages. Shown beside the de-vigged book, never merged into it. */
   modelProbabilities?: ModelProbabilities;
   /** ISO timestamp when these prices were captured into the permanent archive. */
@@ -231,4 +236,28 @@ export interface DeepAnalysisResponse {
   formHome?: string;
   formAway?: string;
   sources: GroundingSource[];
+}
+
+/** One line of the historical record for a per-match pick. */
+export interface PickRecordEntry {
+  key: 'angle' | 'cover' | 'note';
+  label: string;
+  settled: number;
+  wins: number;
+  losses: number;
+  voids: number;
+  /** Wins as a percentage of non-void settled picks; null when there are none. */
+  hitRate: number | null;
+}
+
+/**
+ * Hit rates rebuilt from archived slates. Every pick is recomputed from the
+ * frozen prices with the current strategy, then settled from the final score.
+ */
+export interface PickRecordsResponse {
+  strategy: AccaStrategy;
+  sampleDates: number;
+  sampleFixtures: number;
+  records: PickRecordEntry[];
+  generatedAt: string;
 }

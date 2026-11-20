@@ -4,6 +4,7 @@ import type {
   DeepAnalysisResponse,
   Fixture,
   GroundingSource,
+  PickRecordsResponse,
   PublicFixture,
   PublicSlateResponse,
   RecommendedPickRef,
@@ -17,6 +18,8 @@ import {
   guardTicket,
 } from '../src/utils/ticketGuard.ts';
 import { describeStrategy, isAccaStrategy } from '../src/utils/strategy.ts';
+import { resolveAnalystNoteMarket } from '../src/utils/analystNote.ts';
+import { computePickRecords } from './lib/pickRecord.ts';
 import {
   applySlateToLedger,
   getLedgerSummary,
@@ -593,8 +596,34 @@ export function needsPredictionRefresh(
 }
 
 /**
- * Attaches form and model advice to the curated legs. Works on the per-request
- * fixture copies so the cached slate is never mutated. Returns the time spent
+ * The analyst note now ships with every priced fixture, not just the three
+ * ticket legs. Bound the first-visit cost so a large slate cannot drain the
+ * API-Football quota in one request; `modelDataAt` makes later visits free.
+ */
+const PREDICTION_ENRICH_LIMIT = 40;
+/** Requests held back for the schedule, results and the on-demand brief. */
+const PREDICTION_QUOTA_RESERVE = 6;
+
+function predictionTargetIds(fixtures: Fixture[]): string[] {
+  const priced = fixtures.filter((fixture) => fixture.markets.length > 0);
+  const limits = getApiFootballLimits();
+  let budget = PREDICTION_ENRICH_LIMIT;
+  if (
+    limits?.planHint === 'free-or-limited' &&
+    limits.requestsRemaining !== null
+  ) {
+    budget = Math.max(
+      0,
+      Math.min(budget, limits.requestsRemaining - PREDICTION_QUOTA_RESERVE)
+    );
+  }
+  return priced.slice(0, budget).map((fixture) => fixture.id);
+}
+
+/**
+ * Attaches form, model advice and the analyst note to the requested fixtures.
+ * Works on the per-request fixture copies so the cached slate is never mutated.
+ * Returns the time spent
  * waiting on the prediction feed (0 when the durable archive was enough).
  */
 async function enrichWithPredictions(
@@ -614,11 +643,26 @@ async function enrichWithPredictions(
   );
   if (pendingIds.length === 0) return 0;
 
-  const predictions = await Promise.all(
-    pendingIds.map(async (fixtureId) => ({
-      fixtureId,
-      data: await fetchPrediction(fixtureId),
-    }))
+  // Bound the fan-out: a full slate must not fire 40 simultaneous upstream
+  // calls, which would trip API-Football's burst limits even on a large plan.
+  const predictions: Array<{
+    fixtureId: string;
+    data: RawApiPrediction | null;
+  }> = [];
+  let cursor = 0;
+  await Promise.all(
+    Array.from(
+      { length: Math.min(8, pendingIds.length) },
+      async () => {
+        while (cursor < pendingIds.length) {
+          const fixtureId = pendingIds[cursor++];
+          predictions.push({
+            fixtureId,
+            data: await fetchPrediction(fixtureId),
+          });
+        }
+      }
+    )
   );
 
   for (const { fixtureId, data } of predictions) {
@@ -640,7 +684,10 @@ async function enrichWithPredictions(
 
     // Kept in their own fields: overwriting `tacticalSummary` made the seven
     // ticket fixtures read differently from the rest of the board.
-    if (advice) target.modelAdvice = advice;
+    if (advice) {
+      target.modelAdvice = advice;
+      target.analystNoteMarketId = resolveAnalystNoteMarket(target, advice)?.id;
+    }
     if (pct) {
       target.modelProbabilities = {
         home: parsePercent(pct.home),
@@ -808,7 +855,7 @@ export async function getTodayFixtures(
     if (!isSlateSettled(fixtures, Date.now())) {
       timings.predictionsMs = await enrichWithPredictions(
         fixtures,
-        legs.map((leg) => leg.fixtureId),
+        predictionTargetIds(fixtures),
         forceRefresh
       );
     }
@@ -905,7 +952,7 @@ export interface PrewarmResult {
 
 /**
  * Scheduled-entrypoint work: build (or reuse) a matchday, attach model advice
- * for the default curated shape and write it to the archive with an awaited
+ * and analyst notes for its priced fixtures, then write to the archive with an awaited
  * persist, so the first user request of the day is a pure archive read.
  */
 export async function prewarmSlate(
@@ -928,18 +975,9 @@ export async function prewarmSlate(
 
     const hadModelData = fixtures.map((fixture) => Boolean(fixture.modelDataAt));
     if (!isSlateSettled(fixtures, Date.now())) {
-      const rawLegs = buildRecommendedAcca(
-        fixtures,
-        DEFAULT_TARGET_ODDS,
-        'balanced',
-        DEFAULT_MAX_LEGS
-      );
-      const legs = guardTicket(rawLegs, {
-        maxLegs: Math.min(DEFAULT_MAX_LEGS, MAX_RECOMMENDED_LEGS),
-      }).legs;
       timings.predictionsMs = await enrichWithPredictions(
         fixtures,
-        legs.map((leg) => leg.fixtureId)
+        predictionTargetIds(fixtures)
       );
     }
     const needsModelPersist = fixtures.some(
@@ -1222,6 +1260,26 @@ export async function analyzeFixture(
   } catch (error) {
     console.error('Error analyzing fixture:', error);
     return fail(500, errorMessage(error, 'Failed to fetch match report.'));
+  }
+}
+
+/**
+ * Historical hit rates for the three per-match picks. Archive-backed and
+ * strategy-aware; deliberately does not require an API key or a live slate.
+ */
+export async function getPickRecords(
+  body: unknown
+): Promise<ApiResult<PickRecordsResponse | ErrorBody>> {
+  const source =
+    body && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : {};
+  const strategy = isAccaStrategy(source.strategy) ? source.strategy : 'balanced';
+  try {
+    return ok(await computePickRecords(strategy));
+  } catch (error) {
+    console.error('Error computing pick records:', error);
+    return fail(500, errorMessage(error, 'Failed to build pick records.'));
   }
 }
 

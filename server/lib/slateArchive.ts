@@ -193,6 +193,33 @@ async function writeSlateToAppwrite(
   }
 }
 
+/** Newest-first list of matchdays with a durable slate, for archive scans. */
+export async function listArchivedSlateDates(): Promise<string[]> {
+  const databases = getDataDatabases();
+  if (databases) {
+    try {
+      const documents = await listAllDocuments(databases, 'slates');
+      return documents
+        .map((document) => String(document.dateIso ?? ''))
+        .filter((dateIso) => /^\d{4}-\d{2}-\d{2}$/.test(dateIso))
+        .sort()
+        .reverse();
+    } catch {
+      return [];
+    }
+  }
+  try {
+    const names = await fs.readdir(archiveDir());
+    return names
+      .filter((name) => /^\d{4}-\d{2}-\d{2}\.json$/.test(name))
+      .map((name) => name.slice(0, 10))
+      .sort()
+      .reverse();
+  } catch {
+    return [];
+  }
+}
+
 export async function readArchivedSlate(
   dateIso: string
 ): Promise<ArchivedSlate | null> {

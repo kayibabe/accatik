@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import {
   analyzeFixture,
   getMatchDetail,
+  getPickRecords,
   getPublicTodayFixtures,
   getTodayFixtures,
   refreshResults,
@@ -60,5 +61,10 @@ fixturesRouter.post('/results', async (req: Request, res: Response) => {
 
 fixturesRouter.post('/analyze', async (req: Request, res: Response) => {
   const result = await analyzeFixture(req.body);
+  res.status(result.status).json(result.body);
+});
+
+fixturesRouter.post('/pick-records', async (req: Request, res: Response) => {
+  const result = await getPickRecords(req.body);
   res.status(result.status).json(result.body);
 });
