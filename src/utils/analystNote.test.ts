@@ -58,5 +58,18 @@ test('persisted advice wins, with the fresh API note as fallback', () => {
     'Home Win'
   );
   assert.equal(getAnalystNote(fixture(), '  Away Win  '), 'Away Win');
-  assert.equal(getAnalystNote(fixture()), null);
+});
+
+test('every fixture gets an automatic board-derived note', () => {
+  const note = getAnalystNote(fixture());
+  assert.match(note ?? '', /Price board's clearest line is Over 1\.5 Goals/);
+  assert.match(note ?? '', /Recent form favours Home FC/);
+});
+
+test('generic on-demand fallback does not replace the derived note', () => {
+  const note = getAnalystNote(
+    fixture(),
+    'Use Double Chance or Over 1.5 Goals to balance ticket variance.'
+  );
+  assert.doesNotMatch(note ?? '', /balance ticket variance/);
 });

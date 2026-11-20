@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import {
   ChevronDown,
   ChevronUp,
@@ -230,33 +231,60 @@ function PickResultChip({
 }
 
 /**
- * The analyst note gets its own annotation surface. Violet is deliberately
- * different from the emerald angle card, amber warnings and sky model figures.
+ * Shared annotation-card surface. The three per-match insights each get their
+ * own card with the same shape as the analyst note: a tinted border, a coloured
+ * left rule, an icon and a small caps label. Colours keep the cards distinct —
+ * emerald for the angle, sky for the cover, violet for the note.
  */
-function AnalystNoteStrip({
-  note,
-  resultStatus,
-  compact = false,
+const INSIGHT_CARD_TONES = {
+  angle: {
+    surface: 'border-emerald-200 border-l-emerald-500 bg-emerald-50/70 text-emerald-900',
+    icon: Compass,
+    iconColor: 'text-emerald-600',
+    labelColor: 'text-emerald-800',
+  },
+  cover: {
+    surface: 'border-sky-200 border-l-sky-500 bg-sky-50/70 text-sky-900',
+    icon: ShieldCheck,
+    iconColor: 'text-sky-600',
+    labelColor: 'text-sky-800',
+  },
+  note: {
+    surface: 'border-violet-200 border-l-violet-500 bg-violet-50 text-violet-900',
+    icon: NotebookPen,
+    iconColor: 'text-violet-600',
+    labelColor: 'text-violet-700',
+  },
+} as const;
+
+type InsightTone = keyof typeof INSIGHT_CARD_TONES;
+
+function InsightCard({
+  tone,
+  label,
+  children,
+  action,
 }: {
-  note: string;
-  resultStatus: SettlementStatus | null;
-  compact?: boolean;
+  tone: InsightTone;
+  label: string;
+  children: ReactNode;
+  action?: ReactNode;
 }) {
+  const theme = INSIGHT_CARD_TONES[tone];
+  const Icon = theme.icon;
   return (
     <div
-      className={`rounded-md border border-violet-200 border-l-2 border-l-violet-500 bg-violet-50 px-2.5 py-1.5 text-[11px] leading-snug text-violet-900 ${
-        compact ? 'mt-1.5' : 'mt-2'
-      }`}
+      className={`rounded-md border border-l-2 ${theme.surface} px-2.5 py-1.5 text-[11px] leading-snug`}
     >
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-        <p className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-          <NotebookPen className="w-3 h-3 shrink-0 text-violet-600" aria-hidden="true" />
-          <span className="font-semibold uppercase tracking-wide text-violet-700">
-            Analyst note:
+        <p className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 min-w-0">
+          <Icon className={`w-3 h-3 shrink-0 ${theme.iconColor}`} aria-hidden="true" />
+          <span className={`font-semibold uppercase tracking-wide ${theme.labelColor}`}>
+            {label}
           </span>
-          <span>{note}</span>
+          {children}
         </p>
-        <PickResultChip status={resultStatus} label="Note" />
+        {action}
       </div>
     </div>
   );
@@ -1131,8 +1159,9 @@ export function FixtureBoard({
               angle?.cover && isSettled
                 ? evaluateMarketSettlement(fixture, angle.cover)
                 : null;
-            // Persisted model advice is the default note; the on-demand API
-            // result is only a fresher override, never a gate.
+            // Provider advice, then a fresh API result, then a board-derived
+            // note. Every fixture gets one on first render; the brief is only
+            // a source of fresher detail, never a gate.
             const analystNote = getAnalystNote(fixture, deepAnalysis?.bestAngle);
             const noteMarket = analystNote
               ? resolveAnalystNoteMarket(fixture, analystNote)
@@ -1282,91 +1311,80 @@ export function FixtureBoard({
                     {fixture.tacticalSummary}
                   </p>
 
-                  {/* Per-match Recommended Angle */}
+                  {/* Three distinct cards, one insight each. The note is no
+                      longer nested under the angle, and none of them waits on
+                      the Tactical Brief panel to appear. */}
                   {angle && (
-                    <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2.5">
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-800">
-                          <Compass className="w-3.5 h-3.5" aria-hidden="true" />
-                          Recommended Angle
-                        </span>
-                        <span className="text-xs font-semibold text-slate-900">
-                          {angle.market.label}
-                        </span>
-                        <span className="text-xs font-mono font-semibold text-slate-700 tabular-nums">
-                          @ {angle.market.odds.toFixed(2)}
-                        </span>
-                        <span
-                          className="text-[11px] font-mono text-emerald-800 tabular-nums"
-                          title="Margin-adjusted win probability"
-                        >
-                          {angle.probability.toFixed(0)}% fair
-                        </span>
-                        <span
-                          className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
-                            ANGLE_TONE[angle.confidence]
-                          }`}
-                        >
-                          {angle.confidence}
-                        </span>
-                        <PickResultChip status={angleOutcome} label="Angle" />
-                        {marketChipsActive &&
-                          !displayMarkets.some(
-                            (market) => market.id === angle.market.id
-                          ) && (
-                            <span
-                              className="text-[10px] font-medium px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-800"
-                              title="This pick does not meet the current market, probability or price filters, so its tile is hidden from the grid below."
-                            >
-                              Outside your market filters
-                            </span>
-                          )}
+                    <InsightCard
+                      tone="angle"
+                      label="Recommended Angle"
+                      action={
                         <BriefToggle
                           isExpanded={isExpanded}
                           onToggle={() => toggleExpanded(fixture.id)}
                           controls={`brief-${fixture.id}`}
                           tone="accent"
-                          className="ml-auto"
                         />
-                      </div>
-                      <p className="mt-0.5 text-[11px] text-slate-600 leading-snug">
-                        {angle.note}
-                      </p>
-                      {angle.cover && (
-                        <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                          {angle.cover && (
-                            <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] leading-snug text-slate-600 shadow-sm">
-                              <ShieldCheck
-                                className="w-3 h-3 shrink-0 text-slate-500"
-                                aria-hidden="true"
-                              />
-                              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                                Safer cover
-                              </span>
-                              <span className="font-medium text-slate-900">
-                                {angle.cover.label}
-                              </span>
-                              <span className="font-mono font-semibold text-slate-900 tabular-nums">
-                                @ {angle.cover.odds.toFixed(2)}
-                              </span>
-                              <span aria-hidden="true" className="text-slate-300">
-                                ·
-                              </span>
-                              <span className="font-mono text-slate-600 tabular-nums">
-                                {angle.coverProbability.toFixed(0)}% fair
-                              </span>
-                              <PickResultChip status={coverOutcome} label="Cover" />
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                      }
+                    >
+                      <span className="font-semibold text-slate-900">
+                        {angle.market.label}
+                      </span>
+                      <span className="font-mono font-semibold text-slate-700 tabular-nums">
+                        @ {angle.market.odds.toFixed(2)}
+                      </span>
+                      <span
+                        className="font-mono text-emerald-800 tabular-nums"
+                        title="Margin-adjusted win probability"
+                      >
+                        {angle.probability.toFixed(0)}% fair
+                      </span>
+                      <span
+                        className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
+                          ANGLE_TONE[angle.confidence]
+                        }`}
+                      >
+                        {angle.confidence}
+                      </span>
+                      <PickResultChip status={angleOutcome} label="Angle" />
+                      {marketChipsActive &&
+                        !displayMarkets.some(
+                          (market) => market.id === angle.market.id
+                        ) && (
+                          <span
+                            className="text-[10px] font-medium px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-800"
+                            title="This pick does not meet the current market, probability or price filters, so its tile is hidden from the grid below."
+                          >
+                            Outside your market filters
+                          </span>
+                        )}
+                      <span className="basis-full text-slate-600">{angle.note}</span>
+                    </InsightCard>
                   )}
 
-                  {/* Always-on analyst note. Model advice is captured with the
-                      slate, so the Load button is no longer a gate. */}
+                  {angle?.cover && (
+                    <InsightCard tone="cover" label="Safer cover">
+                      <span className="font-medium text-slate-900">
+                        {angle.cover.label}
+                      </span>
+                      <span className="font-mono font-semibold text-slate-900 tabular-nums">
+                        @ {angle.cover.odds.toFixed(2)}
+                      </span>
+                      <span className="font-mono text-slate-600 tabular-nums">
+                        {angle.coverProbability.toFixed(0)}% fair
+                      </span>
+                      <PickResultChip status={coverOutcome} label="Cover" />
+                    </InsightCard>
+                  )}
+
                   {analystNote && (
-                    <AnalystNoteStrip note={analystNote} resultStatus={noteOutcome} compact />
+                    <InsightCard
+                      tone="note"
+                      label="Analyst note"
+                      action={<PickResultChip status={noteOutcome} label="Note" />}
+                    >
+                      <span>{analystNote}</span>
+                    </InsightCard>
                   )}
 
                   {/* Expandable Tactical Brief & On-Demand API-Football Predictions */}
@@ -1566,12 +1584,6 @@ export function FixtureBoard({
                                 <li key={idx}>{factor}</li>
                               ))}
                             </ul>
-                          )}
-                          {analystNote && (
-                            <AnalystNoteStrip
-                              note={analystNote}
-                              resultStatus={noteOutcome}
-                            />
                           )}
                         </div>
                       )}

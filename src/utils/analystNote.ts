@@ -1,4 +1,12 @@
 import type { Fixture, MarketOption } from '../types/fixtures.ts';
+import { isPriced } from './pickResolver.ts';
+import { marketProbability, mostLikelyMarket } from './probability.ts';
+
+/**
+ * API-Football's on-demand fallback is guidance, never a real pick. It must not
+ * replace a note derived from the board's own data.
+ */
+const GENERIC_ADVICE = /\bto balance\b|\bvariance\b/i;
 
 /**
  * Turns API-Football's one-line `predictions.advice` into the priced market it
@@ -24,7 +32,7 @@ export function resolveAnalystNoteMarket(
   if (recorded) return recorded;
 
   // The server's generic fallback is guidance, never a pick.
-  if (/\bto balance\b|\bvariance\b/i.test(note)) return null;
+  if (GENERIC_ADVICE.test(note)) return null;
 
   const lower = note.toLowerCase();
   const find = (predicate: (market: MarketOption) => boolean) =>
@@ -90,10 +98,84 @@ export function resolveAnalystNoteMarket(
   return null;
 }
 
-/** The note shown on the card: persisted model advice first, fresh API result second. */
+function formPoints(form?: string): number | null {
+  if (!form) return null;
+  const results = form.replace(/[^WDLwdl]/g, '').toUpperCase();
+  if (!results) return null;
+  return [...results].reduce(
+    (points, result) => points + (result === 'W' ? 3 : result === 'D' ? 1 : 0),
+    0
+  );
+}
+
+function formSentence(fixture: Fixture): string | null {
+  const home = formPoints(fixture.formHome);
+  const away = formPoints(fixture.formAway);
+  if (home === null || away === null) return null;
+  if (home > away) {
+    return `Recent form favours ${fixture.homeTeam} (${home} pts vs ${away})`;
+  }
+  if (away > home) {
+    return `Recent form favours ${fixture.awayTeam} (${away} pts vs ${home})`;
+  }
+  return `Recent form is even (${home} pts each)`;
+}
+
+/**
+ * A note built entirely from data already on the fixture. Slate prediction
+ * enrichment is quota-bound and archived matchdays skip it, so without this
+ * fallback most games only showed a note after a user opened the brief and
+ * loaded the on-demand API result. Every fixture now has something to say on
+ * first render; the API result, when it arrives, is still the fresher override.
+ */
+export function deriveAnalystNote(fixture: Fixture): string {
+  const parts: string[] = [];
+  const probabilities = fixture.modelProbabilities;
+  const modelLean = probabilities
+    ? ([
+        { label: 'Home', value: probabilities.home },
+        { label: 'Draw', value: probabilities.draw },
+        { label: 'Away', value: probabilities.away },
+      ]
+        .filter((side) => side.value !== null)
+        .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))[0] ?? null)
+    : null;
+
+  if (modelLean && modelLean.value !== null && modelLean.value !== undefined) {
+    parts.push(`Model leans ${modelLean.label} at ${modelLean.value.toFixed(0)}%`);
+  } else {
+    const priced = fixture.markets.filter(isPriced);
+    const strongest = mostLikelyMarket({ ...fixture, markets: priced });
+    parts.push(
+      strongest
+        ? `Price board's clearest line is ${strongest.label} at ${marketProbability(
+            strongest
+          ).toFixed(0)}% fair`
+        : 'No priced line is available for this fixture yet'
+    );
+  }
+
+  const form = formSentence(fixture);
+  if (form) parts.push(form);
+
+  const sentence = parts.join('; ');
+  return sentence.endsWith('.') ? sentence : `${sentence}.`;
+}
+
+/**
+ * The note shown on the card. Persisted provider advice wins, then a fresh
+ * on-demand API result, then the board-derived note that lets every fixture
+ * render without user interaction.
+ */
 export function getAnalystNote(
   fixture: Fixture,
   freshBestAngle?: string | null
 ): string | null {
-  return fixture.modelAdvice?.trim() || freshBestAngle?.trim() || null;
+  const persisted = fixture.modelAdvice?.trim();
+  if (persisted) return persisted;
+
+  const fresh = freshBestAngle?.trim();
+  if (fresh && !GENERIC_ADVICE.test(fresh)) return fresh;
+
+  return deriveAnalystNote(fixture);
 }

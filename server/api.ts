@@ -596,9 +596,9 @@ export function needsPredictionRefresh(
 }
 
 /**
- * The analyst note now ships with every priced fixture, not just the three
- * ticket legs. Bound the first-visit cost so a large slate cannot drain the
- * API-Football quota in one request; `modelDataAt` makes later visits free.
+ * Prediction enrichment is quota-bound and skipped for sealed matchdays. The
+ * board derives its own analyst note from fixture data when these API fields
+ * are absent, so no user action is needed to see a note on every fixture.
  */
 const PREDICTION_ENRICH_LIMIT = 40;
 /** Requests held back for the schedule, results and the on-demand brief. */
