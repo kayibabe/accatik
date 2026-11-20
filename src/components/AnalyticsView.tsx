@@ -55,6 +55,84 @@ interface FeaturedGroup {
 
 const FEATURED_SOURCE_ORDER: FeaturedPickSource[] = ['angle', 'cover', 'note'];
 
+const MARKET_TYPES: MarketType[] = [
+  '1X2',
+  'Double Chance',
+  'Goals',
+  'BTTS',
+  'Draw No Bet',
+];
+
+const MARKET_TYPE_BY_KEY_PREFIX: Record<string, MarketType> = {
+  '1X2': '1X2',
+  GOALS: 'Goals',
+  BTTS: 'BTTS',
+  DC: 'Double Chance',
+  DNB: 'Draw No Bet',
+};
+
+function inferMarketType(key: string): MarketType | null {
+  const direct = MARKET_TYPES.find((type) => type === key);
+  if (direct) return direct;
+  return MARKET_TYPE_BY_KEY_PREFIX[key.split('-')[0].toUpperCase()] ?? null;
+}
+
+/**
+ * The site and the API Function deploy independently. Older Functions predate
+ * the selection rollups, so missing fields must degrade gracefully instead of
+ * throwing inside render and blanking the whole app.
+ */
+function normalizeAnalytics(raw: PickAnalyticsResponse): {
+  data: PickAnalyticsResponse;
+  staleResponse: boolean;
+} {
+  const source = raw as Partial<PickAnalyticsResponse> | null;
+  const staleResponse =
+    !source ||
+    !Array.isArray(source.featuredBySelection) ||
+    !Array.isArray(source.marketsByType) ||
+    source.marketsByType.some((row) => !row.marketType);
+  const safe = source ?? {};
+
+  return {
+    staleResponse,
+    data: {
+      strategy: safe.strategy ?? 'balanced',
+      generatedAt: safe.generatedAt ?? '',
+      firstDateIso: safe.firstDateIso ?? null,
+      lastDateIso: safe.lastDateIso ?? null,
+      sampleDates: safe.sampleDates ?? 0,
+      sampleFixtures: safe.sampleFixtures ?? 0,
+      marketPicks: safe.marketPicks ?? 0,
+      stakePerPick: safe.stakePerPick ?? 1,
+      priceQuality: {
+        prematch: safe.priceQuality?.prematch ?? 0,
+        live: safe.priceQuality?.live ?? 0,
+        unknown: safe.priceQuality?.unknown ?? 0,
+      },
+      featured: Array.isArray(safe.featured) ? safe.featured : [],
+      featuredBySelection: Array.isArray(safe.featuredBySelection)
+        ? safe.featuredBySelection
+        : [],
+      marketsByType: (Array.isArray(safe.marketsByType)
+        ? safe.marketsByType
+        : []
+      ).map((row) => ({
+        ...row,
+        marketType: row.marketType ?? inferMarketType(row.key) ?? '1X2',
+      })),
+      marketsBySelection: (Array.isArray(safe.marketsBySelection)
+        ? safe.marketsBySelection
+        : []
+      ).map((row) => ({
+        ...row,
+        marketType: row.marketType ?? inferMarketType(row.key) ?? '1X2',
+      })),
+      daily: Array.isArray(safe.daily) ? safe.daily : [],
+    },
+  };
+}
+
 interface Summary {
   wins: number;
   losses: number;
@@ -473,6 +551,7 @@ export function AnalyticsView({
   const [data, setData] = useState<PickAnalyticsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [staleResponse, setStaleResponse] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [showEmptySelections, setShowEmptySelections] = useState(false);
   const [showEmptyFeaturedSelections, setShowEmptyFeaturedSelections] =
@@ -501,7 +580,11 @@ export function AnalyticsView({
             body: JSON.stringify({ strategy, force: refreshKey > 0 }),
           }
         );
-        if (!cancelled) setData(result);
+        if (!cancelled) {
+          const normalized = normalizeAnalytics(result);
+          setStaleResponse(normalized.staleResponse);
+          setData(normalized.data);
+        }
       } catch (err) {
         if (!cancelled) {
           setError(
@@ -659,6 +742,14 @@ export function AnalyticsView({
           >
             Retry
           </button>
+        </div>
+      )}
+
+      {staleResponse && data && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+          The API Function is running an older analytics version, so selection
+          drill-downs are unavailable. Redeploy the Function to see the full
+          breakdown.
         </div>
       )}
 
