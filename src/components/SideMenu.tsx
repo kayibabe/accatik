@@ -159,7 +159,7 @@ export function SideMenu({
 
   return (
     <>
-      <aside className="fixed top-16 bottom-0 left-0 z-30 hidden w-56 flex-col border-r border-slate-200 bg-white sm:flex lg:w-64">
+      <aside className="fixed top-16 bottom-0 left-0 z-30 hidden page-menu flex-col border-r border-slate-200 bg-white sm:flex">
         {navContent}
       </aside>
 

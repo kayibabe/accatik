@@ -877,11 +877,9 @@ export default function App() {
   // Derived from current state, never from the last server payload, so the
   // Curated Acca heading always matches the strategy actually applied to the legs.
   const strategyCopy = describeStrategy(strategy, minOdds);
-  // Full-width gutters: the fixed side menu is the only reserved horizontal
-  // space on signed-in pages; everything else gets just a small edge inset.
-  const contentInset = isGuest
-    ? 'px-2 sm:px-3'
-    : 'px-2 sm:pr-3 sm:pl-56 lg:pl-64';
+  // Outer page gutters are centralized in src/index.css (`--page-gutter*` and
+  // `--page-menu-width*`). Tune them there to resize the whole layout.
+  const contentInset = isGuest ? 'page-inset-guest' : 'page-inset-app';
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">

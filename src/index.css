@@ -6,6 +6,65 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+/*
+ * Page layout — single source of truth for the outer page margins/gutters.
+ *
+ * Tune these values to make the whole UI feel wider or narrower:
+ *   --page-gutter         edge inset on phones (both sides, every page)
+ *   --page-gutter-sm      edge inset from the `sm` breakpoint up
+ *   --page-menu-width     fixed side-menu width from `sm` up
+ *   --page-menu-width-lg  fixed side-menu width from `lg` up
+ *
+ * Signed-in pages reserve the side-menu width on the left and use the gutter
+ * on the right, so page content and the top bar stay aligned. The menu width
+ * is shared with the sidebar itself to keep those two values in sync.
+ */
+:root {
+  --page-gutter: 0.5rem; /* 8px  */
+  --page-gutter-sm: 0.75rem; /* 12px */
+  --page-menu-width: 14rem; /* 224px */
+  --page-menu-width-lg: 16rem; /* 256px */
+}
+
+/* Guest (logged-out) pages: a symmetric gutter on both sides. */
+.page-inset-guest {
+  padding-left: var(--page-gutter);
+  padding-right: var(--page-gutter);
+}
+
+/* Signed-in pages: the left side also clears the fixed side menu. */
+.page-inset-app {
+  padding-left: var(--page-gutter);
+  padding-right: var(--page-gutter);
+}
+
+/* Width of the fixed side menu, driven by the same token as the inset. */
+.page-menu {
+  width: var(--page-menu-width);
+}
+
+@media (min-width: 40rem) {
+  .page-inset-guest {
+    padding-left: var(--page-gutter-sm);
+    padding-right: var(--page-gutter-sm);
+  }
+
+  .page-inset-app {
+    padding-left: var(--page-menu-width);
+    padding-right: var(--page-gutter-sm);
+  }
+}
+
+@media (min-width: 64rem) {
+  .page-inset-app {
+    padding-left: var(--page-menu-width-lg);
+  }
+
+  .page-menu {
+    width: var(--page-menu-width-lg);
+  }
+}
+
 @layer base {
   html {
     font-family: var(--font-sans);

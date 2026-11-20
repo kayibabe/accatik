@@ -55,9 +55,7 @@ export function TopBar({
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white">
       <div
         className={`h-16 flex items-center gap-3 ${
-          guest
-            ? 'px-2 sm:px-3'
-            : 'px-2 sm:pr-3 sm:pl-56 lg:pl-64'
+          guest ? 'page-inset-guest' : 'page-inset-app'
         }`}
       >
         {!guest && (
