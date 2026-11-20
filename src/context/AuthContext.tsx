@@ -20,6 +20,7 @@ import {
   type Credentials,
 } from '../lib/appwrite.ts';
 import type { AccountResponse, AppUser, UserProfile } from '../types/user.ts';
+import { AUTH_DISABLED } from '../lib/devIdentity.ts';
 import { resolveProfileFailure } from './authRefresh.ts';
 import { apiFetch, SessionExpiredError } from '../utils/api.ts';
 
@@ -173,6 +174,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         showNotice('Verification email sent. Check your inbox.');
       },
       signOut: async () => {
+        // Dev bypass keeps the developer session regardless of UI actions.
+        if (AUTH_DISABLED) return;
         refreshGeneration.current += 1;
         await appwriteSignOut();
         clearJwt();

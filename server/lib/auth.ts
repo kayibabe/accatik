@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { Account, Client, Databases, ID } from 'node-appwrite';
 import type { AppUser, UserProfile } from '../../src/types/user.ts';
+import { DEV_PROFILE, DEV_USER } from '../../src/lib/devIdentity.ts';
 import { createTtlCache } from './cache.ts';
 
 /**
@@ -34,6 +35,30 @@ export function appwriteEndpoint(): string {
 
 export function appwriteProjectId(): string {
   return env('APPWRITE_FUNCTION_PROJECT_ID', env('VITE_APPWRITE_PROJECT_ID', '6afee9de002e7fecc9ae'));
+}
+
+/**
+ * TEMPORARY dev bypass. Mirrors the browser's VITE_AUTH_DISABLED flag so
+ * protected endpoints work without an Appwrite JWT or login credentials.
+ * Never enable this outside development.
+ */
+function authBypassEnabled(): boolean {
+  const flag = process.env.VITE_AUTH_DISABLED ?? process.env.AUTH_DISABLED;
+  return String(flag ?? '').trim().toLowerCase() === 'true';
+}
+
+function devAuth(): AuthContext {
+  const apiKey = process.env.APPWRITE_API_KEY || 'dev-bypass';
+  const client = new Client()
+    .setEndpoint(appwriteEndpoint())
+    .setProject(appwriteProjectId())
+    .setKey(apiKey);
+  return {
+    user: DEV_USER,
+    profile: DEV_PROFILE,
+    databases: new Databases(client),
+    jwt: 'dev-bypass',
+  };
 }
 
 function headerValue(
@@ -177,6 +202,8 @@ const identityCache = createTtlCache<VerifiedIdentity>(60_000, 200);
 export async function resolveAuth(
   headers: Record<string, unknown> | undefined
 ): Promise<AuthContext | null> {
+  if (authBypassEnabled()) return devAuth();
+
   const jwt =
     headerValue(headers, 'x-appwrite-user-jwt') ??
     /^Bearer\s+(.+)$/i.exec(headerValue(headers, 'authorization') ?? '')?.[1];

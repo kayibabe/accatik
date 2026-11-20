@@ -1,5 +1,6 @@
 import { Account, Client, ID } from 'appwrite';
 import type { AppUser } from '../types/user.ts';
+import { AUTH_DISABLED, DEV_USER } from './devIdentity.ts';
 
 /**
  * Browser-side Appwrite Auth client.
@@ -124,6 +125,8 @@ async function createJwt(): Promise<string | null> {
  * with a freshly minted token.
  */
 export async function getJwt(force = false): Promise<string | null> {
+  // Dev bypass: there is no Appwrite session, so skip the JWT round trip.
+  if (AUTH_DISABLED) return null;
   if (force) return createJwt();
   if (jwtCache && jwtCache.expiresAt > Date.now() + 60_000) {
     return jwtCache.token;
@@ -153,6 +156,8 @@ export function toAppUser(value: {
 }
 
 export async function currentUser(): Promise<AppUser | null> {
+  // Dev bypass: report a signed-in identity without contacting Appwrite.
+  if (AUTH_DISABLED) return DEV_USER;
   try {
     return toAppUser(await account.get());
   } catch {
