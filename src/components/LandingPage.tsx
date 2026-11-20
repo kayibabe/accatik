@@ -150,14 +150,14 @@ export function LandingPage({
         className="scroll-mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white"
       >
         <div className="grid gap-8 p-6 sm:p-10 lg:grid-cols-[1.25fr_1fr] lg:items-center">
-          <div>
+          <div className="min-w-0">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-800">
               <Sparkles className="size-3.5" aria-hidden="true" />
               Grounded football analysis
             </span>
             <h1
               id="landing-heading"
-              className="mt-4 text-3xl font-bold tracking-tight text-slate-900 [text-wrap:balance] sm:text-4xl"
+              className="mt-4 text-2xl font-bold tracking-tight text-slate-900 [text-wrap:balance] sm:text-4xl"
             >
               Football accumulators, built on evidence — not hunches.
             </h1>
@@ -172,14 +172,14 @@ export function LandingPage({
               <button
                 type="button"
                 onClick={onSignIn}
-                className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 cursor-pointer"
+                className="inline-flex min-w-0 w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 cursor-pointer sm:w-auto"
               >
                 Open the workbench
                 <ArrowRight className="size-4" aria-hidden="true" />
               </button>
               <a
                 href="#todays-matches"
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
+                className="inline-flex min-w-0 w-full items-center justify-center gap-2 rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 sm:w-auto"
               >
                 See today&apos;s matches
               </a>
@@ -189,7 +189,7 @@ export function LandingPage({
             </p>
           </div>
 
-          <ol className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/80 p-5 sm:p-6">
+          <ol className="min-w-0 space-y-3 rounded-xl border border-slate-200 bg-slate-50/80 p-5 sm:p-6">
             <li className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800">
               How it works
             </li>
