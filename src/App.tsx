@@ -877,8 +877,9 @@ export default function App() {
   // Derived from current state, never from the last server payload, so the
   // Curated Acca heading always matches the strategy actually applied to the legs.
   const strategyCopy = describeStrategy(strategy, minOdds);
-  // Outer page gutters are centralized in src/index.css (`--page-gutter*` and
-  // `--page-menu-width*`). Tune them there to resize the whole layout.
+  // Outer page gutters are centralized in src/index.css (`--page-gutter*`,
+  // `--page-menu-width*` and `--page-menu-gap*`). Tune them there to resize
+  // the whole layout.
   const contentInset = isGuest ? 'page-inset-guest' : 'page-inset-app';
 
   return (

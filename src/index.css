@@ -14,16 +14,21 @@
  *   --page-gutter-sm      edge inset from the `sm` breakpoint up
  *   --page-menu-width     fixed side-menu width from `sm` up
  *   --page-menu-width-lg  fixed side-menu width from `lg` up
+ *   --page-menu-gap       clear space between the side menu and page content
+ *   --page-menu-gap-lg    wider clear space from `lg` up
  *
- * Signed-in pages reserve the side-menu width on the left and use the gutter
- * on the right, so page content and the top bar stay aligned. The menu width
- * is shared with the sidebar itself to keep those two values in sync.
+ * Signed-in pages reserve the side-menu width plus a gap on the left and use
+ * the gutter on the right, so page content and the top bar stay aligned and
+ * never touch the sidebar. The menu width is shared with the sidebar itself
+ * to keep those values in sync.
  */
 :root {
   --page-gutter: 0.5rem; /* 8px  */
   --page-gutter-sm: 0.75rem; /* 12px */
   --page-menu-width: 14rem; /* 224px */
   --page-menu-width-lg: 16rem; /* 256px */
+  --page-menu-gap: 1.5rem; /* 24px */
+  --page-menu-gap-lg: 2rem; /* 32px */
 }
 
 /* Guest (logged-out) pages: a symmetric gutter on both sides. */
@@ -50,14 +55,14 @@
   }
 
   .page-inset-app {
-    padding-left: var(--page-menu-width);
+    padding-left: calc(var(--page-menu-width) + var(--page-menu-gap));
     padding-right: var(--page-gutter-sm);
   }
 }
 
 @media (min-width: 64rem) {
   .page-inset-app {
-    padding-left: var(--page-menu-width-lg);
+    padding-left: calc(var(--page-menu-width-lg) + var(--page-menu-gap-lg));
   }
 
   .page-menu {
