@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { needsPredictionRefresh } from './api.ts';
+import { buildRoiAccaTicket, needsPredictionRefresh } from './api.ts';
 import { makeFixture } from '../src/utils/testFactories.ts';
 
 test('a fixture without durable model data needs a prediction fetch', () => {
@@ -19,4 +19,10 @@ test('a durable model snapshot suppresses refetches until explicitly forced', ()
 
 test('a missing fixture never triggers a prediction fetch', () => {
   assert.equal(needsPredictionRefresh(undefined, true), false);
+});
+
+test('ROI accumulator requests cannot opt into live staking', async () => {
+  const result = await buildRoiAccaTicket({ strategy: 'balanced', stake: 100 });
+  assert.equal(result.status, 400);
+  assert.match(JSON.stringify(result.body), /research\/shadow-only/);
 });

@@ -208,6 +208,10 @@ export interface RoiAccaResponse {
   targetReached: boolean;
   economics: import('./fixtures.ts').TicketEconomicsSummary;
   recommended: false;
+  /** Hard guarantee: generated tickets live in the shadow ledger, never at a bookmaker. */
+  mode: 'research-shadow';
+  /** Flat one-unit stake used when the shadow ticket is recorded. */
+  stake: 1;
   reason: string;
   riskWarning: string;
   /** Qualified rows that were not used, with the reason for exclusion. */

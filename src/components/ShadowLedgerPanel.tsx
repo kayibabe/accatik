@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { BarChart3, RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { BarChart3, Filter, RefreshCw } from 'lucide-react';
 import type { LedgerBreakdownRow, LedgerSummary } from '../types/ledger.ts';
 import { apiFetch } from '../utils/api.ts';
 import {
@@ -9,6 +9,10 @@ import {
   type SortAccessors,
   type SortState,
 } from '../utils/tableSort.ts';
+import {
+  selectShadowRoiShortlist,
+  SHADOW_ROI_SHORTLIST,
+} from '../utils/shadowRoiFilter.ts';
 import { SortableTh } from './SortableTh.tsx';
 
 const percent = (value: number | null): string =>
@@ -26,6 +30,11 @@ const pnlTone = (value: number): string =>
 
 const recordLabel = (row: LedgerBreakdownRow): string =>
   `${row.won}W · ${row.lost}L · ${row.voided}V`;
+
+const SHORTLIST_RULE =
+  `ROI ≥ ${SHADOW_ROI_SHORTLIST.minRoiPct}% · ` +
+  `Hit ≥ ${SHADOW_ROI_SHORTLIST.minHitPct}% · ` +
+  `CLV ≥ ${SHADOW_ROI_SHORTLIST.minAvgClvPct}%`;
 
 const VARIANT_ACCESSORS: SortAccessors<LedgerBreakdownRow> = {
   label: (row) => row.label,
@@ -49,14 +58,23 @@ export function ShadowLedgerPanel() {
   const [summary, setSummary] = useState<LedgerSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [shortlistOnly, setShortlistOnly] = useState(true);
   const [variantSort, setVariantSort] = useState<SortState>({
-    key: null,
+    key: 'roi',
     direction: SORT_DESC,
   });
   const handleVariantSort = makeSortHandler(setVariantSort, SORT_DESC);
-  const sortedVariants = summary
-    ? sortRows(summary.byVariant, variantSort, VARIANT_ACCESSORS)
-    : [];
+  const shortlistedVariants = useMemo(
+    () => (summary ? selectShadowRoiShortlist(summary.byVariant) : []),
+    [summary]
+  );
+  const sortedVariants = sortRows(
+    shortlistOnly
+      ? shortlistedVariants
+      : (summary?.byVariant ?? []),
+    variantSort,
+    VARIANT_ACCESSORS
+  );
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -91,7 +109,8 @@ export function ShadowLedgerPanel() {
             Every ticket the engine would have built, recorded automatically at
             one-unit stakes. Only prices captured before kickoff enter ROI; the
             ledger is never edited by hand. Tickets the EV gate would not
-            recommend are still recorded, so the gate itself can be graded.
+            recommend are still recorded, so the gate itself can be graded. The
+            positive-ROI shortlist below is applied automatically.
           </p>
         </div>
         <button
@@ -137,6 +156,30 @@ export function ShadowLedgerPanel() {
         </div>
       ) : (
         <>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-100 bg-emerald-50/40 px-4 py-2.5">
+            <label
+              className="flex flex-wrap items-center gap-2 text-xs text-slate-700 cursor-pointer"
+              title="Monitoring aid only — small samples mean this is not a betting signal."
+            >
+              <input
+                type="checkbox"
+                checked={shortlistOnly}
+                onChange={(event) => setShortlistOnly(event.target.checked)}
+                className="accent-emerald-700"
+              />
+              <Filter className="h-3.5 w-3.5 text-emerald-700" aria-hidden="true" />
+              <span className="font-semibold">Positive-ROI shortlist</span>
+              <span className="font-mono text-[11px] text-slate-500">
+                {SHORTLIST_RULE}
+              </span>
+            </label>
+            <span className="text-[11px] text-slate-500 font-mono tabular-nums">
+              {shortlistOnly
+                ? `${shortlistedVariants.length} of ${summary.byVariant.length} variants`
+                : `Showing all ${summary.byVariant.length} variants`}
+            </span>
+          </div>
+
           <div className="grid grid-cols-2 divide-x divide-y divide-slate-200 sm:grid-cols-5 sm:divide-y-0">
             <div className="px-4 py-3">
               <p className="text-[11px] font-medium text-slate-500">Record</p>
@@ -273,6 +316,22 @@ export function ShadowLedgerPanel() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
+                {sortedVariants.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-8 text-center text-xs text-slate-500">
+                      No variant currently meets {SHORTLIST_RULE}.
+                      {shortlistOnly && (
+                        <button
+                          type="button"
+                          onClick={() => setShortlistOnly(false)}
+                          className="ml-1 font-semibold text-emerald-700 underline cursor-pointer"
+                        >
+                          Show all variants
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                )}
                 {sortedVariants.map((row) => (
                   <tr key={row.key}>
                     <td className="px-4 py-2 font-medium text-slate-800">
@@ -313,6 +372,15 @@ export function ShadowLedgerPanel() {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          <div className="border-t border-amber-100 bg-amber-50/60 px-4 py-2 text-[11px] leading-relaxed text-amber-800">
+            Research/shadow only.{' '}
+            {shortlistOnly
+              ? 'The shortlist is a monitoring aid, not a betting signal — small samples make these rankings noisy. '
+              : ''}
+            Tickets are recorded at flat one-unit stakes and are never placed
+            with a bookmaker.
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50/70 px-4 py-2.5 text-[11px] text-slate-500">

@@ -82,7 +82,10 @@ export function buildRoiAcca(
   registry: RoiRegistryEntry[],
   strategy: AccaStrategy,
   options: RoiAccaOptions
-): Omit<RoiAccaResponse, 'economics' | 'recommended' | 'reason' | 'riskWarning'> {
+): Omit<
+  RoiAccaResponse,
+  'economics' | 'recommended' | 'mode' | 'stake' | 'reason' | 'riskWarning'
+> {
   const nowMs = options.nowMs ?? Date.now();
   const promoted = new Map(
     registry
@@ -158,6 +161,24 @@ export function buildRoiAcca(
     targetReached: product >= options.targetOdds,
     rejected,
   };
+}
+
+/**
+ * Hard boundary for generated tickets. The ROI builder only ever produces
+ * shadow-ledger research tickets; a request that asks for a stake, a live
+ * placement or a recommendation is rejected before any ticket is built.
+ */
+export function isLiveStakingRequest(body: unknown): boolean {
+  if (body === null || typeof body !== 'object') return false;
+  const source = body as Record<string, unknown>;
+  return (
+    source.placeBet === true ||
+    source.live === true ||
+    source.mode === 'live' ||
+    source.recommended === true ||
+    'stake' in source ||
+    'stakeAmount' in source
+  );
 }
 
 /** Grade a research ticket with the structural caps explicitly bypassed. */

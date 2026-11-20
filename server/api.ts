@@ -29,7 +29,11 @@ import {
 import { describeStrategy, isAccaStrategy } from '../src/utils/strategy.ts';
 import { normalizeTicketControls } from '../src/utils/ticketControls.ts';
 import { resolveAnalystNoteMarket } from '../src/utils/analystNote.ts';
-import { buildRoiAcca, guardRoiAcca } from '../src/utils/roiAcca.ts';
+import {
+  buildRoiAcca,
+  guardRoiAcca,
+  isLiveStakingRequest,
+} from '../src/utils/roiAcca.ts';
 import { computePickAnalytics } from './lib/pickAnalytics.ts';
 import { computeTicketAnalytics } from './lib/ticketAnalytics.ts';
 import { computePickRecords } from './lib/pickRecord.ts';
@@ -1520,6 +1524,12 @@ export async function getQualifiedPicks(body: unknown): Promise<
 export async function buildRoiAccaTicket(body: unknown): Promise<
   ApiResult<RoiAccaResponse | ErrorBody>
 > {
+  if (isLiveStakingRequest(body)) {
+    return fail(
+      400,
+      'Generated ROI tickets are research/shadow-only; live staking is not supported.'
+    );
+  }
   const source = asRecord(body);
   const dateIso = requestedRoiDate(source);
   const strategy = isAccaStrategy(source.strategy) ? source.strategy : 'balanced';
@@ -1542,6 +1552,8 @@ export async function buildRoiAccaTicket(body: unknown): Promise<
       dateIso,
       economics: graded.economics,
       recommended: false,
+      mode: 'research-shadow',
+      stake: 1,
       reason: graded.reason,
       riskWarning: graded.riskWarning,
     });

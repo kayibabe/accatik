@@ -226,7 +226,7 @@ export function PositiveRoiView({
               </p>
             </div>
             <span className="px-2 py-1 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded">
-              NOT RECOMMENDED
+              SHADOW ONLY · NOT RECOMMENDED
             </span>
           </div>
           <div className="overflow-x-auto">
@@ -256,7 +256,9 @@ export function PositiveRoiView({
             </table>
           </div>
           <p className="px-4 py-3 text-[11px] leading-relaxed text-amber-900 bg-amber-50 border-t border-amber-200">
-            {ticket.riskWarning}
+            {ticket.riskWarning} This ticket is recorded in the shadow ledger at
+            a flat one-unit stake ({ticket.stake}) and is never placed with a
+            bookmaker.
           </p>
         </div>
       )}

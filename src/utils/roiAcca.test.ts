@@ -2,7 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { Fixture } from '../types/fixtures.ts';
 import type { FeaturedPickSource, RoiRegistryEntry } from '../types/analytics.ts';
-import { buildRoiAcca, guardRoiAcca } from './roiAcca.ts';
+import {
+  buildRoiAcca,
+  guardRoiAcca,
+  isLiveStakingRequest,
+} from './roiAcca.ts';
 import { makeFixture, makeMarket } from './testFactories.ts';
 
 function entry(
@@ -194,4 +198,17 @@ test('research guard keeps long tickets but never recommends them', () => {
   assert.equal(graded.economics.legCount, 6);
   assert.match(graded.riskWarning, /Research only/);
   assert.match(graded.reason, /not a recommendation/);
+});
+
+test('generated tickets cannot be turned into live stakes', () => {
+  assert.equal(isLiveStakingRequest({ strategy: 'balanced' }), false);
+  assert.equal(isLiveStakingRequest({ targetOdds: 5, maxLegs: 8 }), false);
+  assert.equal(isLiveStakingRequest(null), false);
+
+  assert.equal(isLiveStakingRequest({ stake: 100 }), true);
+  assert.equal(isLiveStakingRequest({ stakeAmount: 10 }), true);
+  assert.equal(isLiveStakingRequest({ placeBet: true }), true);
+  assert.equal(isLiveStakingRequest({ live: true }), true);
+  assert.equal(isLiveStakingRequest({ mode: 'live' }), true);
+  assert.equal(isLiveStakingRequest({ recommended: true }), true);
 });
