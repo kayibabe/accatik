@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertCircle, RefreshCw, X } from 'lucide-react';
 import { TopBar, type ActiveTab } from './components/TopBar.tsx';
+import { SideMenu } from './components/SideMenu.tsx';
 import { DateNavigator } from './components/DateNavigator.tsx';
 import { FixtureBoard } from './components/FixtureBoard.tsx';
 import { AccaTicketSlip } from './components/AccaTicketSlip.tsx';
@@ -120,6 +121,7 @@ export default function App() {
   const isGuest = !authLoading && !user;
   const [selectedDate, setSelectedDate] = useState<string>(todayDate);
   const [activeTab, setActiveTab] = useState<ActiveTab>('slate');
+  const [menuOpen, setMenuOpen] = useState(false);
   const [strategy, setStrategy] = useState<AccaStrategy>('balanced');
   const [minOdds, setMinOdds] = useState<number>(2.8);
   const [maxLegs, setMaxLegs] = useState<number>(3);
@@ -875,6 +877,7 @@ export default function App() {
   // Derived from current state, never from the last server payload, so the
   // Curated Acca heading always matches the strategy actually applied to the legs.
   const strategyCopy = describeStrategy(strategy, minOdds);
+  const contentInset = isGuest ? '' : 'lg:pl-64';
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
@@ -883,7 +886,6 @@ export default function App() {
         onSelectTab={setActiveTab}
         onRefresh={() => fetchSlateForDate(selectedDate, strategy, minOdds, maxLegs, true)}
         isLoading={isLoading}
-        savedCount={savedTickets.length}
         user={user}
         profile={profile}
         onSignIn={openAuth}
@@ -892,7 +894,25 @@ export default function App() {
         isAdmin={profile?.role === 'admin'}
         onAdmin={() => setAdminOpen((open) => !open)}
         isGuest={isGuest}
+        onToggleMenu={() => setMenuOpen((open) => !open)}
+        isMenuOpen={menuOpen}
       />
+
+      {!isGuest && (
+        <SideMenu
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          savedCount={savedTickets.length}
+          user={user}
+          profile={profile}
+          onSignOut={() => void signOut()}
+          onResendVerification={() => void handleResendVerification()}
+          isAdmin={profile?.role === 'admin'}
+          onAdmin={() => setAdminOpen((open) => !open)}
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+        />
+      )}
 
       {notice && (
         <div
@@ -904,7 +924,7 @@ export default function App() {
           }
         >
           <div
-            className={`max-w-[1380px] mx-auto px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3 text-xs ${
+            className={`max-w-[1380px] mx-auto px-4 sm:px-6 ${contentInset} py-2.5 flex items-center justify-between gap-3 text-xs ${
               noticeTone === 'error' ? 'text-amber-900' : 'text-emerald-900'
             }`}
           >
@@ -947,7 +967,7 @@ export default function App() {
 
       {user && !user.emailVerified && (
         <div className="bg-amber-50 border-b border-amber-200" role="status">
-          <div className="max-w-[1380px] mx-auto px-4 sm:px-6 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-amber-900">
+          <div className={`max-w-[1380px] mx-auto px-4 sm:px-6 ${contentInset} py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-amber-900`}>
             <div>
               <span className="font-semibold">Verify your email address.</span>{' '}
               <span className="text-amber-800">
@@ -973,7 +993,7 @@ export default function App() {
 
       {importPrompt && (
         <div className="bg-indigo-50 border-b border-indigo-200">
-          <div className="max-w-[1380px] mx-auto px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className={`max-w-[1380px] mx-auto px-4 sm:px-6 ${contentInset} py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
             <div className="text-xs text-indigo-900">
               <span className="font-semibold">
                 Bring your {importPrompt.length} saved slip
@@ -1012,7 +1032,7 @@ export default function App() {
           isGuest ? 'hidden' : ''
         }`}
       >
-        <div className="max-w-[1380px] mx-auto px-4 sm:px-6 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        <div className={`max-w-[1380px] mx-auto px-4 sm:px-6 ${contentInset} py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5`}>
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
             <span className="font-semibold text-slate-900">
               Matchday Schedule
@@ -1038,7 +1058,7 @@ export default function App() {
       </div>
 
       <main
-        className={`flex-1 w-full max-w-[1380px] mx-auto px-4 sm:px-6 ${
+        className={`flex-1 w-full max-w-[1380px] mx-auto px-4 sm:px-6 ${contentInset} ${
           isGuest ? 'py-8 sm:py-12' : 'py-6 sm:py-8'
         }`}
       >
@@ -1263,7 +1283,7 @@ export default function App() {
       </main>
 
       <footer className="border-t border-slate-200 bg-white mt-12">
-        <div className="max-w-[1380px] mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
+        <div className={`max-w-[1380px] mx-auto px-4 sm:px-6 ${contentInset} py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500`}>
           <span>MatchSlip · Built on evidence, not hunches.</span>
           <span>
             18+ only · Bet responsibly · Odds and match schedules should be

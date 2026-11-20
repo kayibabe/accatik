@@ -1,4 +1,4 @@
-import { LogOut, RefreshCw, ShieldCheck, UserRound } from 'lucide-react';
+import { LogOut, Menu, RefreshCw, ShieldCheck, UserRound } from 'lucide-react';
 import type { AppUser, UserProfile } from '../types/user.ts';
 
 export type ActiveTab =
@@ -15,7 +15,6 @@ interface TopBarProps {
   onSelectTab: (tab: ActiveTab) => void;
   onRefresh: () => void;
   isLoading: boolean;
-  savedCount: number;
   user?: AppUser | null;
   profile?: UserProfile | null;
   onSignIn?: () => void;
@@ -25,6 +24,8 @@ interface TopBarProps {
   onAdmin?: () => void;
   /** Guests see landing-page anchors instead of the signed-in workbench tabs. */
   isGuest?: boolean;
+  onToggleMenu?: () => void;
+  isMenuOpen?: boolean;
 }
 
 export function TopBar({
@@ -32,7 +33,6 @@ export function TopBar({
   onSelectTab,
   onRefresh,
   isLoading,
-  savedCount,
   user,
   profile,
   onSignIn,
@@ -41,20 +41,10 @@ export function TopBar({
   isAdmin,
   onAdmin,
   isGuest,
+  onToggleMenu,
+  isMenuOpen = false,
 }: TopBarProps) {
   const guest = isGuest ?? !user;
-  const navItems: { id: ActiveTab; label: string }[] = [
-    { id: 'slate', label: 'Matchday Slate' },
-    { id: 'acca', label: 'Curated Acca' },
-    {
-      id: 'saved',
-      label: savedCount > 0 ? `Saved Slips (${savedCount})` : 'Saved Slips',
-    },
-    { id: 'activity', label: 'My Activity' },
-    { id: 'analytics', label: 'Analytics' },
-    { id: 'roi', label: 'Positive ROI (Research)' },
-    { id: 'sources', label: 'Sources' },
-  ];
   const guestNavItems = [
     { href: '#how-it-works', label: 'How it works' },
     { href: '#todays-matches', label: "Today's matches" },
@@ -62,9 +52,25 @@ export function TopBar({
   ];
 
   return (
-    <header className="bg-white border-b border-slate-200">
-      <div className="max-w-[1380px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-8">
-        {/* Zone 1: Single text element wordmark */}
+    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white">
+      <div
+        className={`mx-auto h-16 max-w-[1380px] px-4 sm:px-6 flex items-center gap-3 ${
+          guest ? '' : 'lg:pl-64'
+        }`}
+      >
+        {!guest && (
+          <button
+            type="button"
+            onClick={onToggleMenu}
+            aria-label="Open navigation menu"
+            aria-expanded={isMenuOpen}
+            className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 lg:hidden"
+          >
+            <Menu className="h-5 w-5" aria-hidden="true" />
+          </button>
+        )}
+
+        {/* Wordmark */}
         <button
           type="button"
           onClick={() =>
@@ -77,51 +83,38 @@ export function TopBar({
           MatchSlip
         </button>
 
-        {/* Zone 2: Clean single-line text navigation links */}
-        <nav
-          aria-label="Primary navigation"
-          className="hidden md:flex items-center gap-6 text-sm font-medium"
-        >
-          {guest
-            ? guestNavItems.map((item) => (
-                <a
-                  key={item.href}
-                  href={item.href}
-                  className="py-5 border-b-2 border-transparent text-slate-600 hover:text-slate-900 transition-colors whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
-                >
-                  {item.label}
-                </a>
-              ))
-            : navItems.map((item) => {
-                const isActive = activeTab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => onSelectTab(item.id)}
-                    className={`py-5 border-b-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${
-                      isActive
-                        ? 'border-emerald-700 text-slate-900 font-semibold'
-                        : 'border-transparent text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                );
-              })}
-        </nav>
+        {/* Guests keep landing-page anchors in the header. Signed-in pages live in the side menu. */}
+        {guest ? (
+          <nav
+            aria-label="Primary navigation"
+            className="hidden md:flex flex-1 items-center justify-center gap-6 text-sm font-medium"
+          >
+            {guestNavItems.map((item) => (
+              <a
+                key={item.href}
+                href={item.href}
+                className="py-5 border-b-2 border-transparent text-slate-600 hover:text-slate-900 transition-colors whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
+              >
+                {item.label}
+              </a>
+            ))}
+          </nav>
+        ) : (
+          <div className="hidden flex-1 lg:block" />
+        )}
 
-        {/* Zone 3: account + primary action */}
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Account + primary action */}
+        <div className="ml-auto flex items-center gap-2 shrink-0">
           {!guest && isAdmin && (
             <button
               type="button"
               onClick={onAdmin}
               title="Admin · manage user roles"
+              aria-label="Admin · manage user roles"
               className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 cursor-pointer"
             >
               <ShieldCheck className="w-3.5 h-3.5" aria-hidden="true" />
-              Admin
+              <span className="hidden sm:inline">Admin</span>
             </button>
           )}
           {!guest && user ? (
@@ -190,67 +183,45 @@ export function TopBar({
               type="button"
               onClick={onRefresh}
               disabled={isLoading}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-emerald-700 rounded-lg hover:bg-emerald-800 disabled:opacity-60 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
+              aria-label={isLoading ? 'Loading slate' : 'Refresh slate'}
+              className="inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold text-white bg-emerald-700 rounded-lg hover:bg-emerald-800 disabled:opacity-60 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 sm:px-4"
             >
               <RefreshCw
                 className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`}
                 aria-hidden="true"
               />
-              <span>{isLoading ? 'Loading Slate' : 'Refresh Slate'}</span>
+              <span className="hidden sm:inline">
+                {isLoading ? 'Loading Slate' : 'Refresh Slate'}
+              </span>
             </button>
           )}
         </div>
       </div>
 
-      {/* Mobile navigation strip */}
-      <nav
-        aria-label="Mobile navigation"
-        className="flex md:hidden items-center gap-4 px-4 pb-2.5 overflow-x-auto text-xs font-medium border-t border-slate-100"
-      >
-        {guest
-          ? guestNavItems.map((item) => (
-              <a
-                key={item.href}
-                href={item.href}
-                className="pt-2 pb-1 border-b-2 border-transparent text-slate-600 whitespace-nowrap shrink-0"
-              >
-                {item.label}
-              </a>
-            ))
-          : navItems.map((item) => {
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => onSelectTab(item.id)}
-                  className={`pt-2 pb-1 border-b-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                    isActive
-                      ? 'border-emerald-700 text-slate-900 font-semibold'
-                      : 'border-transparent text-slate-600'
-                  }`}
-                >
-                  {item.label}
-                </button>
-              );
-            })}
-        {!guest && user && !user.emailVerified && onResendVerification && (
+      {/* Guest landing anchors remain accessible on small screens. */}
+      {guest && (
+        <nav
+          aria-label="Mobile navigation"
+          className="flex md:hidden items-center gap-4 px-4 pb-2.5 overflow-x-auto text-xs font-medium border-t border-slate-100"
+        >
+          {guestNavItems.map((item) => (
+            <a
+              key={item.href}
+              href={item.href}
+              className="pt-2 pb-1 border-b-2 border-transparent text-slate-600 whitespace-nowrap shrink-0"
+            >
+              {item.label}
+            </a>
+          ))}
           <button
             type="button"
-            onClick={onResendVerification}
-            className="pt-2 pb-1 text-amber-700 font-semibold whitespace-nowrap shrink-0 cursor-pointer"
+            onClick={onSignIn}
+            className="ml-auto pt-2 pb-1 text-emerald-700 font-semibold whitespace-nowrap shrink-0 cursor-pointer"
           >
-            Resend verification
+            Sign in
           </button>
-        )}
-        <button
-          type="button"
-          onClick={!guest && user ? onSignOut : onSignIn}
-          className="ml-auto pt-2 pb-1 text-emerald-700 font-semibold whitespace-nowrap shrink-0 cursor-pointer"
-        >
-          {!guest && user ? 'Sign out' : 'Sign in'}
-        </button>
-      </nav>
+        </nav>
+      )}
     </header>
   );
 }
