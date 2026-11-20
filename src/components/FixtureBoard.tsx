@@ -1500,7 +1500,7 @@ export function FixtureBoard({
                             ]
                               .filter(Boolean)
                               .join(' — ')}
-                            className={`group flex flex-col justify-between p-2.5 text-left rounded-lg border transition-colors cursor-pointer disabled:opacity-85 disabled:cursor-not-allowed min-h-[60px] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-emerald-700 ${
+                            className={`group flex flex-col justify-between p-2.5 text-left rounded-lg border transition-colors cursor-pointer disabled:cursor-not-allowed min-h-[60px] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-emerald-700 ${
                               isSelected
                                 ? 'bg-emerald-700 border-emerald-700 text-white'
                                 : unselectedTone
