@@ -3,6 +3,23 @@ import type { RawApiFixture, RawApiOddsItem } from './apiFootball.ts';
 import { formatKickoffCat, formatMatchDateCat } from './time.ts';
 import { getLeaguePriority } from '../../src/utils/leaguePriority.ts';
 import { estimateOverround, stripMargin } from '../../src/utils/probability.ts';
+/**
+ * Selections that have always been shown on the fixture board. Extra lines
+ * captured from the feed (3.5/4.5 goals, unders, BTTS No, DC 12) are archived
+ * for analytics but deliberately held back from the five-card board grid.
+ */
+const BOARD_MARKET_SUFFIXES = [
+  '1x2-h',
+  '1x2-a',
+  'ou-15',
+  'ou-25',
+  'btts-yes',
+  'dc-1x',
+  'dc-x2',
+  'dnb-h',
+  'dnb-a',
+];
+
 const PREFERRED_BOOKMAKER_IDS = [
   8, // Bet365
   11, // 1xBet
@@ -86,9 +103,13 @@ export function buildMarketsFromOdds(
   homeTeam: string,
   awayTeam: string,
   oddsEntry?: RawApiOddsItem
-): { markets: MarketOption[]; bookmakerName?: string } {
+): {
+  markets: MarketOption[];
+  allMarkets: MarketOption[];
+  bookmakerName?: string;
+} {
   if (!oddsEntry || !Array.isArray(oddsEntry.bookmakers) || oddsEntry.bookmakers.length === 0) {
-    return { markets: [] };
+    return { markets: [], allMarkets: [] };
   }
 
   // Pick preferred bookmaker that offers Match Winner or multiple bets
@@ -188,38 +209,62 @@ export function buildMarketsFromOdds(
       `Covers ${awayTeam} win or draw.`,
       doubleChance.bookmaker
     );
+    pushMarket(
+      'dc-12',
+      'Double Chance',
+      '12 (Home or Away)',
+      doubleChance.bet.values.find(
+        (v) =>
+          v.value === 'Home/Away' ||
+          v.value === '12' ||
+          v.value.toLowerCase() === 'home or away'
+      )?.odd,
+      `Either side to win; the draw loses.`,
+      doubleChance.bookmaker
+    );
   }
 
   const overUnder = findBet(5, 'goals over/under');
   if (overUnder) {
-    const o15 = overUnder.bet.values.find((v) => v.value === 'Over 1.5');
-    const o25 = overUnder.bet.values.find((v) => v.value === 'Over 2.5');
-    const u25 = overUnder.bet.values.find((v) => v.value === 'Under 2.5');
-    pushMarket(
-      'ou-15',
-      'Goals',
-      'Over 1.5 Goals',
-      o15?.odd,
-      `At least 2 total match goals scored.`,
-      overUnder.bookmaker
-    );
-    pushMarket(
-      'ou-25',
-      'Goals',
-      'Over 2.5 Goals',
-      o25?.odd,
-      `At least 3 total match goals scored.`,
-      overUnder.bookmaker
-    );
-    if (!o15 && u25) {
-      pushMarket(
-        'ou-u25',
-        'Goals',
-        'Under 2.5 Goals',
-        u25.odd,
-        `Controlled tempo with 2 or fewer total goals.`,
-        overUnder.bookmaker
-      );
+    // The feed publishes a full ladder of lines. Keep every one between 0.5
+    // and 6.5 so the analytics table can compare Over/Under 1.5 through 4.5
+    // instead of only the two overs the board used to show.
+    const lines = new Map<string, { over?: string; under?: string }>();
+    for (const value of overUnder.bet.values) {
+      const match = /^\s*(over|under)\s+(\d+(?:\.\d+)?)\s*$/i.exec(value.value);
+      if (!match) continue;
+      const line = Number(match[2]);
+      if (!Number.isFinite(line) || line < 0.5 || line > 6.5) continue;
+      const entry = lines.get(match[2]) ?? {};
+      if (match[1].toLowerCase() === 'over') entry.over = value.odd;
+      else entry.under = value.odd;
+      lines.set(match[2], entry);
+    }
+
+    for (const [line, prices] of [...lines.entries()].sort(
+      (a, b) => Number(a[0]) - Number(b[0])
+    )) {
+      const compact = line.replace('.', '');
+      if (prices.over) {
+        pushMarket(
+          `ou-${compact}`,
+          'Goals',
+          `Over ${line} Goals`,
+          prices.over,
+          `At least ${Number(line) + 0.5} total match goals scored.`,
+          overUnder.bookmaker
+        );
+      }
+      if (prices.under) {
+        pushMarket(
+          `ou-u${compact}`,
+          'Goals',
+          `Under ${line} Goals`,
+          prices.under,
+          `${Number(line) - 0.5} or fewer total match goals.`,
+          overUnder.bookmaker
+        );
+      }
     }
   }
 
@@ -231,6 +276,14 @@ export function buildMarketsFromOdds(
       'BTTS Yes',
       btts.bet.values.find((v) => v.value === 'Yes')?.odd,
       `Both ${homeTeam} and ${awayTeam} to find the net.`,
+      btts.bookmaker
+    );
+    pushMarket(
+      'btts-no',
+      'BTTS',
+      'BTTS No',
+      btts.bet.values.find((v) => v.value.toLowerCase() === 'no')?.odd,
+      `At least one of ${homeTeam} or ${awayTeam} to fail to score.`,
       btts.bookmaker
     );
   }
@@ -268,17 +321,20 @@ export function buildMarketsFromOdds(
 
   markets.sort((a, b) => priorityOrder(a) - priorityOrder(b));
   // Estimate the margin from the whole priced book (the 1X2 draw included),
-  // then de-vig the five markets that survive the UI cut.
-  const finalMarkets = stripMargin(
-    markets.slice(0, 5),
-    estimateOverround(markets)
-  );
+  // then de-vig every priced selection, not just the board shortlist.
+  const allMarkets = stripMargin(markets, estimateOverround(markets));
+  const boardMarkets = allMarkets
+    .filter((m) =>
+      BOARD_MARKET_SUFFIXES.some((suffix) => m.id.endsWith(suffix))
+    )
+    .slice(0, 5);
 
   return {
-    markets: finalMarkets,
+    markets: boardMarkets,
+    allMarkets,
     // Attribute the fixture to the book that priced its headline pick.
     bookmakerName:
-      finalMarkets.find((m) => m.id === chooseRecommendedMarket(finalMarkets))
+      boardMarkets.find((m) => m.id === chooseRecommendedMarket(boardMarkets))
         ?.bookmaker ?? sortedBookmakers[0]?.name,
   };
 }
@@ -301,7 +357,7 @@ export function toFixture(
   const fixtureId = String(raw.fixture.id);
   const homeTeam = raw.teams.home.name;
   const awayTeam = raw.teams.away.name;
-  const { markets, bookmakerName } = buildMarketsFromOdds(
+  const { markets, allMarkets, bookmakerName } = buildMarketsFromOdds(
     fixtureId,
     homeTeam,
     awayTeam,
@@ -394,6 +450,7 @@ export function toFixture(
     bookmakerName,
     hasLiveOdds: markets.length > 0,
     markets,
+    allMarkets,
     priceQuality,
   };
 }

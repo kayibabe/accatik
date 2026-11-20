@@ -284,6 +284,7 @@ export function mergeArchivedPrices(
     return {
       ...fixture,
       markets: saved.markets,
+      allMarkets: saved.allMarkets ?? saved.markets,
       recommendedPickId: saved.recommendedPickId,
       bookmakerName: saved.bookmakerName,
       hasLiveOdds: saved.hasLiveOdds,

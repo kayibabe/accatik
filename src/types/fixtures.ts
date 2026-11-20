@@ -72,7 +72,15 @@ export interface Fixture {
   recommendedPickId: string;
   bookmakerName?: string;
   hasLiveOdds: boolean;
+  /** The headline selections shown on the board and used by the pick engine. */
   markets: MarketOption[];
+  /**
+   * Every priced selection captured from the odds feed, including goal lines
+   * and cover outcomes held back from the board's five-card shortlist. The
+   * analytics rebuild reads this so each selection gets its own record. Older
+   * archives omit it, in which case `markets` remains the full priced set.
+   */
+  allMarkets?: MarketOption[];
   /** API-Football model's one-line pick, when the provider returned one. */
   modelAdvice?: string;
   /**

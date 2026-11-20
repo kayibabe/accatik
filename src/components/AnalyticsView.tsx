@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import {
   BarChart3,
   Info,
@@ -7,12 +13,19 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import type {
+  FeaturedAnalyticsRow,
+  FeaturedPickSource,
   PickAnalyticsDay,
   PickAnalyticsResponse,
   PickAnalyticsRow,
+  MarketAnalyticsRow,
 } from '../types/analytics.ts';
 import type { AccaStrategy, MarketType } from '../types/fixtures.ts';
 import { apiFetch } from '../utils/api.ts';
+import {
+  compareSelections,
+  MARKET_SELECTION_CATALOG,
+} from '../utils/marketSelection.ts';
 import {
   SORT_DESC,
   sortRows,
@@ -27,13 +40,27 @@ interface AnalyticsViewProps {
   onGoToSlate: () => void;
 }
 
-type MarketTableRow = PickAnalyticsRow & { marketType?: MarketType };
+type MarketTableRow = MarketAnalyticsRow;
+
+interface MarketGroup {
+  typeRow: MarketAnalyticsRow;
+  selections: MarketAnalyticsRow[];
+}
+
+interface FeaturedGroup {
+  source: FeaturedPickSource;
+  row: PickAnalyticsRow;
+  selections: FeaturedAnalyticsRow[];
+}
+
+const FEATURED_SOURCE_ORDER: FeaturedPickSource[] = ['angle', 'cover', 'note'];
 
 interface Summary {
   wins: number;
   losses: number;
   voids: number;
   stake: number;
+  returns: number;
   netPnl: number;
   hitRate: number | null;
   roi: number | null;
@@ -74,12 +101,14 @@ function summarize(rows: PickAnalyticsRow[]): Summary {
   let losses = 0;
   let voids = 0;
   let stake = 0;
+  let returns = 0;
   let netPnl = 0;
   for (const row of rows) {
     wins += row.wins;
     losses += row.losses;
     voids += row.voids;
     stake += row.stake;
+    returns += row.returns;
     netPnl += row.netPnl;
   }
   const decided = wins + losses;
@@ -88,9 +117,42 @@ function summarize(rows: PickAnalyticsRow[]): Summary {
     losses,
     voids,
     stake,
+    returns,
     netPnl,
     hitRate: decided > 0 ? (wins / decided) * 100 : null,
     roi: stake > 0 ? (netPnl / stake) * 100 : null,
+  };
+}
+
+function emptySelectionRow(
+  selection: (typeof MARKET_SELECTION_CATALOG)[number]
+): MarketAnalyticsRow {
+  return {
+    key: selection.key,
+    label: selection.label,
+    marketType: selection.marketType,
+    settled: 0,
+    wins: 0,
+    losses: 0,
+    voids: 0,
+    hitRate: null,
+    stake: 0,
+    returns: 0,
+    netPnl: 0,
+    roi: null,
+    avgOdds: null,
+  };
+}
+
+function emptyFeaturedSelectionRow(
+  source: FeaturedPickSource,
+  selection: (typeof MARKET_SELECTION_CATALOG)[number]
+): FeaturedAnalyticsRow {
+  return {
+    ...emptySelectionRow(selection),
+    key: `${source}:${selection.key}`,
+    source,
+    selectionKey: selection.key,
   };
 }
 
@@ -134,6 +196,98 @@ function HitRateCell({ value }: { value: number | null }) {
         {percent(value)}
       </span>
     </div>
+  );
+}
+
+function MarketRow({
+  label,
+  row,
+  variant = 'selection',
+}: {
+  label: ReactNode;
+  row: PickAnalyticsRow;
+  variant?: 'total' | 'group' | 'selection';
+}) {
+  const tone =
+    variant === 'total'
+      ? 'bg-emerald-50/70 text-emerald-950 font-semibold'
+      : variant === 'group'
+        ? 'bg-slate-50/90 text-slate-800 font-semibold'
+        : 'text-slate-700 hover:bg-slate-50/60';
+  return (
+    <tr className={tone}>
+      <td className="px-4 py-2 font-medium">{label}</td>
+      <td className="px-3 py-2 text-right font-mono tabular-nums">
+        {row.settled}
+      </td>
+      <td className="px-3 py-2 text-right font-mono text-slate-600 tabular-nums">
+        {recordLabel(row.wins, row.losses, row.voids)}
+      </td>
+      <td className="px-3 py-2 text-right">
+        <HitRateCell value={row.hitRate} />
+      </td>
+      <td className="px-3 py-2 text-right font-mono text-slate-600 tabular-nums">
+        {row.avgOdds === null ? '—' : row.avgOdds.toFixed(2)}
+      </td>
+      <td
+        className={`px-3 py-2 text-right font-mono font-semibold tabular-nums ${pnlTone(row.netPnl)}`}
+      >
+        {signedUnits(row.netPnl)}
+      </td>
+      <td
+        className={`px-4 py-2 text-right font-mono font-semibold tabular-nums ${pnlTone(row.roi ?? 0)}`}
+      >
+        {signedPercent(row.roi)}
+      </td>
+    </tr>
+  );
+}
+
+/** Same columns as the featured roll-up, reused for its selection drill-down. */
+function FeaturedRow({
+  label,
+  row,
+  variant = 'selection',
+}: {
+  label: ReactNode;
+  row: PickAnalyticsRow;
+  variant?: 'total' | 'group' | 'selection';
+}) {
+  const tone =
+    variant === 'total'
+      ? 'bg-emerald-50/70 text-emerald-950 font-semibold'
+      : variant === 'group'
+        ? 'bg-slate-50/90 text-slate-800 font-semibold'
+        : 'text-slate-700 hover:bg-slate-50/60';
+  return (
+    <tr className={tone}>
+      <td className="px-4 py-2 font-medium">{label}</td>
+      <td className="px-3 py-2 text-right font-mono text-slate-600 tabular-nums">
+        {recordLabel(row.wins, row.losses, row.voids)}
+      </td>
+      <td className="px-3 py-2 text-right">
+        <HitRateCell value={row.hitRate} />
+      </td>
+      <td className="px-3 py-2 text-right font-mono text-slate-600 tabular-nums">
+        {row.stake.toFixed(0)}u
+      </td>
+      <td className="px-3 py-2 text-right font-mono text-slate-600 tabular-nums">
+        {row.returns.toFixed(2)}u
+      </td>
+      <td
+        className={`px-3 py-2 text-right font-mono font-semibold tabular-nums ${pnlTone(row.netPnl)}`}
+      >
+        {signedUnits(row.netPnl)}
+      </td>
+      <td
+        className={`px-3 py-2 text-right font-mono font-semibold tabular-nums ${pnlTone(row.roi ?? 0)}`}
+      >
+        {signedPercent(row.roi)}
+      </td>
+      <td className="px-4 py-2 text-right font-mono text-slate-600 tabular-nums">
+        {row.avgOdds === null ? '—' : row.avgOdds.toFixed(2)}
+      </td>
+    </tr>
   );
 }
 
@@ -259,6 +413,58 @@ const SELECTION_ACCESSORS: SortAccessors<MarketTableRow> = {
   avgOdds: (row) => row.avgOdds,
 };
 
+const FEATURED_ACCESSORS: SortAccessors<FeaturedAnalyticsRow> = {
+  label: (row) => row.label,
+  selectionKey: (row) => row.selectionKey,
+  settled: (row) => row.settled,
+  hitRate: (row) => row.hitRate,
+  netPnl: (row) => row.netPnl,
+  roi: (row) => row.roi,
+  avgOdds: (row) => row.avgOdds,
+};
+
+function SortHeader({
+  sort,
+  onSort,
+  sortKey,
+  children,
+  align = 'right',
+}: {
+  sort: SortState;
+  onSort: (next: SortState) => void;
+  sortKey: string;
+  children: ReactNode;
+  align?: 'left' | 'right';
+}) {
+  const active = sort.key === sortKey;
+  return (
+    <th
+      scope="col"
+      aria-sort={
+        active
+          ? sort.direction === SORT_DESC
+            ? 'descending'
+            : 'ascending'
+          : 'none'
+      }
+      className={`px-3 py-2 font-semibold ${align === 'right' ? 'text-right' : ''}`}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(toggleSort(sort, sortKey, SORT_DESC))}
+        className="inline-flex items-center gap-1 hover:text-slate-800 cursor-pointer"
+      >
+        {children}
+        {active && (
+          <span aria-hidden="true">
+            {sort.direction === SORT_DESC ? '↓' : '↑'}
+          </span>
+        )}
+      </button>
+    </th>
+  );
+}
+
 export function AnalyticsView({
   strategy,
   strategyName,
@@ -268,9 +474,16 @@ export function AnalyticsView({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [marketView, setMarketView] = useState<'type' | 'selection'>('type');
+  const [showEmptySelections, setShowEmptySelections] = useState(false);
+  const [showEmptyFeaturedSelections, setShowEmptyFeaturedSelections] =
+    useState(false);
+  // No active column keeps the canonical market/selection order from the API.
   const [sort, setSort] = useState<SortState>({
-    key: 'settled',
+    key: null,
+    direction: SORT_DESC,
+  });
+  const [featuredSort, setFeaturedSort] = useState<SortState>({
+    key: null,
     direction: SORT_DESC,
   });
 
@@ -312,41 +525,89 @@ export function AnalyticsView({
     () => (data ? summarize(data.marketsByType) : null),
     [data]
   );
-  const marketRows = useMemo<MarketTableRow[]>(() => {
+  const marketGroups = useMemo<MarketGroup[]>(() => {
     if (!data) return [];
-    const rows: MarketTableRow[] =
-      marketView === 'type'
-        ? data.marketsByType
-        : data.marketsBySelection;
-    return sortRows(rows, sort, SELECTION_ACCESSORS);
-  }, [data, marketView, sort]);
-
-  const sortHeader = (key: string, label: string, align: 'left' | 'right' = 'right') => (
-    <th
-      scope="col"
-      aria-sort={
-        sort.key === key
-          ? sort.direction === SORT_DESC
-            ? 'descending'
-            : 'ascending'
-          : 'none'
+    const byType = new Map<MarketType, MarketAnalyticsRow[]>();
+    for (const row of data.marketsBySelection) {
+      const list = byType.get(row.marketType) ?? [];
+      list.push(row);
+      byType.set(row.marketType, list);
+    }
+    return sortRows(data.marketsByType, sort, SELECTION_ACCESSORS).map(
+      (typeRow) => {
+        const priced = byType.get(typeRow.marketType) ?? [];
+        let selections = priced;
+        if (showEmptySelections) {
+          const byKey = new Map(priced.map((row) => [row.key, row]));
+          selections = MARKET_SELECTION_CATALOG.filter(
+            (selection) => selection.marketType === typeRow.marketType
+          ).map((selection) => byKey.get(selection.key) ?? emptySelectionRow(selection));
+        }
+        return {
+          typeRow,
+          selections: sortRows(selections, sort, SELECTION_ACCESSORS),
+        };
       }
-      className={`px-3 py-2 font-semibold ${align === 'right' ? 'text-right' : ''}`}
-    >
-      <button
-        type="button"
-        onClick={() => setSort((current) => toggleSort(current, key, SORT_DESC))}
-        className="inline-flex items-center gap-1 hover:text-slate-800 cursor-pointer"
-      >
-        {label}
-        {sort.key === key && (
-          <span aria-hidden="true">
-            {sort.direction === SORT_DESC ? '↓' : '↑'}
-          </span>
-        )}
-      </button>
-    </th>
-  );
+    );
+  }, [data, sort, showEmptySelections]);
+
+  const featuredGroups = useMemo<FeaturedGroup[]>(() => {
+    if (!data) return [];
+    const bySource = new Map<FeaturedPickSource, FeaturedAnalyticsRow[]>();
+    for (const row of data.featuredBySelection) {
+      const list = bySource.get(row.source) ?? [];
+      list.push(row);
+      bySource.set(row.source, list);
+    }
+    return data.featured.map((row, index) => {
+      const source =
+        FEATURED_SOURCE_ORDER[index] ?? (row.key as FeaturedPickSource);
+      // Canonical order matches the individual-market table: 1X2, goals
+      // ladder, BTTS, Double Chance, Draw No Bet, then anything unfamiliar.
+      const priced = [...(bySource.get(source) ?? [])].sort((a, b) =>
+        compareSelections(
+          { ...a, key: a.selectionKey },
+          { ...b, key: b.selectionKey }
+        )
+      );
+      let selections = priced;
+      if (showEmptyFeaturedSelections) {
+        const bySelection = new Map(
+          priced.map((selection) => [selection.selectionKey, selection])
+        );
+        const catalogKeys = new Set(
+          MARKET_SELECTION_CATALOG.map((selection) => selection.key)
+        );
+        selections = [
+          ...MARKET_SELECTION_CATALOG.map(
+            (selection) =>
+              bySelection.get(selection.key) ??
+              emptyFeaturedSelectionRow(source, selection)
+          ),
+          // The resolver keeps unfamiliar bets in their own stable row; do not
+          // lose them just because they are outside the published catalogue.
+          ...priced.filter((row) => !catalogKeys.has(row.selectionKey)),
+        ];
+      }
+      return {
+        source,
+        row,
+        selections: sortRows(selections, featuredSort, FEATURED_ACCESSORS),
+      };
+    });
+  }, [data, featuredSort, showEmptyFeaturedSelections]);
+
+  const selectionInsight = useMemo(() => {
+    const qualified = (data?.marketsBySelection ?? []).filter(
+      (row) => row.settled >= 20 && row.roi !== null
+    );
+    if (qualified.length === 0) return null;
+    const byRoi = [...qualified].sort((a, b) => (b.roi ?? 0) - (a.roi ?? 0));
+    return {
+      best: byRoi[0],
+      worst: byRoi[byRoi.length - 1],
+    };
+  }, [data]);
 
   return (
     <section aria-label="Analytics" className="space-y-6">
@@ -493,67 +754,151 @@ export function AnalyticsView({
                   Featured picks
                 </h2>
                 <p className="mt-0.5 text-[11px] text-slate-400">
-                  Recommended Angle, Safer cover and Analyst note, rebuilt with
-                  the {strategyName} strategy.
+                  Recommended Angle, Safer cover and Analyst note, each split
+                  into the selections they backed with the {strategyName}{' '}
+                  strategy.
                 </p>
               </div>
-              <span className="text-[11px] text-slate-400">
-                1u flat stake per pick
-              </span>
+              <div className="flex flex-wrap items-center gap-4">
+                <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showEmptyFeaturedSelections}
+                    onChange={(event) =>
+                      setShowEmptyFeaturedSelections(event.target.checked)
+                    }
+                    className="h-3.5 w-3.5 rounded border-slate-300 accent-emerald-700"
+                  />
+                  Show lines with no picks yet
+                </label>
+                <span className="text-[11px] text-slate-400">
+                  1u flat stake per pick
+                </span>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[780px] text-left text-xs">
                 <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
                   <tr>
-                    <th className="px-4 py-2 font-semibold">Pick</th>
+                    <SortHeader
+                      sort={featuredSort}
+                      onSort={setFeaturedSort}
+                      sortKey="label"
+                      align="left"
+                    >
+                      Pick / selection
+                    </SortHeader>
                     <th className="px-3 py-2 text-right font-semibold">Record</th>
-                    <th className="px-3 py-2 text-right font-semibold">Hit rate</th>
+                    <SortHeader
+                      sort={featuredSort}
+                      onSort={setFeaturedSort}
+                      sortKey="hitRate"
+                    >
+                      Hit rate
+                    </SortHeader>
                     <th className="px-3 py-2 text-right font-semibold">Stake</th>
                     <th className="px-3 py-2 text-right font-semibold">Returns</th>
-                    <th className="px-3 py-2 text-right font-semibold">Net P&amp;L</th>
-                    <th className="px-3 py-2 text-right font-semibold">ROI</th>
-                    <th className="px-4 py-2 text-right font-semibold">Avg odds</th>
+                    <SortHeader
+                      sort={featuredSort}
+                      onSort={setFeaturedSort}
+                      sortKey="netPnl"
+                    >
+                      Net P&amp;L
+                    </SortHeader>
+                    <SortHeader
+                      sort={featuredSort}
+                      onSort={setFeaturedSort}
+                      sortKey="roi"
+                    >
+                      ROI
+                    </SortHeader>
+                    <SortHeader
+                      sort={featuredSort}
+                      onSort={setFeaturedSort}
+                      sortKey="avgOdds"
+                    >
+                      Avg odds
+                    </SortHeader>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {data.featured.map((row) => (
-                    <tr key={row.key}>
-                      <td className="px-4 py-2.5 font-medium text-slate-800">
-                        {row.label}
-                        <span className="mt-0.5 block text-[10px] font-normal text-slate-400">
-                          {row.settled} settled
+                  <FeaturedRow
+                    variant="total"
+                    label={
+                      <span className="flex items-center gap-2">
+                        All featured picks
+                        <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700">
+                          overall
                         </span>
-                      </td>
-                      <td className="px-3 py-2.5 text-right font-mono text-slate-600 tabular-nums">
-                        {recordLabel(row.wins, row.losses, row.voids)}
-                      </td>
-                      <td className="px-3 py-2.5 text-right">
-                        <HitRateCell value={row.hitRate} />
-                      </td>
-                      <td className="px-3 py-2.5 text-right font-mono text-slate-600 tabular-nums">
-                        {row.stake.toFixed(0)}u
-                      </td>
-                      <td className="px-3 py-2.5 text-right font-mono text-slate-600 tabular-nums">
-                        {row.returns.toFixed(2)}u
-                      </td>
-                      <td
-                        className={`px-3 py-2.5 text-right font-mono font-semibold tabular-nums ${pnlTone(row.netPnl)}`}
-                      >
-                        {signedUnits(row.netPnl)}
-                      </td>
-                      <td
-                        className={`px-3 py-2.5 text-right font-mono font-semibold tabular-nums ${pnlTone(row.roi ?? 0)}`}
-                      >
-                        {signedPercent(row.roi)}
-                      </td>
-                      <td className="px-4 py-2.5 text-right font-mono text-slate-600 tabular-nums">
-                        {row.avgOdds === null ? '—' : row.avgOdds.toFixed(2)}
-                      </td>
-                    </tr>
-                  ))}
+                      </span>
+                    }
+                    row={{
+                      key: 'all-featured',
+                      label: 'All featured picks',
+                      settled: data.featured.reduce(
+                        (sum, row) => sum + row.settled,
+                        0
+                      ),
+                      wins: featuredSummary?.wins ?? 0,
+                      losses: featuredSummary?.losses ?? 0,
+                      voids: featuredSummary?.voids ?? 0,
+                      hitRate: featuredSummary?.hitRate ?? null,
+                      stake: featuredSummary?.stake ?? 0,
+                      returns: featuredSummary?.returns ?? 0,
+                      netPnl: featuredSummary?.netPnl ?? 0,
+                      roi: featuredSummary?.roi ?? null,
+                      avgOdds: null,
+                    }}
+                  />
+                  {featuredGroups.map((group) => {
+                    const selections = showEmptyFeaturedSelections
+                      ? group.selections
+                      : group.selections.filter((row) => row.settled > 0);
+                    if (selections.length === 0) return null;
+                    return (
+                      <Fragment key={group.source}>
+                        <FeaturedRow
+                          variant="group"
+                          label={
+                            <span className="flex items-center gap-2">
+                              {group.row.label}
+                              <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-500">
+                                {selections.length} lines
+                              </span>
+                              <span className="text-[10px] font-normal text-slate-400">
+                                {group.row.settled} settled
+                              </span>
+                            </span>
+                          }
+                          row={group.row}
+                        />
+                        {selections.map((row) => (
+                          <FeaturedRow
+                            key={row.key}
+                            label={
+                              <span className="flex items-center gap-2">
+                                <span
+                                  className="ml-3 h-1 w-1 shrink-0 rounded-full bg-slate-300"
+                                  aria-hidden="true"
+                                />
+                                {row.label}
+                              </span>
+                            }
+                            row={row}
+                          />
+                        ))}
+                      </Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
+            <p className="border-t border-slate-100 px-4 py-2 text-[11px] text-slate-400">
+              Roll-up rows repeat their selections&apos; totals. Selections use
+              the same Home/Draw/Away, goal-line, BTTS, Double Chance and DNB
+              identities as the individual-market table. Click a heading to
+              sort.
+            </p>
           </div>
 
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -563,90 +908,133 @@ export function AnalyticsView({
                   Individual markets
                 </h2>
                 <p className="mt-0.5 text-[11px] text-slate-400">
-                  Every priced selection on a finished fixture, settled
-                  independently.
+                  Every priced selection, rolled up by market then broken into
+                  Home/Away, goal lines, BTTS sides, Double Chance and DNB.
                 </p>
+                {selectionInsight && (
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Best ROI (min 20 picks):{' '}
+                    <span className="font-semibold text-emerald-700">
+                      {selectionInsight.best.label} {signedPercent(selectionInsight.best.roi)}
+                    </span>
+                    <span className="mx-1.5 text-slate-300">·</span>
+                    Weakest:{' '}
+                    <span className="font-semibold text-red-600">
+                      {selectionInsight.worst.label} {signedPercent(selectionInsight.worst.roi)}
+                    </span>
+                  </p>
+                )}
               </div>
-              <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
-                {(
-                  [
-                    ['type', 'By market'],
-                    ['selection', 'By selection'],
-                  ] as const
-                ).map(([id, label]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setMarketView(id)}
-                    aria-pressed={marketView === id}
-                    className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
-                      marketView === id
-                        ? 'bg-white text-slate-900 shadow-sm'
-                        : 'text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showEmptySelections}
+                  onChange={(event) => setShowEmptySelections(event.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-slate-300 accent-emerald-700"
+                />
+                Show lines with no picks yet
+              </label>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[820px] text-left text-xs">
                 <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
                   <tr>
-                    {sortHeader('label', 'Market', 'left')}
-                    {marketView === 'selection' &&
-                      sortHeader('marketType', 'Type', 'left')}
-                    {sortHeader('settled', 'Picks')}
+                    <SortHeader
+                      sort={sort}
+                      onSort={setSort}
+                      sortKey="label"
+                      align="left"
+                    >
+                      Market / selection
+                    </SortHeader>
+                    <SortHeader sort={sort} onSort={setSort} sortKey="settled">
+                      Picks
+                    </SortHeader>
                     <th className="px-3 py-2 text-right font-semibold">W-L-V</th>
-                    {sortHeader('hitRate', 'Hit rate')}
-                    {sortHeader('avgOdds', 'Avg odds')}
-                    {sortHeader('netPnl', 'Net P&L')}
-                    {sortHeader('roi', 'ROI')}
+                    <SortHeader sort={sort} onSort={setSort} sortKey="hitRate">
+                      Hit rate
+                    </SortHeader>
+                    <SortHeader sort={sort} onSort={setSort} sortKey="avgOdds">
+                      Avg odds
+                    </SortHeader>
+                    <SortHeader sort={sort} onSort={setSort} sortKey="netPnl">
+                      Net P&amp;L
+                    </SortHeader>
+                    <SortHeader sort={sort} onSort={setSort} sortKey="roi">
+                      ROI
+                    </SortHeader>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {marketRows.map((row) => (
-                    <tr key={row.key}>
-                      <td className="px-4 py-2 font-medium text-slate-800">
-                        {row.label}
-                      </td>
-                      {marketView === 'selection' && (
-                        <td className="px-3 py-2 text-slate-500">
-                          {row.marketType}
-                        </td>
-                      )}
-                      <td className="px-3 py-2 text-right font-mono text-slate-600 tabular-nums">
-                        {row.settled}
-                      </td>
-                      <td className="px-3 py-2 text-right font-mono text-slate-600 tabular-nums">
-                        {recordLabel(row.wins, row.losses, row.voids)}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <HitRateCell value={row.hitRate} />
-                      </td>
-                      <td className="px-3 py-2 text-right font-mono text-slate-600 tabular-nums">
-                        {row.avgOdds === null ? '—' : row.avgOdds.toFixed(2)}
-                      </td>
-                      <td
-                        className={`px-3 py-2 text-right font-mono font-semibold tabular-nums ${pnlTone(row.netPnl)}`}
-                      >
-                        {signedUnits(row.netPnl)}
-                      </td>
-                      <td
-                        className={`px-4 py-2 text-right font-mono font-semibold tabular-nums ${pnlTone(row.roi ?? 0)}`}
-                      >
-                        {signedPercent(row.roi)}
-                      </td>
-                    </tr>
-                  ))}
+                  <MarketRow
+                    variant="total"
+                    label={
+                      <span className="flex items-center gap-2">
+                        All markets
+                        <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700">
+                          overall
+                        </span>
+                      </span>
+                    }
+                    row={{
+                      key: 'all-markets',
+                      label: 'All markets',
+                      settled: data.marketPicks,
+                      wins: marketSummary?.wins ?? 0,
+                      losses: marketSummary?.losses ?? 0,
+                      voids: marketSummary?.voids ?? 0,
+                      hitRate: marketSummary?.hitRate ?? null,
+                      stake: marketSummary?.stake ?? 0,
+                      returns: (marketSummary?.returns ?? 0),
+                      netPnl: marketSummary?.netPnl ?? 0,
+                      roi: marketSummary?.roi ?? null,
+                      avgOdds: null,
+                    }}
+                  />
+                  {marketGroups.map((group) => {
+                    const selections = showEmptySelections
+                      ? group.selections
+                      : group.selections.filter((row) => row.settled > 0);
+                    if (selections.length === 0) return null;
+                    return (
+                      <Fragment key={group.typeRow.key}>
+                        <MarketRow
+                          variant="group"
+                          label={
+                            <span className="flex items-center gap-2">
+                              {group.typeRow.label}
+                              <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-500">
+                                {selections.length} lines
+                              </span>
+                            </span>
+                          }
+                          row={group.typeRow}
+                        />
+                        {selections.map((row) => (
+                          <MarketRow
+                            key={row.key}
+                            label={
+                              <span className="flex items-center gap-2">
+                                <span
+                                  className="ml-3 h-1 w-1 shrink-0 rounded-full bg-slate-300"
+                                  aria-hidden="true"
+                                />
+                                {row.label}
+                              </span>
+                            }
+                            row={row}
+                          />
+                        ))}
+                      </Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
             <p className="border-t border-slate-100 px-4 py-2 text-[11px] text-slate-400">
-              {marketView === 'selection'
-                ? 'Top 12 selections by settled sample size. Click a heading to sort.'
-                : 'Click a heading to sort. These are single selections, not accumulators.'}
+              Roll-up rows repeat their selections&apos; totals. Voids return the
+              stake and stay out of hit rate and ROI. Click a heading to sort.
+              These are single selections, not accumulators.
             </p>
           </div>
 
