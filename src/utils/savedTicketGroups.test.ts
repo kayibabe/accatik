@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 import {
   formatTicketDayLabel,
   formatTicketMonthLabel,
+  groupLegsByFixture,
   groupTicketsByDate,
   sortTicketsNewestFirst,
   ticketDateIso,
 } from './savedTicketGroups.ts';
-import { makeTicket } from './testFactories.ts';
+import { makeLeg, makeTicket } from './testFactories.ts';
 
 test('dateIso wins, with display date and saved time as fallbacks', () => {
   assert.equal(
@@ -129,4 +130,24 @@ test('day labels call out today and yesterday', () => {
 test('month labels drop the year already shown by the section heading', () => {
   assert.equal(formatTicketMonthLabel(1), 'January');
   assert.equal(formatTicketMonthLabel(11), 'November');
+});
+
+test('legs on the same match collapse into one group in ticket order', () => {
+  const groups = groupLegsByFixture([
+    makeLeg('match-a', 'match-a-angle', 2.1),
+    makeLeg('match-b', 'match-b-cover', 1.5),
+    makeLeg('match-a', 'match-a-cover', 1.3),
+    makeLeg('match-a', 'match-a-note', 1.8),
+  ]);
+
+  assert.deepEqual(
+    groups.map((group) => [
+      group.fixtureId,
+      group.legs.map((leg) => leg.marketId),
+    ]),
+    [
+      ['match-a', ['match-a-angle', 'match-a-cover', 'match-a-note']],
+      ['match-b', ['match-b-cover']],
+    ]
+  );
 });

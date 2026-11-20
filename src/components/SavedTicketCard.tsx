@@ -12,6 +12,7 @@ import {
   getFixtureMatchResultSummary,
 } from '../utils/accaMath.ts';
 import type { TicketSettlementSummary } from '../utils/accaMath.ts';
+import { groupLegsByFixture } from '../utils/savedTicketGroups.ts';
 import { SettlementLabel } from './SettlementLabel.tsx';
 
 interface SavedTicketCardProps {
@@ -23,8 +24,8 @@ interface SavedTicketCardProps {
   onCopy: (ticket: SavedTicket) => void;
   onLoad: (ticket: SavedTicket) => void;
   onDelete: (ticketId: string) => void;
-  /** Opens the archived day-of-pick detail for one leg. */
-  onSelectLeg: (ticket: SavedTicket, leg: AccaLeg) => void;
+  /** Opens the archived day-of-pick detail for every pick on one match. */
+  onSelectMatch: (ticket: SavedTicket, legs: AccaLeg[]) => void;
 }
 
 const accentByStatus: Record<SettlementStatus, string> = {
@@ -64,7 +65,7 @@ export function SavedTicketCard({
   onCopy,
   onLoad,
   onDelete,
-  onSelectLeg,
+  onSelectMatch,
 }: SavedTicketCardProps) {
   const fixtureMap = new Map(pool.map((fixture) => [fixture.id, fixture]));
   const isSettled =
@@ -180,61 +181,80 @@ export function SavedTicketCard({
           Match legs
         </p>
         <p className="text-[10px] text-slate-400">
-          Click any match for its day-of-pick detail
+          Multiple picks on one match are grouped · click for detail
         </p>
       </div>
 
       <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-        {ticket.legs.map((leg) => {
-          const matched = fixtureMap.get(leg.fixtureId);
-          const legStatus = matched
-            ? evaluateMarketSettlement(matched, {
-                id: leg.marketId,
-                label: leg.marketLabel,
-                marketType: leg.marketType,
-              })
-            : 'Pending';
+        {groupLegsByFixture(ticket.legs).map((group) => {
+          const firstLeg = group.legs[0];
+          const matched = fixtureMap.get(group.fixtureId);
           const resultText =
             matched &&
             (matched.status !== 'Scheduled' || matched.awaitingResult)
               ? getFixtureMatchResultSummary(matched)
               : null;
+          const hasMultiplePicks = group.legs.length > 1;
 
           return (
-            <li key={leg.fixtureId} className="min-w-0">
+            <li key={group.fixtureId} className="min-w-0">
               <button
                 type="button"
-                onClick={() => onSelectLeg(ticket, leg)}
+                onClick={() => onSelectMatch(ticket, group.legs)}
                 aria-haspopup="dialog"
-                title={`Open ${leg.homeTeam} vs ${leg.awayTeam} details`}
+                title={`Open ${firstLeg.homeTeam} vs ${firstLeg.awayTeam} details`}
                 className="group h-full w-full space-y-1 rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-2.5 text-left text-xs transition-colors hover:border-emerald-300 hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-emerald-700 cursor-pointer"
               >
-                <span className="block font-mono text-[11px] text-slate-400 tabular-nums">
-                  {leg.matchDate || ticket.date} · {leg.kickoffTime}
+                <span className="flex items-center justify-between gap-2">
+                  <span className="block font-mono text-[11px] text-slate-400 tabular-nums">
+                    {firstLeg.matchDate || ticket.date} · {firstLeg.kickoffTime}
+                  </span>
+                  {hasMultiplePicks && (
+                    <span className="shrink-0 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800">
+                      {group.legs.length} picks
+                    </span>
+                  )}
                 </span>
                 <span className="block truncate font-semibold text-slate-900">
-                  {leg.homeTeam} vs {leg.awayTeam}
+                  {firstLeg.homeTeam} vs {firstLeg.awayTeam}
                 </span>
-                <span className="flex items-center justify-between gap-2">
-                  <span className="truncate font-medium text-emerald-800">
-                    {leg.marketLabel}
-                  </span>
-                  <span className="flex shrink-0 items-center gap-2">
-                    <SettlementLabel status={legStatus} />
-                    <span className="text-right leading-tight">
-                      <span className="block font-mono font-bold text-slate-900 tabular-nums">
-                        {leg.odds.toFixed(2)}
-                      </span>
-                      {typeof leg.fairProbability === 'number' && (
-                        <span
-                          className="block font-mono text-[10px] text-slate-400 tabular-nums"
-                          title="Margin-adjusted win probability"
-                        >
-                          {leg.fairProbability.toFixed(1)}%
+                <span className="block space-y-1">
+                  {group.legs.map((leg) => {
+                    const legStatus = matched
+                      ? evaluateMarketSettlement(matched, {
+                          id: leg.marketId,
+                          label: leg.marketLabel,
+                          marketType: leg.marketType,
+                        })
+                      : 'Pending';
+
+                    return (
+                      <span
+                        key={leg.marketId}
+                        className="flex items-center justify-between gap-2"
+                      >
+                        <span className="truncate font-medium text-emerald-800">
+                          {leg.marketLabel}
                         </span>
-                      )}
-                    </span>
-                  </span>
+                        <span className="flex shrink-0 items-center gap-2">
+                          <SettlementLabel status={legStatus} />
+                          <span className="text-right leading-tight">
+                            <span className="block font-mono font-bold text-slate-900 tabular-nums">
+                              {leg.odds.toFixed(2)}
+                            </span>
+                            {typeof leg.fairProbability === 'number' && (
+                              <span
+                                className="block font-mono text-[10px] text-slate-400 tabular-nums"
+                                title="Margin-adjusted win probability"
+                              >
+                                {leg.fairProbability.toFixed(1)}%
+                              </span>
+                            )}
+                          </span>
+                        </span>
+                      </span>
+                    );
+                  })}
                 </span>
                 {resultText && (
                   <span className="block font-mono text-[11px] text-slate-600 tabular-nums">
@@ -242,7 +262,9 @@ export function SavedTicketCard({
                   </span>
                 )}
                 <span className="block text-[10px] font-medium text-emerald-700 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-                  View match detail →
+                  {hasMultiplePicks
+                    ? `View all ${group.legs.length} selections →`
+                    : 'View match detail →'}
                 </span>
               </button>
             </li>

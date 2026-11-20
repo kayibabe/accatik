@@ -18,7 +18,8 @@ import { SortableTh } from './SortableTh.tsx';
 
 interface SavedMatchDetailDialogProps {
   ticket: SavedTicket;
-  leg: AccaLeg;
+  /** Every selection made on this match in the saved slip. */
+  legs: AccaLeg[];
   /** Full archived fixture for the matchday, when the archive covers it. */
   fixture: Fixture | null;
   /** Result-only fixture from the merged settlement pool. */
@@ -49,7 +50,7 @@ function hasValue(value: string | undefined): value is string {
 
 export function SavedMatchDetailDialog({
   ticket,
-  leg,
+  legs,
   fixture,
   settlementFixture,
   isLoading,
@@ -81,10 +82,12 @@ export function SavedMatchDetailDialog({
     };
   }, [onClose]);
 
+  const leg = legs[0];
   const detailSource = fixture ?? settlementFixture;
   const statusFixture = pickMoreAdvancedFixture(settlementFixture, fixture);
   const pickedMarket: MarketOption | null =
     detailSource?.markets.find((market) => market.id === leg.marketId) ?? null;
+  const pickedMarketIds = new Set(legs.map((pick) => pick.marketId));
 
   const homeTeam = detailSource?.homeTeam ?? leg.homeTeam;
   const awayTeam = detailSource?.awayTeam ?? leg.awayTeam;
@@ -99,11 +102,6 @@ export function SavedMatchDetailDialog({
         marketType: leg.marketType,
       })
     : 'Pending';
-
-  const odds = pickedMarket?.odds ?? leg.odds;
-  const fairProbability = pickedMarket?.fairProbability ?? leg.fairProbability;
-  const bookmaker = pickedMarket?.bookmaker ?? leg.bookmaker;
-  const rationale = pickedMarket?.rationale || leg.rationale;
 
   const homeScore = statusFixture?.score?.home ?? null;
   const awayScore = statusFixture?.score?.away ?? null;
@@ -197,32 +195,78 @@ export function SavedMatchDetailDialog({
                 </p>
               )}
             </div>
-            <SettlementLabel status={legStatus} prefix="Your pick" />
+            {legs.length === 1 && (
+              <SettlementLabel status={legStatus} prefix="Your pick" />
+            )}
           </div>
 
           <section className="space-y-2 rounded-xl border border-emerald-200 bg-emerald-50/50 px-4 py-3.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800">
-                Your pick on the day
+                {legs.length > 1
+                  ? `Your ${legs.length} picks on the day`
+                  : 'Your pick on the day'}
               </p>
-              <p className="text-[11px] font-mono text-emerald-900 tabular-nums">
-                @ {odds.toFixed(2)}
-              </p>
-            </div>
-            <p className="text-sm font-bold text-slate-900">{leg.marketLabel}</p>
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-mono text-slate-600 tabular-nums">
-              {typeof fairProbability === 'number' && (
-                <span>Fair probability {fairProbability.toFixed(1)}%</span>
+              {legs.length === 1 && (
+                <p className="text-[11px] font-mono text-emerald-900 tabular-nums">
+                  @ {(pickedMarket?.odds ?? leg.odds).toFixed(2)}
+                </p>
               )}
-              {typeof leg.impliedProbability === 'number' && (
-                <span>Implied {leg.impliedProbability.toFixed(1)}%</span>
-              )}
-              <span>Market {leg.marketType}</span>
-              {bookmaker && <span>Book {bookmaker}</span>}
             </div>
-            {rationale && (
-              <p className="text-xs leading-relaxed text-slate-600">{rationale}</p>
-            )}
+            <div className="space-y-3">
+              {legs.map((pick, index) => {
+                const pickMarket: MarketOption | null =
+                  detailSource?.markets.find(
+                    (market) => market.id === pick.marketId
+                  ) ?? null;
+                const pickOdds = pickMarket?.odds ?? pick.odds;
+                const pickFair =
+                  pickMarket?.fairProbability ?? pick.fairProbability;
+                const pickBookmaker = pickMarket?.bookmaker ?? pick.bookmaker;
+                const pickRationale = pickMarket?.rationale || pick.rationale;
+                const pickStatus = statusFixture
+                  ? evaluateMarketSettlement(statusFixture, {
+                      id: pick.marketId,
+                      label: pick.marketLabel,
+                      marketType: pick.marketType,
+                    })
+                  : 'Pending';
+
+                return (
+                  <div
+                    key={pick.marketId}
+                    className={index > 0 ? 'border-t border-emerald-200 pt-3' : ''}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-bold text-slate-900">
+                        {pick.marketLabel}
+                      </p>
+                      <span className="flex items-center gap-2">
+                        <SettlementLabel status={pickStatus} />
+                        <span className="font-mono text-[11px] font-semibold text-emerald-900 tabular-nums">
+                          @ {pickOdds.toFixed(2)}
+                        </span>
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-mono text-slate-600 tabular-nums">
+                      {typeof pickFair === 'number' && (
+                        <span>Fair probability {pickFair.toFixed(1)}%</span>
+                      )}
+                      {typeof pick.impliedProbability === 'number' && (
+                        <span>Implied {pick.impliedProbability.toFixed(1)}%</span>
+                      )}
+                      <span>Market {pick.marketType}</span>
+                      {pickBookmaker && <span>Book {pickBookmaker}</span>}
+                    </div>
+                    {pickRationale && (
+                      <p className="text-xs leading-relaxed text-slate-600">
+                        {pickRationale}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
             <p className="text-[11px] text-slate-500">
               Picked from the {matchDay} matchday
               {savedAt ? ` · slip saved ${savedAt} CAT` : ''}
@@ -291,7 +335,7 @@ export function SavedMatchDetailDialog({
                   </thead>
                   <tbody className="divide-y divide-slate-200/80">
                     {sortedMarkets.map((market) => {
-                      const isPicked = market.id === leg.marketId;
+                      const isPicked = pickedMarketIds.has(market.id);
                       return (
                         <tr
                           key={market.id}

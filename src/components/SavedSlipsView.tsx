@@ -91,7 +91,7 @@ export function SavedSlipsView({
 
   const [selectedMatch, setSelectedMatch] = useState<{
     ticket: SavedTicket;
-    leg: AccaLeg;
+    legs: AccaLeg[];
   } | null>(null);
   const [matchDetails, setMatchDetails] = useState<Record<string, Fixture>>({});
   const [isLoadingMatchDetail, setIsLoadingMatchDetail] = useState(false);
@@ -224,32 +224,33 @@ export function SavedSlipsView({
     }
   };
 
-  const handleSelectLeg = async (ticket: SavedTicket, leg: AccaLeg) => {
-    setSelectedMatch({ ticket, leg });
+  const handleSelectMatch = async (ticket: SavedTicket, legs: AccaLeg[]) => {
+    const fixtureId = legs[0].fixtureId;
+    setSelectedMatch({ ticket, legs });
     setMatchDetailError(null);
 
-    if (matchDetails[leg.fixtureId]) {
+    if (matchDetails[fixtureId]) {
       setIsLoadingMatchDetail(false);
       return;
     }
 
     const pool = settlements.get(ticket.id)?.pool ?? [];
-    const fixture = pool.find((entry) => entry.id === leg.fixtureId);
+    const fixture = pool.find((entry) => entry.id === fixtureId);
     const dateIso =
       fixture?.matchDateIso || ticket.dateIso || ticketDateIso(ticket);
     const requestId = ++matchDetailRequestRef.current;
     setIsLoadingMatchDetail(true);
 
     try {
-      const fixtures = await onLoadMatchDetails(dateIso, [leg.fixtureId]);
+      const fixtures = await onLoadMatchDetails(dateIso, [fixtureId]);
       if (requestId !== matchDetailRequestRef.current) return;
 
-      const detail = fixtures.find((entry) => entry.id === leg.fixtureId);
+      const detail = fixtures.find((entry) => entry.id === fixtureId);
       if (detail) {
         setMatchDetails((prev) => ({ ...prev, [detail.id]: detail }));
       } else {
         setMatchDetailError(
-          'No archived board is stored for this matchday — showing the saved pick and result only.'
+          'No archived board is stored for this matchday — showing the saved picks and result only.'
         );
       }
     } catch (error) {
@@ -277,7 +278,7 @@ export function SavedSlipsView({
     ? (settlements
         .get(selectedMatch.ticket.id)
         ?.pool.find(
-          (fixture) => fixture.id === selectedMatch.leg.fixtureId
+          (fixture) => fixture.id === selectedMatch.legs[0].fixtureId
         ) ?? null)
     : null;
 
@@ -497,7 +498,7 @@ export function SavedSlipsView({
                                         onCopy={handleCopy}
                                         onLoad={onLoadTicket}
                                         onDelete={onDeleteTicket}
-                                        onSelectLeg={handleSelectLeg}
+                                        onSelectMatch={handleSelectMatch}
                                       />
                                     );
                                   })}
@@ -519,8 +520,8 @@ export function SavedSlipsView({
       {selectedMatch && (
         <SavedMatchDetailDialog
           ticket={selectedMatch.ticket}
-          leg={selectedMatch.leg}
-          fixture={matchDetails[selectedMatch.leg.fixtureId] ?? null}
+          legs={selectedMatch.legs}
+          fixture={matchDetails[selectedMatch.legs[0].fixtureId] ?? null}
           settlementFixture={selectedSettlementFixture}
           isLoading={isLoadingMatchDetail}
           error={matchDetailError}

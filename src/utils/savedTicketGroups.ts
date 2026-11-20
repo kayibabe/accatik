@@ -1,4 +1,4 @@
-import type { SavedTicket } from '../types/fixtures.ts';
+import type { AccaLeg, SavedTicket } from '../types/fixtures.ts';
 
 /**
  * Grouping helpers for the Local Ticket Archive.
@@ -26,6 +26,12 @@ export interface TicketMonthGroup {
 export interface TicketYearGroup {
   year: number;
   months: TicketMonthGroup[];
+}
+
+/** All the selections made against one match on a saved slip. */
+export interface TicketLegGroup {
+  fixtureId: string;
+  legs: AccaLeg[];
 }
 
 const catIsoFormatter = new Intl.DateTimeFormat('en-CA', {
@@ -128,6 +134,28 @@ export function groupTicketsByDate(tickets: SavedTicket[]): TicketYearGroup[] {
       })),
     })),
   }));
+}
+
+/**
+ * ROI-built slips can carry several cards (angle, cover, note) for the same
+ * match. Collapse those selections into one match group, keeping the order in
+ * which they appear on the ticket.
+ */
+export function groupLegsByFixture(legs: AccaLeg[]): TicketLegGroup[] {
+  const groups: TicketLegGroup[] = [];
+  const byFixture = new Map<string, TicketLegGroup>();
+
+  for (const leg of legs) {
+    let group = byFixture.get(leg.fixtureId);
+    if (!group) {
+      group = { fixtureId: leg.fixtureId, legs: [] };
+      byFixture.set(leg.fixtureId, group);
+      groups.push(group);
+    }
+    group.legs.push(leg);
+  }
+
+  return groups;
 }
 
 /** Shifts an ISO date by whole days without letting time zones move it. */
