@@ -1364,6 +1364,11 @@ const STATUSES: SettlementStatus[] = [
   'Live',
   'Pending',
 ];
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function asDateIso(value: unknown): string | undefined {
+  return typeof value === 'string' && ISO_DATE.test(value) ? value : undefined;
+}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -1371,11 +1376,11 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-export async function getLedgerSummaryResult(): Promise<
+export async function getLedgerSummaryResult(query?: unknown): Promise<
   ApiResult<LedgerSummary | ErrorBody>
 > {
   try {
-    return ok(await getLedgerSummary());
+    return ok(await getLedgerSummary(asDateIso(asRecord(query).dateIso)));
   } catch (error) {
     console.error('Error reading ledger summary:', error);
     return fail(500, 'Could not read the shadow ticket ledger.');
@@ -1387,11 +1392,7 @@ export async function listLedgerTicketsResult(
 ): Promise<ApiResult<{ tickets: LedgerTicket[] } | ErrorBody>> {
   try {
     const source = asRecord(query);
-    const dateIso =
-      typeof source.dateIso === 'string' &&
-      /^\d{4}-\d{2}-\d{2}$/.test(source.dateIso)
-        ? source.dateIso
-        : undefined;
+    const dateIso = asDateIso(source.dateIso);
     const status =
       typeof source.status === 'string' &&
       STATUSES.includes(source.status as SettlementStatus)
@@ -1412,11 +1413,7 @@ export async function settleLedger(body: unknown): Promise<
 > {
   try {
     const source = asRecord(body);
-    const dateIso =
-      typeof source.dateIso === 'string' &&
-      /^\d{4}-\d{2}-\d{2}$/.test(source.dateIso)
-        ? source.dateIso
-        : undefined;
+    const dateIso = asDateIso(source.dateIso);
 
     const changed = await settleLedgerFromArchives(dateIso);
     return ok({ changed, summary: await getLedgerSummary() });

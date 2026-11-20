@@ -94,6 +94,10 @@ export interface LedgerBreakdownRow extends LedgerStats {
 export interface LedgerSummary extends LedgerStats {
   generatedAt: string;
   updatedAt: string;
+  /** Echoes the day filter applied by the UI. `null` means inception-to-date. */
+  dateIso: string | null;
+  /** Every day in the ledger, newest first, independent of the active filter. */
+  availableDates: string[];
   byVariant: LedgerBreakdownRow[];
   byLegCount: LedgerBreakdownRow[];
   byPriceQuality: LedgerBreakdownRow[];

@@ -23,6 +23,14 @@ interface PositiveRoiViewProps {
   onGoToSlate: () => void;
 }
 
+type PickFilter = 'all' | 'qualified' | 'promoted';
+
+const FILTER_OPTIONS: ReadonlyArray<{ id: PickFilter; label: string }> = [
+  { id: 'all', label: 'All cards' },
+  { id: 'qualified', label: 'Qualified only' },
+  { id: 'promoted', label: 'Promoted only' },
+];
+
 const SOURCE_LABELS: Record<string, string> = {
   angle: 'Recommended Angle',
   cover: 'Safer cover',
@@ -42,7 +50,7 @@ export function PositiveRoiView({
   const [loading, setLoading] = useState(false);
   const [building, setBuilding] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [eligibleOnly, setEligibleOnly] = useState(false);
+  const [pickFilter, setPickFilter] = useState<PickFilter>('all');
   const [sort, setSort] = useState<SortState>({ key: null, direction: SORT_ASC });
   const onSort = makeSortHandler(setSort);
 
@@ -100,9 +108,21 @@ export function PositiveRoiView({
   };
 
   const promoted = registry.filter((entry) => entry.status === 'promoted');
+  const filterCounts = useMemo(() => {
+    const cards = qualified?.rows ?? [];
+    return {
+      all: cards.length,
+      qualified: cards.filter((row) => row.eligibleForAcca).length,
+      promoted: cards.filter((row) => row.status === 'promoted').length,
+    };
+  }, [qualified]);
   const rows = useMemo(() => {
-    const source = (qualified?.rows ?? []).filter(
-      (row) => !eligibleOnly || row.eligibleForAcca
+    const source = (qualified?.rows ?? []).filter((row) =>
+      pickFilter === 'qualified'
+        ? row.eligibleForAcca
+        : pickFilter === 'promoted'
+          ? row.status === 'promoted'
+          : true
     );
     return sortRows(source, sort, {
       fixture: (row) => `${row.homeTeam} ${row.awayTeam}`,
@@ -115,7 +135,7 @@ export function PositiveRoiView({
       settled: (row) => row.settled,
       status: (row) => row.status,
     });
-  }, [qualified, eligibleOnly, sort]);
+  }, [qualified, pickFilter, sort]);
 
   return (
     <section aria-label="Positive ROI research" className="space-y-6">
@@ -264,16 +284,40 @@ export function PositiveRoiView({
       )}
 
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-2 bg-slate-50 border-b border-slate-200">
-          <label className="flex items-center gap-2 text-[11px] text-slate-600 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={eligibleOnly}
-              onChange={(event) => setEligibleOnly(event.target.checked)}
-              className="accent-emerald-700"
-            />
-            Eligible for acca only
-          </label>
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 bg-slate-50 border-b border-slate-200">
+          <div
+            role="group"
+            aria-label="Filter qualified picks"
+            className="flex flex-wrap items-center gap-1"
+          >
+            {FILTER_OPTIONS.map((option) => {
+              const isActive = pickFilter === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setPickFilter(option.id)}
+                  aria-pressed={isActive}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border transition-colors whitespace-nowrap cursor-pointer ${
+                    isActive
+                      ? option.id === 'qualified'
+                        ? 'bg-emerald-700 border-emerald-700 text-white'
+                        : 'bg-slate-900 border-slate-900 text-white'
+                      : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  <span>{option.label}</span>
+                  <span
+                    className={`font-mono tabular-nums ${
+                      isActive ? 'text-white/70' : 'text-slate-400'
+                    }`}
+                  >
+                    {filterCounts[option.id]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
           {loading && <span className="text-[11px] text-slate-500">Loading…</span>}
         </div>
         <div className="overflow-x-auto">
@@ -295,7 +339,22 @@ export function PositiveRoiView({
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={9} className="py-10 text-center text-sm text-slate-500">
-                    No cards on this slate {eligibleOnly ? 'qualified for the acca' : 'yet'}.
+                    <p>
+                      {pickFilter === 'qualified'
+                        ? 'No cards on this slate qualified for the acca.'
+                        : pickFilter === 'promoted'
+                          ? 'No cards on this slate are promoted.'
+                          : 'No cards on this slate yet.'}
+                    </p>
+                    {pickFilter !== 'all' && (
+                      <button
+                        type="button"
+                        onClick={() => setPickFilter('all')}
+                        className="mt-2 font-semibold text-emerald-700 underline cursor-pointer"
+                      >
+                        Show all cards
+                      </button>
+                    )}
                   </td>
                 </tr>
               )}

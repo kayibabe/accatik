@@ -798,19 +798,51 @@ function groupBy(
     .sort((a, b) => b.tickets - a.tickets || a.label.localeCompare(b.label));
 }
 
-export function summariseLedger(ledger: LedgerFile): LedgerSummary {
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function normaliseDateIso(value: unknown): string | null {
+  return typeof value === 'string' && ISO_DATE.test(value) ? value : null;
+}
+
+/** Scope a ledger to one matchday without mutating the stored file. */
+export function filterLedgerByDate(
+  ledger: LedgerFile,
+  dateIso?: string | null
+): LedgerFile {
+  const date = normaliseDateIso(dateIso);
+  if (!date) return ledger;
+  return {
+    ...ledger,
+    tickets: ledger.tickets.filter((ticket) => ticket.dateIso === date),
+  };
+}
+
+/**
+ * Build the scorecard for one day or for inception-to-date. `availableDates`
+ * always comes from the unfiltered ledger so the UI's day-picker stays useful
+ * when the current day has no tickets.
+ */
+export function summariseLedger(
+  ledger: LedgerFile,
+  dateIso?: string | null
+): LedgerSummary {
+  const scoped = filterLedgerByDate(ledger, dateIso);
   return {
     generatedAt: new Date().toISOString(),
     updatedAt: ledger.updatedAt,
-    ...buildStats(ledger.tickets),
-    byVariant: groupBy(ledger.tickets, (ticket) => ticket.label),
+    dateIso: normaliseDateIso(dateIso),
+    availableDates: [
+      ...new Set(ledger.tickets.map((ticket) => ticket.dateIso)),
+    ].sort((a, b) => b.localeCompare(a)),
+    ...buildStats(scoped.tickets),
+    byVariant: groupBy(scoped.tickets, (ticket) => ticket.label),
     byLegCount: groupBy(
-      ledger.tickets,
+      scoped.tickets,
       (ticket) => String(ticket.legCount),
       (key) => `${key} legs`
     ),
     byPriceQuality: groupBy(
-      ledger.tickets,
+      scoped.tickets,
       (ticket) => ticket.priceQuality,
       (key) =>
         key === 'prematch'
@@ -819,16 +851,19 @@ export function summariseLedger(ledger: LedgerFile): LedgerSummary {
             ? 'Captured after kickoff'
             : 'Unknown capture time'
     ),
-    recent: [...ledger.tickets]
+    recent: [...scoped.tickets]
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .slice(0, 12),
   };
 }
 
 /** Settles from the archive, then returns the summary the UI renders. */
-export async function getLedgerSummary(): Promise<LedgerSummary> {
-  await settleLedgerFromArchives();
-  return summariseLedger(await readLedgerFile());
+export async function getLedgerSummary(
+  dateIso?: string | null
+): Promise<LedgerSummary> {
+  const date = normaliseDateIso(dateIso);
+  await settleLedgerFromArchives(date ?? undefined);
+  return summariseLedger(await readLedgerFile(), date);
 }
 
 export async function listLedgerTickets(options?: {

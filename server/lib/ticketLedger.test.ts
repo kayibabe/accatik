@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { Fixture } from '../../src/types/fixtures.ts';
-import type { LedgerTicket } from '../../src/types/ledger.ts';
+import type { LedgerFile, LedgerTicket } from '../../src/types/ledger.ts';
 import { makeFixture, makeMarket } from '../../src/utils/testFactories.ts';
 import {
   planLedgerWrites,
@@ -220,4 +220,35 @@ test('a failed/empty ledger read never prunes stored documents', () => {
 
   assert.equal(plan.changed, false);
   assert.deepEqual(plan.staleIds, []);
+});
+
+test('a ledger summary can be scoped to one day without losing the day list', () => {
+  const ledger: LedgerFile = {
+    version: 1,
+    updatedAt: new Date(NOW).toISOString(),
+    tickets: [
+      { ...shadowTicket('older', 'Win'), dateIso: '2026-11-19' },
+      { ...shadowTicket('newer', 'Lost'), dateIso: '2026-11-20' },
+    ],
+  };
+
+  const all = summariseLedger(ledger);
+  assert.equal(all.dateIso, null);
+  assert.deepEqual(all.availableDates, ['2026-11-20', '2026-11-19']);
+  assert.equal(all.tickets, 2);
+
+  const day = summariseLedger(ledger, '2026-11-20');
+  assert.equal(day.dateIso, '2026-11-20');
+  assert.equal(day.tickets, 1);
+  assert.equal(day.won, 0);
+  assert.equal(day.lost, 1);
+  assert.deepEqual(day.recent.map((ticket) => ticket.id), ['newer']);
+  assert.deepEqual(day.availableDates, all.availableDates);
+
+  const empty = summariseLedger(ledger, '2026-11-18');
+  assert.equal(empty.tickets, 0);
+  assert.equal(empty.roi, null);
+  assert.deepEqual(empty.byVariant, []);
+
+  assert.equal(summariseLedger(ledger, 'not-a-date').tickets, 2);
 });

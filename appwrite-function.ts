@@ -158,7 +158,11 @@ const routes: Route[] = [
   { method: 'POST', pattern: '/analytics/roi-promotion/run', handler: ({ body }) => runRoiPromotion(body) },
   { method: 'POST', pattern: '/analytics/qualified-picks', handler: ({ body }) => getQualifiedPicks(body) },
   { method: 'POST', pattern: '/analytics/roi-acca', handler: ({ body }) => buildRoiAccaTicket(body) },
-  { method: 'GET', pattern: '/ledger/summary', handler: () => getLedgerSummaryResult() },
+  {
+    method: 'GET',
+    pattern: '/ledger/summary',
+    handler: ({ query }) => getLedgerSummaryResult(query),
+  },
   { method: 'GET', pattern: '/ledger/tickets', handler: ({ query }) => listLedgerTicketsResult(query) },
   { method: 'POST', pattern: '/ledger/settle', handler: ({ body }) => settleLedger(body) },
 

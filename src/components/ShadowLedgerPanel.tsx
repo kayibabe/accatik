@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { BarChart3, Filter, RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { BarChart3, Calendar, Filter, RefreshCw } from 'lucide-react';
 import type { LedgerBreakdownRow, LedgerSummary } from '../types/ledger.ts';
 import { apiFetch } from '../utils/api.ts';
 import {
@@ -56,9 +56,11 @@ const VARIANT_ACCESSORS: SortAccessors<LedgerBreakdownRow> = {
  */
 export function ShadowLedgerPanel() {
   const [summary, setSummary] = useState<LedgerSummary | null>(null);
+  const [selectedDateIso, setSelectedDateIso] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [shortlistOnly, setShortlistOnly] = useState(true);
+  const requestIdRef = useRef(0);
   const [variantSort, setVariantSort] = useState<SortState>({
     key: 'roi',
     direction: SORT_DESC,
@@ -77,20 +79,29 @@ export function ShadowLedgerPanel() {
   );
 
   const load = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     setIsLoading(true);
     setError(null);
     try {
-      setSummary(await apiFetch<LedgerSummary>('/api/ledger/summary'));
+      const query = selectedDateIso
+        ? `?dateIso=${encodeURIComponent(selectedDateIso)}`
+        : '';
+      const next = await apiFetch<LedgerSummary>(`/api/ledger/summary${query}`);
+      if (requestId !== requestIdRef.current) return;
+      setSummary(next);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       setError(
         err instanceof Error ? err.message : 'Could not load the shadow ledger.'
       );
     } finally {
-      setIsLoading(false);
+      if (requestId === requestIdRef.current) setIsLoading(false);
     }
-  }, []);
+  }, [selectedDateIso]);
 
   useEffect(() => {
+    // A new day invalidates the old scorecard; keep the loading state honest.
+    setSummary(null);
     void load();
   }, [load]);
 
@@ -140,9 +151,80 @@ export function ShadowLedgerPanel() {
         </div>
       )}
 
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/60 px-4 py-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="relative inline-flex items-center">
+            <Calendar
+              className="h-3.5 w-3.5 text-slate-500 absolute left-2.5 pointer-events-none"
+              aria-hidden="true"
+            />
+            <input
+              type="date"
+              value={selectedDateIso}
+              onChange={(event) => setSelectedDateIso(event.target.value)}
+              aria-label="Filter ledger by matchday"
+              className="h-8 pl-8 pr-2.5 text-xs font-mono font-medium text-slate-800 bg-white border border-slate-200 rounded-lg tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700 cursor-pointer"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => setSelectedDateIso('')}
+            disabled={!selectedDateIso}
+            className="h-8 px-2.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg transition-colors hover:bg-slate-50 disabled:opacity-50 cursor-pointer"
+          >
+            All days
+          </button>
+          <span className="text-[11px] text-slate-500 font-mono tabular-nums">
+            {selectedDateIso
+              ? `Scoped to ${selectedDateIso}`
+              : `Inception to date${summary ? ` · ${summary.availableDates.length} days recorded` : ''}`}
+          </span>
+        </div>
+        {summary && summary.availableDates.length > 0 && (
+          <label className="flex items-center gap-1.5 text-[11px] text-slate-500">
+            Recorded days
+            <select
+              value={selectedDateIso}
+              onChange={(event) => setSelectedDateIso(event.target.value)}
+              aria-label="Days with ledger tickets"
+              className="h-8 max-w-[11rem] px-2 text-xs font-mono text-slate-800 bg-white border border-slate-200 rounded-lg tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700 cursor-pointer"
+            >
+              <option value="">All days</option>
+              {selectedDateIso &&
+                !summary.availableDates.includes(selectedDateIso) && (
+                  <option value={selectedDateIso}>
+                    {selectedDateIso} (no tickets)
+                  </option>
+                )}
+              {summary.availableDates.map((dateIso) => (
+                <option key={dateIso} value={dateIso}>
+                  {dateIso}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
+
       {!summary ? (
         <div className="px-4 py-8 text-center text-xs text-slate-400">
           {isLoading ? 'Reading the ledger…' : 'No ledger data yet.'}
+        </div>
+      ) : selectedDateIso && summary.tickets === 0 ? (
+        <div className="px-4 py-8 text-center space-y-2">
+          <p className="text-sm font-semibold text-slate-800">
+            No shadow tickets for {selectedDateIso}
+          </p>
+          <p className="mx-auto max-w-md text-xs leading-relaxed text-slate-500">
+            Pick another matchday or return to the inception-to-date scorecard.
+          </p>
+          <button
+            type="button"
+            onClick={() => setSelectedDateIso('')}
+            className="font-semibold text-emerald-700 underline cursor-pointer"
+          >
+            Show all days
+          </button>
         </div>
       ) : summary.tickets === 0 ? (
         <div className="px-4 py-8 text-center space-y-1">
@@ -390,6 +472,7 @@ export function ShadowLedgerPanel() {
                 .join(' · ')}
             </span>
             <span className="font-mono tabular-nums">
+              {summary.dateIso ? `${summary.dateIso} · ` : 'All days · '}
               Updated {new Date(summary.updatedAt).toLocaleString('en-GB')}
             </span>
           </div>

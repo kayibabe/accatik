@@ -9,8 +9,8 @@ import {
 /** Express adapter for the shared ledger API handlers. */
 export const ledgerRouter = Router();
 
-ledgerRouter.get('/summary', async (_req: Request, res: Response) => {
-  const result = await getLedgerSummaryResult();
+ledgerRouter.get('/summary', async (req: Request, res: Response) => {
+  const result = await getLedgerSummaryResult(req.query);
   res.status(result.status).json(result.body);
 });
 
