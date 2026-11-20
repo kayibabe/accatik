@@ -1,0 +1,129 @@
+import type { AccaStrategy, Fixture, MarketOption } from '../../src/types/fixtures.ts';
+import type {
+  FeaturedPickSource,
+  QualifiedPickRow,
+  QualifiedPicksResponse,
+  RoiRegistryEntry,
+} from '../../src/types/analytics.ts';
+import { isPreMatchFixture, inferPriceQuality } from '../../src/utils/priceQuality.ts';
+import { isPriced } from '../../src/utils/pickResolver.ts';
+import { resolveMarketSelection } from '../../src/utils/marketSelection.ts';
+import { buildRecommendedAngle } from '../../src/utils/recommendedAngle.ts';
+import { resolveAnalystNoteMarket } from '../../src/utils/analystNote.ts';
+import { formatKickoffCat } from './time.ts';
+
+/**
+ * Join between the daily ROI whitelist and the three cards the board renders.
+ *
+ * Only stored `modelAdvice` is used for the analyst note: `getAnalystNote()`
+ * falls back to a derived note the analytics never settled, so admitting that
+ * fallback here would let an untracked bet into the qualified table.
+ */
+
+interface Card {
+  source: FeaturedPickSource;
+  market: MarketOption | null;
+}
+
+function cardsFor(fixture: Fixture, strategy: AccaStrategy): Card[] {
+  const angle = buildRecommendedAngle(fixture, strategy);
+  return [
+    { source: 'angle', market: angle?.market ?? null },
+    { source: 'cover', market: angle?.cover ?? null },
+    {
+      source: 'note',
+      market: resolveAnalystNoteMarket(fixture, fixture.modelAdvice),
+    },
+  ];
+}
+
+function kickoffLabel(fixture: Fixture): string {
+  if (fixture.kickoffTimestamp) {
+    return formatKickoffCat(new Date(fixture.kickoffTimestamp).toISOString());
+  }
+  return fixture.kickoffTime || 'TBD';
+}
+
+export function buildQualifiedPickRows(
+  fixtures: Fixture[],
+  registry: RoiRegistryEntry[],
+  strategy: AccaStrategy,
+  nowMs: number = Date.now()
+): QualifiedPickRow[] {
+  const byPair = new Map(
+    registry
+      .filter((entry) => entry.strategy === strategy)
+      .map((entry) => [`${entry.source}:${entry.selectionKey}`, entry])
+  );
+
+  const rows: QualifiedPickRow[] = [];
+  for (const fixture of fixtures) {
+    const upcoming = isPreMatchFixture(fixture);
+    const notKickedOff =
+      !fixture.kickoffTimestamp || fixture.kickoffTimestamp > nowMs;
+    const quality = inferPriceQuality(fixture);
+
+    for (const card of cardsFor(fixture, strategy)) {
+      if (!card.market || !isPriced(card.market)) continue;
+      const selection = resolveMarketSelection(card.market, fixture);
+      const entry = byPair.get(`${card.source}:${selection.key}`);
+
+      let reason: string;
+      let eligibleForAcca = false;
+      if (!upcoming || !notKickedOff) {
+        reason = 'Fixture has already kicked off or is not scheduled.';
+      } else if (quality !== 'prematch') {
+        reason = `Price quality is ${quality}, not prematch-confirmed.`;
+      } else if (!entry) {
+        reason = 'No registry row for this card and selection.';
+      } else if (entry.status !== 'promoted') {
+        reason = entry.reason || `Registry status is ${entry.status}.`;
+      } else {
+        eligibleForAcca = true;
+        reason = entry.reason || 'Promoted selection.';
+      }
+
+      rows.push({
+        fixtureId: fixture.id,
+        homeTeam: fixture.homeTeam,
+        awayTeam: fixture.awayTeam,
+        competition: fixture.competition,
+        kickoffTimestamp: fixture.kickoffTimestamp ?? null,
+        kickoffCat: kickoffLabel(fixture),
+        source: card.source,
+        selectionKey: selection.key,
+        selectionLabel: selection.label,
+        marketType: selection.marketType,
+        marketId: card.market.id,
+        odds: card.market.odds,
+        fairProbability: card.market.fairProbability ?? null,
+        status: entry?.status ?? 'untracked',
+        roi: entry?.roi ?? null,
+        roiCiLow: entry?.roiCiLow ?? null,
+        roiCiHigh: entry?.roiCiHigh ?? null,
+        settled: entry?.settled ?? 0,
+        eligibleForAcca,
+        reason,
+      });
+    }
+  }
+
+  return rows;
+}
+
+export function buildQualifiedPicksResponse(
+  dateIso: string,
+  fixtures: Fixture[],
+  registry: RoiRegistryEntry[],
+  strategy: AccaStrategy,
+  nowMs: number = Date.now()
+): QualifiedPicksResponse {
+  const rows = buildQualifiedPickRows(fixtures, registry, strategy, nowMs);
+  return {
+    dateIso,
+    strategy,
+    generatedAt: new Date(nowMs).toISOString(),
+    rows,
+    eligibleCount: rows.filter((row) => row.eligibleForAcca).length,
+  };
+}

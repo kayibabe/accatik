@@ -15,7 +15,8 @@ import type {
  * guessing from a handful of user-saved slips.
  */
 
-export type LedgerTicketKind = 'strategy' | 'shape';
+/** `roi` tickets come from the promoted positive-ROI whitelist, not the strategy engine. */
+export type LedgerTicketKind = 'strategy' | 'shape' | 'roi';
 
 export interface LedgerLeg extends AccaLeg {
   priceQuality: PriceQuality;

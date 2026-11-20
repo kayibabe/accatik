@@ -7,6 +7,7 @@ export type ActiveTab =
   | 'saved'
   | 'activity'
   | 'analytics'
+  | 'roi'
   | 'sources';
 
 interface TopBarProps {
@@ -51,6 +52,7 @@ export function TopBar({
     },
     { id: 'activity', label: 'My Activity' },
     { id: 'analytics', label: 'Analytics' },
+    { id: 'roi', label: 'Positive ROI (Research)' },
     { id: 'sources', label: 'Sources' },
   ];
   const guestNavItems = [

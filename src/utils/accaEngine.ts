@@ -8,7 +8,7 @@ import { calculateImpliedProbability } from './accaMath.ts';
 import { getLeaguePriority } from './leaguePriority.ts';
 import { resolvePick, scoreMarket } from './pickResolver.ts';
 
-function legFromMarket(fixture: Fixture, market: MarketOption): AccaLeg {
+export function legFromMarket(fixture: Fixture, market: MarketOption): AccaLeg {
   return {
     fixtureId: fixture.id,
     homeTeam: fixture.homeTeam,

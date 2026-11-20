@@ -433,6 +433,79 @@ export async function recordShadowTickets(
   return withLedger((ledger) => addShadowTickets(ledger, dateIso, fixtures, nowMs));
 }
 
+export interface RoiShadowDraft {
+  strategy: AccaStrategy;
+  label: string;
+  targetOdds: number;
+  maxLegs: number;
+  legs: AccaLeg[];
+}
+
+/**
+ * Records promoted-ROI research tickets beside the existing strategy and shape
+ * variants so their ROI and CLV can be compared honestly over 2-4 weeks before
+ * anything is considered live. Same first-observation rule as the other kinds.
+ */
+export async function recordRoiShadowTickets(
+  dateIso: string,
+  fixtures: Fixture[],
+  drafts: RoiShadowDraft[],
+  nowMs = Date.now()
+): Promise<ShadowTicketResult> {
+  return withLedger((ledger) => {
+    const eligible = fixtures.filter(
+      (fixture) =>
+        fixture.status === 'Scheduled' &&
+        !fixture.awaitingResult &&
+        fixture.markets.length > 0 &&
+        inferPriceQuality(fixture) === 'prematch' &&
+        (fixture.kickoffTimestamp === undefined ||
+          fixture.kickoffTimestamp > nowMs)
+    );
+    if (eligible.length === 0 || drafts.length === 0) {
+      return { added: 0, skipped: 0, eligible: eligible.length };
+    }
+
+    const fixturesById = new Map(eligible.map((fixture) => [fixture.id, fixture]));
+    const nowIso = new Date(nowMs).toISOString();
+    const existing = new Set(ledger.tickets.map((ticket) => ticket.id));
+    let added = 0;
+    let skipped = 0;
+
+    for (const draft of drafts) {
+      if (draft.legs.length === 0) {
+        skipped++;
+        continue;
+      }
+      const legs = asLedgerLegs(draft.legs, fixturesById);
+      if (legs.some((leg) => leg.priceQuality !== 'prematch')) {
+        skipped++;
+        continue;
+      }
+      const ticket = makeTicket(
+        dateIso,
+        'roi',
+        draft.strategy,
+        draft.label,
+        draft.targetOdds,
+        draft.maxLegs,
+        legs,
+        eligible,
+        nowIso
+      );
+      if (existing.has(ticket.id)) {
+        skipped++;
+        continue;
+      }
+      ledger.tickets.push(ticket);
+      existing.add(ticket.id);
+      added++;
+    }
+
+    return { added, skipped, eligible: eligible.length };
+  });
+}
+
 function recomputeClosing(ticket: LedgerTicket): void {
   if (ticket.legs.length === 0) return;
 

@@ -48,6 +48,12 @@ export interface TicketGuardOptions {
   minEdgePts?: number;
   /** Keep locked selections even when they push past the cap. */
   preserveLocked?: boolean;
+  /**
+   * Research/shadow tickets only. Allows up to `maxLegs` (default 8), skips the
+   * short-price cap, and never grants the "recommended" label. Used by the ROI
+   * accumulator, where a 5.00+ target is impossible under the 2-3 leg gate.
+   */
+  researchMode?: boolean;
 }
 
 export interface TicketGuardResult extends TicketGuardSummary {
@@ -150,16 +156,16 @@ export function guardTicket(
     ? [...legs.filter((leg) => leg.locked), ...legs.filter((leg) => !leg.locked)]
     : legs;
 
+  const research = options.researchMode === true;
+  const cap = research ? 8 : MAX_RECOMMENDED_LEGS;
   const ceiling = Math.max(
     1,
-    Math.min(
-      options.maxLegs ?? MAX_RECOMMENDED_LEGS,
-      MAX_RECOMMENDED_LEGS,
-      legs.length
-    )
+    Math.min(options.maxLegs ?? cap, cap, legs.length)
   );
   const shortlist = ordered.slice(0, ceiling);
-  const keptSet = new Set(shortlist.slice(0, priceAwareCap(shortlist)));
+  const keptSet = new Set(
+    research ? shortlist : shortlist.slice(0, priceAwareCap(shortlist))
+  );
   const kept = legs.filter((leg) => keptSet.has(leg));
 
   const economics = ticketEconomics(kept);
@@ -169,11 +175,17 @@ export function guardTicket(
   // margin is already baked into those numbers, so an "edge" there is just a
   // rounding artifact.
   const recommended =
+    !research &&
     kept.length >= 2 &&
     economics.basis === 'fair' &&
     economics.edgePts > minEdge;
 
   const reasons: string[] = [];
+  if (research) {
+    reasons.push(
+      'Research ticket: the 2-3 leg structural cap is intentionally bypassed; this is not a recommendation.'
+    );
+  }
   if (trimmedCount > 0) {
     reasons.push(
       `Capped at ${kept.length} legs so the bookmaker margin cannot compound further.`

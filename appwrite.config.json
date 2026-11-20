@@ -91,6 +91,20 @@
             "timeout": 300,
             "enabled": true,
             "logging": true
+        },
+        {
+            "$id": "accatik-roi-daily",
+            "name": "AccaTik Daily ROI Promotion",
+            "runtime": "node-22",
+            "path": ".",
+            "entrypoint": "appwrite-roi-daily.ts",
+            "commands": "npm install",
+            "execute": ["any"],
+            "events": [],
+            "schedule": "0 3 * * *",
+            "timeout": 300,
+            "enabled": true,
+            "logging": true
         }
     ]
 }

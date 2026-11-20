@@ -7,6 +7,7 @@ import type {
 } from '../../src/types/fixtures.ts';
 import type {
   FeaturedAnalyticsRow,
+  FeaturedPickSample,
   FeaturedPickSource,
   MarketAnalyticsRow,
   PickAnalyticsDay,
@@ -44,6 +45,8 @@ const FEATURED_SOURCE_ORDER: FeaturedPickSource[] = ['angle', 'cover', 'note'];
 interface Tally {
   key: string;
   label: string;
+  firstDateIso?: string;
+  lastDateIso?: string;
   settled: number;
   wins: number;
   losses: number;
@@ -88,9 +91,18 @@ function isDecided(status: SettlementStatus): boolean {
   return status === 'Win' || status === 'Lost' || status === 'Void';
 }
 
-function record(tally: Tally, market: MarketOption, status: SettlementStatus): void {
+function record(
+  tally: Tally,
+  market: MarketOption,
+  status: SettlementStatus,
+  dateIso?: string
+): void {
   if (!isDecided(status)) return;
   tally.settled += 1;
+  if (dateIso) {
+    if (!tally.firstDateIso || dateIso < tally.firstDateIso) tally.firstDateIso = dateIso;
+    if (!tally.lastDateIso || dateIso > tally.lastDateIso) tally.lastDateIso = dateIso;
+  }
 
   if (status === 'Void') {
     tally.voids += 1;
@@ -126,6 +138,8 @@ function toRow(tally: Tally): PickAnalyticsRow {
     losses: tally.losses,
     voids: tally.voids,
     hitRate: decided > 0 ? round1((tally.wins / decided) * 100) : null,
+    firstDateIso: tally.firstDateIso,
+    lastDateIso: tally.lastDateIso,
     stake: round2(tally.stake),
     returns: round2(tally.returns),
     netPnl,
@@ -161,14 +175,16 @@ function recordFeaturedPick(
   aggregate: Tally,
   featuredDate: Tally,
   featuredSelections: Map<string, FeaturedTally>,
+  samples: Map<string, FeaturedPickSample[]>,
   fixture: Fixture,
-  market: MarketOption
+  market: MarketOption,
+  dateIso: string
 ): void {
   const status = evaluateMarketSettlement(fixture, market);
   if (!isDecided(status)) return;
 
-  record(aggregate, market, status);
-  record(featuredDate, market, status);
+  record(aggregate, market, status, dateIso);
+  record(featuredDate, market, status, dateIso);
 
   const resolved = resolveMarketSelection(market, fixture);
   const key = `${source}:${resolved.key}`;
@@ -182,18 +198,21 @@ function recordFeaturedPick(
     };
     featuredSelections.set(key, tally);
   }
-  record(tally, market, status);
+  record(tally, market, status, dateIso);
+  const list = samples.get(key) ?? [];
+  list.push({ key, dateIso, odds: market.odds, won: status === 'Win' });
+  samples.set(key, list);
 }
 
-function sampleFixture(fixture: Fixture): boolean {
-  return (
+function sampleFixture(fixture: Fixture, prematchOnly: boolean): boolean {
+  const decided =
     fixture.status === 'Finished' &&
     fixture.score?.home !== null &&
     fixture.score?.home !== undefined &&
     fixture.score?.away !== null &&
     fixture.score?.away !== undefined &&
-    fixture.markets.some(isPriced)
-  );
+    fixture.markets.some(isPriced);
+  return decided && (!prematchOnly || qualityKey(fixture) === 'prematch');
 }
 
 function qualityKey(fixture: Fixture): 'prematch' | 'live' | 'unknown' {
@@ -237,9 +256,12 @@ const cache = createTtlCache<PickAnalyticsResponse>(CACHE_TTL_MS, 8);
 
 export async function computePickAnalytics(
   strategy: AccaStrategy,
-  force = false
+  force = false,
+  options: { prematchOnly?: boolean } = {}
 ): Promise<PickAnalyticsResponse> {
-  const cached = cache.get(strategy);
+  const prematchOnly = options.prematchOnly === true;
+  const cacheKey = `${strategy}:${prematchOnly ? 'prematch' : 'all'}`;
+  const cached = cache.get(cacheKey);
   if (cached && !force) return cached;
 
   const dates = await listArchivedSlateDates();
@@ -253,6 +275,7 @@ export async function computePickAnalytics(
   const cover = newTally('cover', 'Safer cover');
   const note = newTally('note', 'Analyst note');
   const featuredSelections = new Map<string, FeaturedTally>();
+  const featuredSamples = new Map<string, FeaturedPickSample[]>();
   const marketsByType = new Map<string, Tally>();
   const selections = new Map<string, SelectionTally>();
   const featuredByDate = new Map<string, Tally>();
@@ -269,7 +292,7 @@ export async function computePickAnalytics(
 
     let dateUsed = false;
     for (const fixture of slate.fixtures) {
-      if (!sampleFixture(fixture)) continue;
+      if (!sampleFixture(fixture, prematchOnly)) continue;
       dateUsed = true;
       sampleFixtures += 1;
 
@@ -281,8 +304,10 @@ export async function computePickAnalytics(
           angle,
           featuredDate,
           featuredSelections,
+          featuredSamples,
           fixture,
-          recommended.market
+          recommended.market,
+          dateIso
         );
         if (recommended.cover) {
           recordFeaturedPick(
@@ -290,8 +315,10 @@ export async function computePickAnalytics(
             cover,
             featuredDate,
             featuredSelections,
+            featuredSamples,
             fixture,
-            recommended.cover
+            recommended.cover,
+            dateIso
           );
         }
         const noteMarket = resolveAnalystNoteMarket(
@@ -304,8 +331,10 @@ export async function computePickAnalytics(
             note,
             featuredDate,
             featuredSelections,
+            featuredSamples,
             fixture,
-            noteMarket
+            noteMarket,
+            dateIso
           );
         }
       }
@@ -404,7 +433,8 @@ export async function computePickAnalytics(
     marketsByType: byTypeRows,
     marketsBySelection: selectionRows,
     daily: buildDaily(featuredByDate, marketByDate),
+    featuredSelectionSamples: [...featuredSamples.values()].flat(),
   };
-  cache.set(strategy, result);
+  cache.set(cacheKey, result);
   return result;
 }

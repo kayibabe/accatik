@@ -8,6 +8,7 @@ import { CuratedAccaView } from './components/CuratedAccaView.tsx';
 import { SavedSlipsView } from './components/SavedSlipsView.tsx';
 import { MyActivityView } from './components/MyActivityView.tsx';
 import { AnalyticsView } from './components/AnalyticsView.tsx';
+import { PositiveRoiView } from './components/PositiveRoiView.tsx';
 import { SourcesView } from './components/SourcesView.tsx';
 import { AuthDialog } from './components/AuthDialog.tsx';
 import { AdminPanel } from './components/AdminPanel.tsx';
@@ -1049,6 +1050,13 @@ export default function App() {
           <AnalyticsView
             strategy={strategy}
             strategyName={strategyCopy.title}
+            onGoToSlate={() => setActiveTab('slate')}
+          />
+        ) : !isGuest && activeTab === 'roi' ? (
+          <PositiveRoiView
+            strategy={strategy}
+            selectedDate={selectedDate}
+            displayDate={slate?.displayDate || selectedDate}
             onGoToSlate={() => setActiveTab('slate')}
           />
         ) : isGuest ? (

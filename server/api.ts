@@ -11,7 +11,14 @@ import type {
   ServerTimings,
   SettlementStatus,
 } from '../src/types/fixtures.ts';
-import type { PickAnalyticsResponse } from '../src/types/analytics.ts';
+import type {
+  PickAnalyticsResponse,
+  QualifiedPicksResponse,
+  RoiAccaResponse,
+  RoiPromotionConfig,
+  RoiPromotionResult,
+  RoiRegistryEntry,
+} from '../src/types/analytics.ts';
 import type { LedgerSummary, LedgerTicket } from '../src/types/ledger.ts';
 import { buildRecommendedAcca } from '../src/utils/accaEngine.ts';
 import {
@@ -20,8 +27,19 @@ import {
 } from '../src/utils/ticketGuard.ts';
 import { describeStrategy, isAccaStrategy } from '../src/utils/strategy.ts';
 import { resolveAnalystNoteMarket } from '../src/utils/analystNote.ts';
+import { buildRoiAcca, guardRoiAcca } from '../src/utils/roiAcca.ts';
 import { computePickAnalytics } from './lib/pickAnalytics.ts';
 import { computePickRecords } from './lib/pickRecord.ts';
+import { buildQualifiedPicksResponse } from './lib/qualifiedPicks.ts';
+import {
+  DEFAULT_ROI_PROMOTION_CONFIG,
+} from './lib/roiPromotion.ts';
+import {
+  readQualifiedPicks,
+  readRoiRegistry,
+  runDailyRoiPromotion,
+  writeQualifiedPicks,
+} from './lib/roiRegistry.ts';
 import {
   applySlateToLedger,
   getLedgerSummary,
@@ -1373,5 +1391,134 @@ export async function settleLedger(body: unknown): Promise<
   } catch (error) {
     console.error('Error settling ledger:', error);
     return fail(500, 'Could not settle the shadow ledger.');
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Positive-ROI research flow                                          */
+/* ------------------------------------------------------------------ */
+
+function parseRoiConfig(source: Record<string, unknown>): RoiPromotionConfig {
+  const raw = asRecord(source.config);
+  const number = (key: keyof RoiPromotionConfig, fallback: number): number => {
+    const value = raw[key] ?? source[key];
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  };
+  return {
+    ...DEFAULT_ROI_PROMOTION_CONFIG,
+    prematchOnly: true,
+    minSettled: number('minSettled', DEFAULT_ROI_PROMOTION_CONFIG.minSettled),
+    minSpanDays: number('minSpanDays', DEFAULT_ROI_PROMOTION_CONFIG.minSpanDays),
+    promoteAfter: number('promoteAfter', DEFAULT_ROI_PROMOTION_CONFIG.promoteAfter),
+    demoteAfter: number('demoteAfter', DEFAULT_ROI_PROMOTION_CONFIG.demoteAfter),
+    retireAfterDays: number('retireAfterDays', DEFAULT_ROI_PROMOTION_CONFIG.retireAfterDays),
+  };
+}
+
+function requestedRoiDate(source: Record<string, unknown>): string {
+  const value = source.dateIso ?? source.date;
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? value
+    : getTodayIsoDate();
+}
+
+/** Read-only view of the persisted promotion registry. */
+export async function getRoiRegistry(body: unknown): Promise<
+  ApiResult<{ strategy: string; entries: RoiRegistryEntry[]; generatedAt: string } | ErrorBody>
+> {
+  const source = asRecord(body);
+  const strategy = isAccaStrategy(source.strategy) ? source.strategy : 'balanced';
+  try {
+    return ok({
+      strategy,
+      entries: await readRoiRegistry(strategy),
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Error reading ROI registry:', error);
+    return fail(500, 'Could not read the ROI registry.');
+  }
+}
+
+/** Recomputes clean analytics and applies one daily promotion snapshot. */
+export async function runRoiPromotion(body: unknown): Promise<
+  ApiResult<RoiPromotionResult | ErrorBody>
+> {
+  const source = asRecord(body);
+  const strategy = isAccaStrategy(source.strategy) ? source.strategy : 'balanced';
+  try {
+    return ok(
+      await runDailyRoiPromotion(strategy, parseRoiConfig(source), source.force === true)
+    );
+  } catch (error) {
+    console.error('Error running ROI promotion:', error);
+    return fail(500, errorMessage(error, 'Could not run the ROI promotion snapshot.'));
+  }
+}
+
+/** Daily qualified-matches table: whitelist joined to the board's three cards. */
+export async function getQualifiedPicks(body: unknown): Promise<
+  ApiResult<QualifiedPicksResponse | ErrorBody>
+> {
+  const source = asRecord(body);
+  const dateIso = requestedRoiDate(source);
+  const strategy = isAccaStrategy(source.strategy) ? source.strategy : 'balanced';
+  try {
+    const [loaded, registry] = await Promise.all([
+      getSlate(dateIso, source.forceRefresh === true),
+      readRoiRegistry(strategy),
+    ]);
+    const response = buildQualifiedPicksResponse(
+      dateIso,
+      loaded.fixtures,
+      registry,
+      strategy
+    );
+    try {
+      await writeQualifiedPicks(response);
+    } catch (persistError) {
+      // The table is a derived view: a failed cache write must not hide it.
+      console.error('Could not persist qualified picks:', persistError);
+    }
+    return ok(response);
+  } catch (error) {
+    console.error('Error building qualified picks:', error);
+    return fail(500, errorMessage(error, 'Could not build the qualified-picks table.'));
+  }
+}
+
+/** Research accumulator: 5.00+ odds from promoted markets only. */
+export async function buildRoiAccaTicket(body: unknown): Promise<
+  ApiResult<RoiAccaResponse | ErrorBody>
+> {
+  const source = asRecord(body);
+  const dateIso = requestedRoiDate(source);
+  const strategy = isAccaStrategy(source.strategy) ? source.strategy : 'balanced';
+  const targetOdds = source.targetOdds === undefined
+    ? 5
+    : parseTargetOdds(source.targetOdds);
+  const maxLegs = source.maxLegs === undefined ? 8 : parseMaxLegs(source.maxLegs);
+  try {
+    const [loaded, registry] = await Promise.all([
+      getSlate(dateIso, source.forceRefresh === true),
+      readRoiRegistry(strategy),
+    ]);
+    const built = buildRoiAcca(loaded.fixtures, registry, strategy, {
+      targetOdds,
+      maxLegs,
+    });
+    const graded = guardRoiAcca(built.legs);
+    return ok({
+      ...built,
+      dateIso,
+      economics: graded.economics,
+      recommended: false,
+      reason: graded.reason,
+      riskWarning: graded.riskWarning,
+    });
+  } catch (error) {
+    console.error('Error building ROI accumulator:', error);
+    return fail(500, errorMessage(error, 'Could not build the ROI accumulator.'));
   }
 }

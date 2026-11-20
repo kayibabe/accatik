@@ -24,6 +24,9 @@ export interface PickAnalyticsRow {
   avgOdds: number | null;
   /** Average margin-adjusted win probability (percent) at the prices taken. */
   avgProbability: number | null;
+  /** First/last matchday that contributed a settled pick. Set by the inception scan. */
+  firstDateIso?: string;
+  lastDateIso?: string;
 }
 
 export interface MarketAnalyticsRow extends PickAnalyticsRow {
@@ -72,4 +75,141 @@ export interface PickAnalyticsResponse {
   /** Every priced selection, grouped by canonical selection rather than raw label. */
   marketsBySelection: MarketAnalyticsRow[];
   daily: PickAnalyticsDay[];
+  /**
+   * Per-pick outcomes behind `featuredBySelection`, used by the ROI promotion
+   * job for a matchday-clustered bootstrap of each row's ROI interval.
+   */
+  featuredSelectionSamples?: FeaturedPickSample[];
+}
+
+/** One settled featured pick, tagged with the matchday it came from. */
+export interface FeaturedPickSample {
+  /** `${source}:${selectionKey}`, matching `FeaturedAnalyticsRow.key`. */
+  key: string;
+  dateIso: string;
+  odds: number;
+  won: boolean;
+}
+
+/* ------------------------------------------------------------------ */
+/* Positive-ROI promotion registry                                     */
+/* ------------------------------------------------------------------ */
+
+/** Lifecycle of a featured selection in the ROI registry. */
+export type RoiRegistryStatus = 'watch' | 'promoted' | 'demoted' | 'retired';
+
+/**
+ * One persisted `(strategy, source, selectionKey)` row. Only `promoted` rows are
+ * admitted to a research accumulator; the other states keep the history so a
+ * noisy daily snapshot cannot silently rewrite it.
+ */
+export interface RoiRegistryEntry {
+  strategy: AccaStrategy;
+  source: FeaturedPickSource;
+  selectionKey: string;
+  marketType: MarketType;
+  label: string;
+  settled: number;
+  wins: number;
+  losses: number;
+  roi: number | null;
+  roiCiLow: number | null;
+  roiCiHigh: number | null;
+  hitRateCiLow: number | null;
+  hitRateCiHigh: number | null;
+  avgOdds: number | null;
+  firstDateIso: string | null;
+  lastDateIso: string | null;
+  status: RoiRegistryStatus;
+  promotedAt: string | null;
+  /** Snapshot where the settled count last increased. */
+  lastSeenDateIso: string | null;
+  /** Consecutive snapshots that met every promotion rule. */
+  qualifyingStreak: number;
+  /** Consecutive snapshots that failed at least one rule. */
+  failingStreak: number;
+  reason: string;
+  snapshotDateIso: string;
+}
+
+/** Tunable thresholds for the daily promotion state machine. */
+export interface RoiPromotionConfig {
+  /** Prematch-only analytics are supplied by the caller; this records the intent. */
+  prematchOnly: boolean;
+  minSettled: number;
+  minSpanDays: number;
+  /** Lower bound of the clustered ROI interval must clear zero. */
+  requirePositiveCi: boolean;
+  /** Consecutive qualifying snapshots before a row is promoted. */
+  promoteAfter: number;
+  /** Consecutive failing snapshots before a promoted row is demoted. */
+  demoteAfter: number;
+  /** Days without a new settled pick before a row is retired. */
+  retireAfterDays: number;
+}
+
+export interface RoiPromotionResult {
+  strategy: AccaStrategy;
+  snapshotDateIso: string;
+  config: RoiPromotionConfig;
+  entries: RoiRegistryEntry[];
+  promotedKeys: string[];
+  /** Human-readable summary of this snapshot's transitions. */
+  transitions: string[];
+  analytics: {
+    generatedAt: string;
+    sampleDates: number;
+    sampleFixtures: number;
+    priceQuality: PickAnalyticsResponse['priceQuality'];
+  };
+}
+
+/** One qualified/considered market on the daily table. */
+export interface QualifiedPickRow {
+  fixtureId: string;
+  homeTeam: string;
+  awayTeam: string;
+  competition: string;
+  kickoffTimestamp: number | null;
+  kickoffCat: string;
+  source: FeaturedPickSource;
+  selectionKey: string;
+  selectionLabel: string;
+  marketType: MarketType;
+  marketId: string;
+  odds: number;
+  fairProbability: number | null;
+  status: RoiRegistryStatus | 'untracked';
+  roi: number | null;
+  roiCiLow: number | null;
+  roiCiHigh: number | null;
+  settled: number;
+  eligibleForAcca: boolean;
+  reason: string;
+}
+
+export interface QualifiedPicksResponse {
+  dateIso: string;
+  strategy: AccaStrategy;
+  generatedAt: string;
+  rows: QualifiedPickRow[];
+  /** Number of rows currently admitted to the research accumulator. */
+  eligibleCount: number;
+}
+
+/** Research accumulator result returned by the ROI builder. */
+export interface RoiAccaResponse {
+  dateIso: string;
+  strategy: AccaStrategy;
+  targetOdds: number;
+  maxLegs: number;
+  legs: import('./fixtures.ts').AccaLeg[];
+  totalOdds: number;
+  targetReached: boolean;
+  economics: import('./fixtures.ts').TicketEconomicsSummary;
+  recommended: false;
+  reason: string;
+  riskWarning: string;
+  /** Qualified rows that were not used, with the reason for exclusion. */
+  rejected: Array<{ fixtureId: string; marketId: string; reason: string }>;
 }
