@@ -213,3 +213,77 @@ export interface RoiAccaResponse {
   /** Qualified rows that were not used, with the reason for exclusion. */
   rejected: Array<{ fixtureId: string; marketId: string; reason: string }>;
 }
+
+/* ------------------------------------------------------------------ */
+/* Accumulator ticket replay                                           */
+/* ------------------------------------------------------------------ */
+
+/** One control combination replayed against the archived matchdays. */
+export interface TicketVariantConfig {
+  id: string;
+  label: string;
+  /** Which slip control this row explains. */
+  group: 'shape' | 'strategy' | 'odds' | 'legs' | 'current';
+  strategy: AccaStrategy;
+  /** The slip's "Min Odds" value, i.e. the builder target. */
+  targetOdds: number;
+  maxLegs: number;
+  description?: string;
+}
+
+export type TicketReplayStatus = 'Win' | 'Lost' | 'Void';
+
+/** One matchday's reconstructed ticket for a control combination. */
+export interface TicketReplayDay {
+  dateIso: string;
+  status: TicketReplayStatus;
+  legs: number;
+  odds: number;
+  /** Whether the built ticket actually reached the requested target. */
+  targetMet: boolean;
+}
+
+export interface TicketReplaySummary {
+  /** Matchdays where the builder produced a settleable ticket. */
+  tickets: number;
+  wins: number;
+  losses: number;
+  voids: number;
+  hitRate: number | null;
+  /** Hit rate needed to break even at the average price taken. */
+  breakEvenHitRate: number | null;
+  /** Share of tickets whose combined odds reached the target. */
+  targetHitRate: number | null;
+  /** Flat one-unit stake per ticket; voids are returned, not staked. */
+  roi: number | null;
+  netPnl: number;
+  avgOdds: number | null;
+  avgLegs: number | null;
+  maxDrawdown: number;
+  longestLossStreak: number;
+  firstDateIso: string | null;
+  lastDateIso: string | null;
+}
+
+export interface TicketReplayRow extends TicketVariantConfig {
+  summary: TicketReplaySummary;
+  daily: TicketReplayDay[];
+}
+
+export interface TicketReplayResponse {
+  generatedAt: string;
+  firstDateIso: string | null;
+  lastDateIso: string | null;
+  /** Matchdays with at least one clean pre-match priced fixture. */
+  matchdays: number;
+  pricedFixtures: number;
+  /** Finished fixtures excluded because their price was not captured pre-match. */
+  excludedFixtures: number;
+  stakePerTicket: number;
+  shapes: TicketReplayRow[];
+  strategies: TicketReplayRow[];
+  odds: TicketReplayRow[];
+  legs: TicketReplayRow[];
+  /** The exact strategy / min odds / max legs held by the slip when loaded. */
+  current: TicketReplayRow | null;
+}

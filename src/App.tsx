@@ -1050,6 +1050,8 @@ export default function App() {
           <AnalyticsView
             strategy={strategy}
             strategyName={strategyCopy.title}
+            minOdds={minOdds}
+            maxLegs={maxLegs}
             onGoToSlate={() => setActiveTab('slate')}
           />
         ) : !isGuest && activeTab === 'roi' ? (

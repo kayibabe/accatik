@@ -29,10 +29,14 @@ import {
   type SortState,
 } from '../utils/tableSort.ts';
 import { SortableTh } from './SortableTh.tsx';
+import { TicketReplayPanel } from './TicketReplayPanel.tsx';
 
 interface AnalyticsViewProps {
   strategy: AccaStrategy;
   strategyName: string;
+  /** Current slip controls, so the ticket replay can describe this shape too. */
+  minOdds: number;
+  maxLegs: number;
   onGoToSlate: () => void;
 }
 
@@ -545,6 +549,8 @@ const FEATURED_ACCESSORS: SortAccessors<FeaturedAnalyticsRow> = {
 export function AnalyticsView({
   strategy,
   strategyName,
+  minOdds,
+  maxLegs,
   onGoToSlate,
 }: AnalyticsViewProps) {
   const [data, setData] = useState<PickAnalyticsResponse | null>(null);
@@ -875,6 +881,13 @@ export function AnalyticsView({
               tone={pnlTone(marketSummary?.roi ?? 0)}
             />
           </div>
+
+          <TicketReplayPanel
+            strategy={strategy}
+            minOdds={minOdds}
+            maxLegs={maxLegs}
+            refreshKey={refreshKey}
+          />
 
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-200 px-4 py-3">

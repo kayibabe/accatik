@@ -13,6 +13,7 @@ import type {
 } from '../src/types/fixtures.ts';
 import type {
   PickAnalyticsResponse,
+  TicketReplayResponse,
   QualifiedPicksResponse,
   RoiAccaResponse,
   RoiPromotionConfig,
@@ -26,9 +27,11 @@ import {
   guardTicket,
 } from '../src/utils/ticketGuard.ts';
 import { describeStrategy, isAccaStrategy } from '../src/utils/strategy.ts';
+import { normalizeTicketControls } from '../src/utils/ticketControls.ts';
 import { resolveAnalystNoteMarket } from '../src/utils/analystNote.ts';
 import { buildRoiAcca, guardRoiAcca } from '../src/utils/roiAcca.ts';
 import { computePickAnalytics } from './lib/pickAnalytics.ts';
+import { computeTicketAnalytics } from './lib/ticketAnalytics.ts';
 import { computePickRecords } from './lib/pickRecord.ts';
 import { buildQualifiedPicksResponse } from './lib/qualifiedPicks.ts';
 import {
@@ -1322,6 +1325,31 @@ export async function getPickAnalytics(
   } catch (error) {
     console.error('Error computing pick analytics:', error);
     return fail(500, errorMessage(error, 'Failed to build pick analytics.'));
+  }
+}
+
+/**
+ * Inception-to-date replay of the accumulator slip: every ticket shape,
+ * strategy, min-odds target and leg cap settled against clean pre-match prices.
+ */
+export async function getTicketAnalytics(
+  body: unknown
+): Promise<ApiResult<TicketReplayResponse | ErrorBody>> {
+  const source = asRecord(body);
+  const controls = normalizeTicketControls(source);
+  const force = source.force === true;
+  try {
+    return ok(
+      await computeTicketAnalytics(
+        controls.strategy,
+        controls.minOdds,
+        controls.maxLegs,
+        force
+      )
+    );
+  } catch (error) {
+    console.error('Error computing ticket analytics:', error);
+    return fail(500, errorMessage(error, 'Failed to build ticket analytics.'));
   }
 }
 

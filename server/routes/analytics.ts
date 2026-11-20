@@ -5,6 +5,7 @@ import {
   getPickAnalytics,
   getQualifiedPicks,
   getRoiRegistry,
+  getTicketAnalytics,
   runRoiPromotion,
 } from '../api.ts';
 
@@ -13,6 +14,11 @@ export const analyticsRouter = Router();
 
 analyticsRouter.post('/picks', async (req: Request, res: Response) => {
   const result = await getPickAnalytics(req.body);
+  res.status(result.status).json(result.body);
+});
+
+analyticsRouter.post('/tickets', async (req: Request, res: Response) => {
+  const result = await getTicketAnalytics(req.body);
   res.status(result.status).json(result.body);
 });
 

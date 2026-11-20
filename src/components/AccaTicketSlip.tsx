@@ -22,9 +22,11 @@ import {
 } from '../utils/accaMath.ts';
 import { isPreMatchFixture } from '../utils/priceQuality.ts';
 import {
-  MAX_RECOMMENDED_LEGS,
-  guardTicket,
-} from '../utils/ticketGuard.ts';
+  TICKET_MAX_LEGS_OPTIONS,
+  TICKET_STRATEGY_OPTIONS,
+  TICKET_TARGET_ODDS_OPTIONS,
+} from '../utils/ticketControls.ts';
+import { guardTicket } from '../utils/ticketGuard.ts';
 import {
   TICKET_SHAPES,
   matchTicketShape,
@@ -55,21 +57,11 @@ interface AccaTicketSlipProps {
   onSaveTicket: (stake: number) => void;
 }
 
-const STRATEGIES: { id: AccaStrategy; label: string }[] = [
-  { id: 'balanced', label: 'Balanced' },
-  { id: 'favorites', label: 'Favorites' },
-  { id: 'goals', label: 'Goals' },
-  { id: 'high-yield', label: 'High-Yield' },
-  { id: 'probability', label: 'Most Likely' },
-];
-
-const TARGET_ODDS_OPTIONS = [2, 2.8, 3.6, 5, 8];
+const STRATEGIES = TICKET_STRATEGY_OPTIONS;
+const TARGET_ODDS_OPTIONS = TICKET_TARGET_ODDS_OPTIONS;
 // The structural cap is three legs, so offering 4/6/8 here would only create
 // a control that silently rewrites the user's choice back to three.
-const LEG_OPTIONS = Array.from(
-  { length: MAX_RECOMMENDED_LEGS - 1 },
-  (_, index) => index + 2
-);
+const LEG_OPTIONS = TICKET_MAX_LEGS_OPTIONS;
 
 export function AccaTicketSlip({
   legs,
