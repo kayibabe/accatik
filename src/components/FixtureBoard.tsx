@@ -1185,39 +1185,43 @@ export function FixtureBoard({
                       <p className="mt-0.5 text-[11px] text-slate-600 leading-snug">
                         {angle.note}
                       </p>
-                      {angle.cover && (
-                        <p className="mt-1.5 inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] leading-snug text-slate-600 shadow-sm">
-                          <ShieldCheck
-                            className="w-3 h-3 shrink-0 text-slate-500"
-                            aria-hidden="true"
-                          />
-                          <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                            Safer cover
-                          </span>
-                          <span className="font-medium text-slate-900">
-                            {angle.cover.label}
-                          </span>
-                          <span className="font-mono font-semibold text-slate-900 tabular-nums">
-                            @ {angle.cover.odds.toFixed(2)}
-                          </span>
-                          <span aria-hidden="true" className="text-slate-300">
-                            ·
-                          </span>
-                          <span className="font-mono text-slate-600 tabular-nums">
-                            {angle.coverProbability.toFixed(0)}% fair
-                          </span>
-                        </p>
-                      )}
-                      {/* Read-only copy of the brief's analyst note, kept in sync
-                          by sharing the same deepAnalysis value. The original in
-                          the Tactical Brief stays where it is. */}
-                      {deepAnalysis?.bestAngle && (
-                        <p className="mt-1.5 rounded border border-sky-200 bg-sky-50 px-2 py-1 text-[11px] leading-snug text-sky-900">
-                          <span className="font-semibold uppercase tracking-wide text-sky-800">
-                            Analyst note:{' '}
-                          </span>
-                          {deepAnalysis.bestAngle}
-                        </p>
+                      {(angle.cover || deepAnalysis?.bestAngle) && (
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                          {angle.cover && (
+                            <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] leading-snug text-slate-600 shadow-sm">
+                              <ShieldCheck
+                                className="w-3 h-3 shrink-0 text-slate-500"
+                                aria-hidden="true"
+                              />
+                              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                                Safer cover
+                              </span>
+                              <span className="font-medium text-slate-900">
+                                {angle.cover.label}
+                              </span>
+                              <span className="font-mono font-semibold text-slate-900 tabular-nums">
+                                @ {angle.cover.odds.toFixed(2)}
+                              </span>
+                              <span aria-hidden="true" className="text-slate-300">
+                                ·
+                              </span>
+                              <span className="font-mono text-slate-600 tabular-nums">
+                                {angle.coverProbability.toFixed(0)}% fair
+                              </span>
+                            </span>
+                          )}
+                          {/* Read-only copy of the brief's analyst note, kept in sync
+                              by sharing the same deepAnalysis value. The original in
+                              the Tactical Brief stays where it is. */}
+                          {deepAnalysis?.bestAngle && (
+                            <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded border border-sky-200 bg-sky-50 px-2 py-1 text-[11px] leading-snug text-sky-900">
+                              <span className="font-semibold uppercase tracking-wide text-sky-800">
+                                Analyst note:{' '}
+                              </span>
+                              {deepAnalysis.bestAngle}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </div>
                   )}
