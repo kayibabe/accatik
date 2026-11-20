@@ -11,6 +11,7 @@ import type {
   ServerTimings,
   SettlementStatus,
 } from '../src/types/fixtures.ts';
+import type { PickAnalyticsResponse } from '../src/types/analytics.ts';
 import type { LedgerSummary, LedgerTicket } from '../src/types/ledger.ts';
 import { buildRecommendedAcca } from '../src/utils/accaEngine.ts';
 import {
@@ -19,6 +20,7 @@ import {
 } from '../src/utils/ticketGuard.ts';
 import { describeStrategy, isAccaStrategy } from '../src/utils/strategy.ts';
 import { resolveAnalystNoteMarket } from '../src/utils/analystNote.ts';
+import { computePickAnalytics } from './lib/pickAnalytics.ts';
 import { computePickRecords } from './lib/pickRecord.ts';
 import {
   applySlateToLedger,
@@ -1280,6 +1282,28 @@ export async function getPickRecords(
   } catch (error) {
     console.error('Error computing pick records:', error);
     return fail(500, errorMessage(error, 'Failed to build pick records.'));
+  }
+}
+
+/**
+ * Inception-to-date hit rate, net P&L and ROI for featured picks and for every
+ * individual market on the archived board. Same strategy awareness as the
+ * board's pick records, but across the full archive and with flat-stake money.
+ */
+export async function getPickAnalytics(
+  body: unknown
+): Promise<ApiResult<PickAnalyticsResponse | ErrorBody>> {
+  const source =
+    body && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : {};
+  const strategy = isAccaStrategy(source.strategy) ? source.strategy : 'balanced';
+  const force = source.force === true;
+  try {
+    return ok(await computePickAnalytics(strategy, force));
+  } catch (error) {
+    console.error('Error computing pick analytics:', error);
+    return fail(500, errorMessage(error, 'Failed to build pick analytics.'));
   }
 }
 

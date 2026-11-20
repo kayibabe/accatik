@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getHealth } from './server/api.ts';
 import { createRateLimiter } from './server/lib/cache.ts';
+import { analyticsRouter } from './server/routes/analytics.ts';
 import { fixturesRouter } from './server/routes/fixtures.ts';
 import { ledgerRouter } from './server/routes/ledger.ts';
 import { userRouter } from './server/routes/user.ts';
@@ -38,6 +39,7 @@ async function createServer() {
     fixturesRouter
   );
 
+  app.use('/api/analytics', analyticsRouter);
   app.use('/api/ledger', ledgerRouter);
   app.use('/api', userRouter);
 

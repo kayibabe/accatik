@@ -1,7 +1,13 @@
 import { LogOut, RefreshCw, ShieldCheck, UserRound } from 'lucide-react';
 import type { AppUser, UserProfile } from '../types/user.ts';
 
-export type ActiveTab = 'slate' | 'acca' | 'saved' | 'activity' | 'sources';
+export type ActiveTab =
+  | 'slate'
+  | 'acca'
+  | 'saved'
+  | 'activity'
+  | 'analytics'
+  | 'sources';
 
 interface TopBarProps {
   activeTab: ActiveTab;
@@ -44,6 +50,7 @@ export function TopBar({
       label: savedCount > 0 ? `Saved Slips (${savedCount})` : 'Saved Slips',
     },
     { id: 'activity', label: 'My Activity' },
+    { id: 'analytics', label: 'Analytics' },
     { id: 'sources', label: 'Sources' },
   ];
   const guestNavItems = [
