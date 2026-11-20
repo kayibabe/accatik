@@ -1208,6 +1208,17 @@ export function FixtureBoard({
                           </span>
                         </p>
                       )}
+                      {/* Read-only copy of the brief's analyst note, kept in sync
+                          by sharing the same deepAnalysis value. The original in
+                          the Tactical Brief stays where it is. */}
+                      {deepAnalysis?.bestAngle && (
+                        <p className="mt-1.5 rounded border border-sky-200 bg-sky-50 px-2 py-1 text-[11px] leading-snug text-sky-900">
+                          <span className="font-semibold uppercase tracking-wide text-sky-800">
+                            Analyst note:{' '}
+                          </span>
+                          {deepAnalysis.bestAngle}
+                        </p>
+                      )}
                     </div>
                   )}
 
