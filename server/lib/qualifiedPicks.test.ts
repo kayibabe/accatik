@@ -79,6 +79,37 @@ test('excludes started fixtures and non-prematch prices', () => {
   assert.ok(rows.some((row) => row.reason.includes('not prematch-confirmed')));
 });
 
+test('settles each card selection against this fixture', () => {
+  const scheduled = fixture();
+  scheduled.id = 'scheduled';
+  const live = fixture();
+  live.id = 'live';
+  live.status = 'Live';
+  const finished = fixture();
+  finished.id = 'finished';
+  finished.status = 'Finished';
+  finished.score = { home: 2, away: 1 };
+  const voided = fixture();
+  voided.id = 'voided';
+  voided.status = 'Void';
+
+  const rows = buildQualifiedPickRows(
+    [scheduled, live, finished, voided],
+    [],
+    'balanced',
+    now
+  );
+  const resultsFor = (fixtureId: string) =>
+    rows
+      .filter((row) => row.fixtureId === fixtureId)
+      .map((row) => row.result);
+
+  assert.deepEqual(resultsFor('scheduled'), ['Pending', 'Pending', 'Pending']);
+  assert.deepEqual(resultsFor('live'), ['Live', 'Live', 'Live']);
+  assert.deepEqual(resultsFor('finished'), ['Win', 'Win', 'Lost']);
+  assert.deepEqual(resultsFor('voided'), ['Void', 'Void', 'Void']);
+});
+
 test('uses stored model advice only, never a derived note', () => {
   const noAdvice = fixture();
   noAdvice.modelAdvice = undefined;

@@ -15,6 +15,7 @@ import {
 } from '../utils/tableSort.ts';
 import { makeSortHandler } from '../utils/tableSort.ts';
 import { SortableTh } from './SortableTh.tsx';
+import { SettlementLabel } from './SettlementLabel.tsx';
 
 interface PositiveRoiViewProps {
   strategy: AccaStrategy;
@@ -133,6 +134,7 @@ export function PositiveRoiView({
       roi: (row) => row.roi,
       ci: (row) => row.roiCiLow,
       settled: (row) => row.settled,
+      result: (row) => row.result ?? 'Pending',
       status: (row) => row.status,
     });
   }, [qualified, pickFilter, sort]);
@@ -331,6 +333,7 @@ export function PositiveRoiView({
                 <SortableTh label="Odds" columnKey="odds" sort={sort} onSort={onSort} defaultDirection={SORT_DESC} align="right" className="py-3 px-4" />
                 <SortableTh label="ROI / CI" columnKey="ci" sort={sort} onSort={onSort} defaultDirection={SORT_DESC} align="right" className="py-3 px-4" />
                 <SortableTh label="Settled" columnKey="settled" sort={sort} onSort={onSort} defaultDirection={SORT_DESC} align="right" className="py-3 px-4" />
+                <SortableTh label="Result" columnKey="result" sort={sort} onSort={onSort} className="py-3 px-4" />
                 <SortableTh label="Status" columnKey="status" sort={sort} onSort={onSort} className="py-3 px-4" />
                 <th className="py-3 px-4 text-xs font-semibold text-slate-600">Reason</th>
               </tr>
@@ -338,7 +341,7 @@ export function PositiveRoiView({
             <tbody className="divide-y divide-slate-200">
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="py-10 text-center text-sm text-slate-500">
+                  <td colSpan={10} className="py-10 text-center text-sm text-slate-500">
                     <p>
                       {pickFilter === 'qualified'
                         ? 'No cards on this slate qualified for the acca.'
@@ -391,6 +394,9 @@ export function PositiveRoiView({
                   </td>
                   <td className="py-3 px-4 text-right font-mono tabular-nums text-slate-700">
                     {row.settled}
+                  </td>
+                  <td className="py-3 px-4">
+                    <SettlementLabel status={row.result ?? 'Pending'} />
                   </td>
                   <td className="py-3 px-4">
                     <span

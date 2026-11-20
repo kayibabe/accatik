@@ -5,6 +5,7 @@ import type {
   QualifiedPicksResponse,
   RoiRegistryEntry,
 } from '../../src/types/analytics.ts';
+import { evaluateMarketSettlement } from '../../src/utils/accaMath.ts';
 import { isPreMatchFixture, inferPriceQuality } from '../../src/utils/priceQuality.ts';
 import { isPriced } from '../../src/utils/pickResolver.ts';
 import { resolveMarketSelection } from '../../src/utils/marketSelection.ts';
@@ -66,6 +67,7 @@ export function buildQualifiedPickRows(
     for (const card of cardsFor(fixture, strategy)) {
       if (!card.market || !isPriced(card.market)) continue;
       const selection = resolveMarketSelection(card.market, fixture);
+      const result = evaluateMarketSettlement(fixture, card.market);
       const entry = byPair.get(`${card.source}:${selection.key}`);
 
       let reason: string;
@@ -97,6 +99,7 @@ export function buildQualifiedPickRows(
         marketId: card.market.id,
         odds: card.market.odds,
         fairProbability: card.market.fairProbability ?? null,
+        result,
         status: entry?.status ?? 'untracked',
         roi: entry?.roi ?? null,
         roiCiLow: entry?.roiCiLow ?? null,

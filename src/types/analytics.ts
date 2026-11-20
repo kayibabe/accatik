@@ -1,4 +1,8 @@
-import type { AccaStrategy, MarketType } from './fixtures.ts';
+import type {
+  AccaStrategy,
+  MarketType,
+  SettlementStatus,
+} from './fixtures.ts';
 
 /**
  * Flat-stake performance for one tracked pick or group of picks.
@@ -179,6 +183,8 @@ export interface QualifiedPickRow {
   marketId: string;
   odds: number;
   fairProbability: number | null;
+  /** Outcome of this card's selection in this fixture. Optional for older cached rows. */
+  result?: SettlementStatus;
   status: RoiRegistryStatus | 'untracked';
   roi: number | null;
   roiCiLow: number | null;
