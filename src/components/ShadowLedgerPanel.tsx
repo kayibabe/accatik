@@ -2,6 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { BarChart3, RefreshCw } from 'lucide-react';
 import type { LedgerBreakdownRow, LedgerSummary } from '../types/ledger.ts';
 import { apiFetch } from '../utils/api.ts';
+import {
+  SORT_DESC,
+  makeSortHandler,
+  sortRows,
+  type SortAccessors,
+  type SortState,
+} from '../utils/tableSort.ts';
+import { SortableTh } from './SortableTh.tsx';
 
 const percent = (value: number | null): string =>
   value === null ? '—' : `${value.toFixed(1)}%`;
@@ -19,6 +27,17 @@ const pnlTone = (value: number): string =>
 const recordLabel = (row: LedgerBreakdownRow): string =>
   `${row.won}W · ${row.lost}L · ${row.voided}V`;
 
+const VARIANT_ACCESSORS: SortAccessors<LedgerBreakdownRow> = {
+  label: (row) => row.label,
+  tickets: (row) => row.tickets,
+  record: (row) => recordLabel(row),
+  hitRate: (row) => row.hitRate,
+  breakEven: (row) => row.breakEvenHitRate,
+  roi: (row) => row.roi,
+  avgClv: (row) => row.avgClv,
+  avgOdds: (row) => row.avgOdds,
+};
+
 /**
  * Server-side record of the engine's own tickets.
  *
@@ -30,6 +49,14 @@ export function ShadowLedgerPanel() {
   const [summary, setSummary] = useState<LedgerSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [variantSort, setVariantSort] = useState<SortState>({
+    key: null,
+    direction: SORT_DESC,
+  });
+  const handleVariantSort = makeSortHandler(setVariantSort, SORT_DESC);
+  const sortedVariants = summary
+    ? sortRows(summary.byVariant, variantSort, VARIANT_ACCESSORS)
+    : [];
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -180,20 +207,73 @@ export function ShadowLedgerPanel() {
             <table className="w-full min-w-[720px] text-left text-xs">
               <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="px-4 py-2 font-semibold">Variant</th>
-                  <th className="px-3 py-2 text-right font-semibold">Tickets</th>
-                  <th className="px-3 py-2 text-right font-semibold">W-L-V</th>
-                  <th className="px-3 py-2 text-right font-semibold">Hit</th>
-                  <th className="px-3 py-2 text-right font-semibold">
-                    Break-even
-                  </th>
-                  <th className="px-3 py-2 text-right font-semibold">ROI</th>
-                  <th className="px-3 py-2 text-right font-semibold">Avg CLV</th>
-                  <th className="px-4 py-2 text-right font-semibold">Avg odds</th>
+                  <SortableTh
+                    label="Variant"
+                    columnKey="label"
+                    sort={variantSort}
+                    onSort={handleVariantSort}
+                    className="px-4 py-2 font-semibold"
+                  />
+                  <SortableTh
+                    label="Tickets"
+                    columnKey="tickets"
+                    sort={variantSort}
+                    onSort={handleVariantSort}
+                    align="right"
+                    className="px-3 py-2 font-semibold"
+                  />
+                  <SortableTh
+                    label="W-L-V"
+                    columnKey="record"
+                    sort={variantSort}
+                    onSort={handleVariantSort}
+                    align="right"
+                    className="px-3 py-2 font-semibold"
+                  />
+                  <SortableTh
+                    label="Hit"
+                    columnKey="hitRate"
+                    sort={variantSort}
+                    onSort={handleVariantSort}
+                    align="right"
+                    className="px-3 py-2 font-semibold"
+                  />
+                  <SortableTh
+                    label="Break-even"
+                    columnKey="breakEven"
+                    sort={variantSort}
+                    onSort={handleVariantSort}
+                    align="right"
+                    className="px-3 py-2 font-semibold"
+                  />
+                  <SortableTh
+                    label="ROI"
+                    columnKey="roi"
+                    sort={variantSort}
+                    onSort={handleVariantSort}
+                    align="right"
+                    className="px-3 py-2 font-semibold"
+                  />
+                  <SortableTh
+                    label="Avg CLV"
+                    columnKey="avgClv"
+                    sort={variantSort}
+                    onSort={handleVariantSort}
+                    align="right"
+                    className="px-3 py-2 font-semibold"
+                  />
+                  <SortableTh
+                    label="Avg odds"
+                    columnKey="avgOdds"
+                    sort={variantSort}
+                    onSort={handleVariantSort}
+                    align="right"
+                    className="px-4 py-2 font-semibold"
+                  />
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {summary.byVariant.map((row) => (
+                {sortedVariants.map((row) => (
                   <tr key={row.key}>
                     <td className="px-4 py-2 font-medium text-slate-800">
                       {row.label}

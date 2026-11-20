@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   SORT_ASC,
   SORT_DESC,
+  makeSortHandler,
   sortRows,
   toggleSort,
 } from './tableSort.ts';
@@ -118,4 +119,19 @@ test('an unknown column key is a no-op', () => {
   const rows: Row[] = [{ name: 'b' }, { name: 'a' }];
   const result = sortRows(rows, { key: 'nope', direction: SORT_ASC }, accessors);
   assert.equal(result, rows);
+});
+
+test('a shared sort handler flips the active column and honours its default', () => {
+  let state = { key: null as string | null, direction: SORT_ASC };
+  const setter = (update: (current: typeof state) => typeof state) => {
+    state = update(state);
+  };
+  const onSort = makeSortHandler(setter, SORT_DESC);
+
+  onSort('odds');
+  assert.deepEqual(state, { key: 'odds', direction: SORT_DESC });
+  onSort('odds');
+  assert.deepEqual(state, { key: 'odds', direction: SORT_ASC });
+  onSort('name');
+  assert.deepEqual(state, { key: 'name', direction: SORT_DESC });
 });

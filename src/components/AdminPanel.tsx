@@ -2,6 +2,13 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { AlertCircle, ShieldCheck, X } from 'lucide-react';
 import type { UserProfile, UserRole } from '../types/user.ts';
 import { apiFetch } from '../utils/api.ts';
+import {
+  SORT_DESC,
+  makeSortHandler,
+  sortRows,
+  type SortState,
+} from '../utils/tableSort.ts';
+import { SortableTh } from './SortableTh.tsx';
 
 /** Minimal internal view for manual role assignment. Admin role only. */
 export function AdminPanel({ onClose }: { onClose: () => void }) {
@@ -11,6 +18,11 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [profileSort, setProfileSort] = useState<SortState>({
+    key: null,
+    direction: SORT_DESC,
+  });
+  const handleProfileSort = makeSortHandler(setProfileSort);
 
   const load = useCallback(async () => {
     try {
@@ -52,6 +64,13 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
     }
   };
 
+  const sortedProfiles = sortRows(profiles, profileSort, {
+    displayName: (profile) => profile.displayName || profile.userId,
+    role: (profile) => roles[profile.userId] ?? profile.role,
+    auditReason: (profile) => reasons[profile.userId] ?? '',
+    joined: (profile) => profile.createdAt ?? null,
+  });
+
   return (
     <section className="mb-6 rounded-xl border border-slate-200 bg-white p-5">
       <div className="flex items-start justify-between gap-4">
@@ -87,14 +106,32 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
         <table className="w-full text-left text-xs">
           <thead className="text-slate-500 border-b border-slate-200">
             <tr>
-              <th className="py-2 pr-4">User</th>
-              <th className="py-2 pr-4">Role</th>
-              <th className="py-2 pr-4">Audit reason</th>
+              <SortableTh
+                label="User"
+                columnKey="displayName"
+                sort={profileSort}
+                onSort={handleProfileSort}
+                className="py-2 pr-4"
+              />
+              <SortableTh
+                label="Role"
+                columnKey="role"
+                sort={profileSort}
+                onSort={handleProfileSort}
+                className="py-2 pr-4"
+              />
+              <SortableTh
+                label="Audit reason"
+                columnKey="auditReason"
+                sort={profileSort}
+                onSort={handleProfileSort}
+                className="py-2 pr-4"
+              />
               <th className="py-2" />
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {profiles.map((item) => (
+            {sortedProfiles.map((item) => (
               <tr key={item.userId}>
                 <td className="py-2.5 pr-4">
                   <div className="font-medium text-slate-800">

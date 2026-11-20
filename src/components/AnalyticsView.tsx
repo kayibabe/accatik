@@ -1,12 +1,7 @@
-import {
-  Fragment,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   BarChart3,
+  ChevronRight,
   Info,
   RefreshCw,
   TrendingDown,
@@ -28,11 +23,12 @@ import {
 } from '../utils/marketSelection.ts';
 import {
   SORT_DESC,
+  makeSortHandler,
   sortRows,
-  toggleSort,
   type SortAccessors,
   type SortState,
 } from '../utils/tableSort.ts';
+import { SortableTh } from './SortableTh.tsx';
 
 interface AnalyticsViewProps {
   strategy: AccaStrategy;
@@ -55,6 +51,15 @@ interface FeaturedGroup {
 
 const FEATURED_SOURCE_ORDER: FeaturedPickSource[] = ['angle', 'cover', 'note'];
 
+/** Win-probability floors offered above the individual-markets table. */
+const MARKET_PROBABILITY_FILTERS: readonly number[] = [
+  0, 30, 40, 50, 60, 70, 80, 90,
+];
+
+/** Stable DOM id for a group's collapsible panel. */
+const groupPanelId = (prefix: string, key: string): string =>
+  `${prefix}-${key.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+
 const MARKET_TYPES: MarketType[] = [
   '1X2',
   'Double Chance',
@@ -75,6 +80,23 @@ function inferMarketType(key: string): MarketType | null {
   const direct = MARKET_TYPES.find((type) => type === key);
   if (direct) return direct;
   return MARKET_TYPE_BY_KEY_PREFIX[key.split('-')[0].toUpperCase()] ?? null;
+}
+
+/**
+ * Older Functions published average odds but not fair probability. Derive a
+ * usable fallback so the probability filter still works before redeployment.
+ * (1 / average odds is the raw implied probability, so it runs a little above
+ * the margin-adjusted value.)
+ */
+function withProbabilityFallback<T extends PickAnalyticsRow>(row: T): T {
+  if (typeof row.avgProbability === 'number') return row;
+  return {
+    ...row,
+    avgProbability:
+      row.avgOdds !== null && row.avgOdds > 0
+        ? Math.round((100 / row.avgOdds) * 10) / 10
+        : null,
+  };
 }
 
 /**
@@ -110,22 +132,24 @@ function normalizeAnalytics(raw: PickAnalyticsResponse): {
         live: safe.priceQuality?.live ?? 0,
         unknown: safe.priceQuality?.unknown ?? 0,
       },
-      featured: Array.isArray(safe.featured) ? safe.featured : [],
+      featured: Array.isArray(safe.featured)
+        ? safe.featured.map(withProbabilityFallback)
+        : [],
       featuredBySelection: Array.isArray(safe.featuredBySelection)
-        ? safe.featuredBySelection
+        ? safe.featuredBySelection.map(withProbabilityFallback)
         : [],
       marketsByType: (Array.isArray(safe.marketsByType)
         ? safe.marketsByType
         : []
       ).map((row) => ({
-        ...row,
+        ...withProbabilityFallback(row),
         marketType: row.marketType ?? inferMarketType(row.key) ?? '1X2',
       })),
       marketsBySelection: (Array.isArray(safe.marketsBySelection)
         ? safe.marketsBySelection
         : []
       ).map((row) => ({
-        ...row,
+        ...withProbabilityFallback(row),
         marketType: row.marketType ?? inferMarketType(row.key) ?? '1X2',
       })),
       daily: Array.isArray(safe.daily) ? safe.daily : [],
@@ -219,6 +243,7 @@ function emptySelectionRow(
     netPnl: 0,
     roi: null,
     avgOdds: null,
+    avgProbability: null,
   };
 }
 
@@ -303,6 +328,9 @@ function MarketRow({
       </td>
       <td className="px-3 py-2 text-right">
         <HitRateCell value={row.hitRate} />
+      </td>
+      <td className="px-3 py-2 text-right font-mono text-slate-600 tabular-nums">
+        {row.avgProbability === null ? '—' : `${row.avgProbability.toFixed(1)}%`}
       </td>
       <td className="px-3 py-2 text-right font-mono text-slate-600 tabular-nums">
         {row.avgOdds === null ? '—' : row.avgOdds.toFixed(2)}
@@ -485,63 +513,34 @@ const SELECTION_ACCESSORS: SortAccessors<MarketTableRow> = {
   label: (row) => row.label,
   marketType: (row) => row.marketType ?? null,
   settled: (row) => row.settled,
+  record: (row) => recordLabel(row.wins, row.losses, row.voids),
+  wins: (row) => row.wins,
+  losses: (row) => row.losses,
+  voids: (row) => row.voids,
   hitRate: (row) => row.hitRate,
+  avgProbability: (row) => row.avgProbability,
+  avgOdds: (row) => row.avgOdds,
+  stake: (row) => row.stake,
+  returns: (row) => row.returns,
   netPnl: (row) => row.netPnl,
   roi: (row) => row.roi,
-  avgOdds: (row) => row.avgOdds,
 };
 
 const FEATURED_ACCESSORS: SortAccessors<FeaturedAnalyticsRow> = {
   label: (row) => row.label,
   selectionKey: (row) => row.selectionKey,
   settled: (row) => row.settled,
+  record: (row) => recordLabel(row.wins, row.losses, row.voids),
+  wins: (row) => row.wins,
+  losses: (row) => row.losses,
+  voids: (row) => row.voids,
   hitRate: (row) => row.hitRate,
+  stake: (row) => row.stake,
+  returns: (row) => row.returns,
   netPnl: (row) => row.netPnl,
   roi: (row) => row.roi,
   avgOdds: (row) => row.avgOdds,
 };
-
-function SortHeader({
-  sort,
-  onSort,
-  sortKey,
-  children,
-  align = 'right',
-}: {
-  sort: SortState;
-  onSort: (next: SortState) => void;
-  sortKey: string;
-  children: ReactNode;
-  align?: 'left' | 'right';
-}) {
-  const active = sort.key === sortKey;
-  return (
-    <th
-      scope="col"
-      aria-sort={
-        active
-          ? sort.direction === SORT_DESC
-            ? 'descending'
-            : 'ascending'
-          : 'none'
-      }
-      className={`px-3 py-2 font-semibold ${align === 'right' ? 'text-right' : ''}`}
-    >
-      <button
-        type="button"
-        onClick={() => onSort(toggleSort(sort, sortKey, SORT_DESC))}
-        className="inline-flex items-center gap-1 hover:text-slate-800 cursor-pointer"
-      >
-        {children}
-        {active && (
-          <span aria-hidden="true">
-            {sort.direction === SORT_DESC ? '↓' : '↑'}
-          </span>
-        )}
-      </button>
-    </th>
-  );
-}
 
 export function AnalyticsView({
   strategy,
@@ -556,6 +555,14 @@ export function AnalyticsView({
   const [showEmptySelections, setShowEmptySelections] = useState(false);
   const [showEmptyFeaturedSelections, setShowEmptyFeaturedSelections] =
     useState(false);
+  const [minProbability, setMinProbability] = useState(0);
+  // Groups start collapsed; only the roll-up rows are visible until expanded.
+  const [expandedMarketGroups, setExpandedMarketGroups] = useState<
+    Record<string, boolean>
+  >({});
+  const [expandedFeaturedGroups, setExpandedFeaturedGroups] = useState<
+    Record<string, boolean>
+  >({});
   // No active column keeps the canonical market/selection order from the API.
   const [sort, setSort] = useState<SortState>({
     key: null,
@@ -565,6 +572,17 @@ export function AnalyticsView({
     key: null,
     direction: SORT_DESC,
   });
+
+  const handleMarketSort = makeSortHandler(setSort, SORT_DESC);
+  const handleFeaturedSort = makeSortHandler(setFeaturedSort, SORT_DESC);
+
+  const toggleMarketGroup = (key: string) =>
+    setExpandedMarketGroups((current) => ({ ...current, [key]: !current[key] }));
+  const toggleFeaturedGroup = (key: string) =>
+    setExpandedFeaturedGroups((current) => ({
+      ...current,
+      [key]: !current[key],
+    }));
 
   useEffect(() => {
     let cancelled = false;
@@ -616,23 +634,32 @@ export function AnalyticsView({
       list.push(row);
       byType.set(row.marketType, list);
     }
-    return sortRows(data.marketsByType, sort, SELECTION_ACCESSORS).map(
-      (typeRow) => {
-        const priced = byType.get(typeRow.marketType) ?? [];
-        let selections = priced;
-        if (showEmptySelections) {
-          const byKey = new Map(priced.map((row) => [row.key, row]));
-          selections = MARKET_SELECTION_CATALOG.filter(
-            (selection) => selection.marketType === typeRow.marketType
-          ).map((selection) => byKey.get(selection.key) ?? emptySelectionRow(selection));
-        }
-        return {
-          typeRow,
-          selections: sortRows(selections, sort, SELECTION_ACCESSORS),
-        };
+    const passesProbability = (row: MarketAnalyticsRow) =>
+      minProbability === 0 ||
+      (row.avgProbability !== null && row.avgProbability >= minProbability);
+
+    const groups: MarketGroup[] = [];
+    for (const typeRow of sortRows(data.marketsByType, sort, SELECTION_ACCESSORS)) {
+      const priced = byType.get(typeRow.marketType) ?? [];
+      let selections = priced;
+      if (showEmptySelections) {
+        const byKey = new Map(priced.map((row) => [row.key, row]));
+        selections = MARKET_SELECTION_CATALOG.filter(
+          (selection) => selection.marketType === typeRow.marketType
+        ).map(
+          (selection) => byKey.get(selection.key) ?? emptySelectionRow(selection)
+        );
       }
-    );
-  }, [data, sort, showEmptySelections]);
+      const matching = sortRows(selections, sort, SELECTION_ACCESSORS).filter(
+        passesProbability
+      );
+      // A market type stays visible when at least one of its selections clears
+      // the floor, even when the type's own average does not.
+      if (matching.length === 0) continue;
+      groups.push({ typeRow, selections: matching });
+    }
+    return groups;
+  }, [data, sort, showEmptySelections, minProbability]);
 
   const featuredGroups = useMemo<FeaturedGroup[]>(() => {
     if (!data) return [];
@@ -691,6 +718,17 @@ export function AnalyticsView({
       worst: byRoi[byRoi.length - 1],
     };
   }, [data]);
+
+  const matchingSelectionCount = marketGroups.reduce(
+    (total, group) => total + group.selections.length,
+    0
+  );
+  const allMarketsExpanded =
+    marketGroups.length > 0 &&
+    marketGroups.every((group) => expandedMarketGroups[group.typeRow.key]);
+  const allFeaturedExpanded =
+    featuredGroups.length > 0 &&
+    featuredGroups.every((group) => expandedFeaturedGroups[group.source]);
 
   return (
     <section aria-label="Analytics" className="space-y-6">
@@ -862,6 +900,21 @@ export function AnalyticsView({
                   />
                   Show lines with no picks yet
                 </label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpandedFeaturedGroups(
+                      allFeaturedExpanded
+                        ? {}
+                        : Object.fromEntries(
+                            featuredGroups.map((group) => [group.source, true])
+                          )
+                    )
+                  }
+                  className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 cursor-pointer"
+                >
+                  {allFeaturedExpanded ? 'Collapse all' : 'Expand all'}
+                </button>
                 <span className="text-[11px] text-slate-400">
                   1u flat stake per pick
                 </span>
@@ -871,45 +924,70 @@ export function AnalyticsView({
               <table className="w-full min-w-[780px] text-left text-xs">
                 <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
                   <tr>
-                    <SortHeader
+                    <SortableTh
+                      label="Pick / selection"
+                      columnKey="label"
                       sort={featuredSort}
-                      onSort={setFeaturedSort}
-                      sortKey="label"
+                      onSort={handleFeaturedSort}
                       align="left"
-                    >
-                      Pick / selection
-                    </SortHeader>
-                    <th className="px-3 py-2 text-right font-semibold">Record</th>
-                    <SortHeader
+                      className="px-4 py-2 font-semibold"
+                    />
+                    <SortableTh
+                      label="Record"
+                      columnKey="record"
                       sort={featuredSort}
-                      onSort={setFeaturedSort}
-                      sortKey="hitRate"
-                    >
-                      Hit rate
-                    </SortHeader>
-                    <th className="px-3 py-2 text-right font-semibold">Stake</th>
-                    <th className="px-3 py-2 text-right font-semibold">Returns</th>
-                    <SortHeader
+                      onSort={handleFeaturedSort}
+                      align="right"
+                      className="px-3 py-2 font-semibold"
+                    />
+                    <SortableTh
+                      label="Hit rate"
+                      columnKey="hitRate"
                       sort={featuredSort}
-                      onSort={setFeaturedSort}
-                      sortKey="netPnl"
-                    >
-                      Net P&amp;L
-                    </SortHeader>
-                    <SortHeader
+                      onSort={handleFeaturedSort}
+                      align="right"
+                      className="px-3 py-2 font-semibold"
+                    />
+                    <SortableTh
+                      label="Stake"
+                      columnKey="stake"
                       sort={featuredSort}
-                      onSort={setFeaturedSort}
-                      sortKey="roi"
-                    >
-                      ROI
-                    </SortHeader>
-                    <SortHeader
+                      onSort={handleFeaturedSort}
+                      align="right"
+                      className="px-3 py-2 font-semibold"
+                    />
+                    <SortableTh
+                      label="Returns"
+                      columnKey="returns"
                       sort={featuredSort}
-                      onSort={setFeaturedSort}
-                      sortKey="avgOdds"
-                    >
-                      Avg odds
-                    </SortHeader>
+                      onSort={handleFeaturedSort}
+                      align="right"
+                      className="px-3 py-2 font-semibold"
+                    />
+                    <SortableTh
+                      label="Net P&L"
+                      columnKey="netPnl"
+                      sort={featuredSort}
+                      onSort={handleFeaturedSort}
+                      align="right"
+                      className="px-3 py-2 font-semibold"
+                    />
+                    <SortableTh
+                      label="ROI"
+                      columnKey="roi"
+                      sort={featuredSort}
+                      onSort={handleFeaturedSort}
+                      align="right"
+                      className="px-3 py-2 font-semibold"
+                    />
+                    <SortableTh
+                      label="Avg odds"
+                      columnKey="avgOdds"
+                      sort={featuredSort}
+                      onSort={handleFeaturedSort}
+                      align="right"
+                      className="px-4 py-2 font-semibold"
+                    />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -939,121 +1017,238 @@ export function AnalyticsView({
                       netPnl: featuredSummary?.netPnl ?? 0,
                       roi: featuredSummary?.roi ?? null,
                       avgOdds: null,
+                      avgProbability: null,
                     }}
                   />
-                  {featuredGroups.map((group) => {
+                </tbody>
+                {featuredGroups.map((group) => {
                     const selections = showEmptyFeaturedSelections
                       ? group.selections
                       : group.selections.filter((row) => row.settled > 0);
                     if (selections.length === 0) return null;
+                    const isExpanded = Boolean(
+                      expandedFeaturedGroups[group.source]
+                    );
                     return (
-                      <Fragment key={group.source}>
+                      <tbody
+                        key={group.source}
+                        id={groupPanelId('featured-group', group.source)}
+                        className="divide-y divide-slate-100 border-t border-slate-100"
+                      >
                         <FeaturedRow
                           variant="group"
                           label={
-                            <span className="flex items-center gap-2">
-                              {group.row.label}
+                            <button
+                              type="button"
+                              onClick={() => toggleFeaturedGroup(group.source)}
+                              aria-expanded={isExpanded}
+                              aria-controls={groupPanelId(
+                                'featured-group',
+                                group.source
+                              )}
+                              className="flex w-full items-center gap-2 text-left cursor-pointer hover:text-slate-950"
+                            >
+                              <ChevronRight
+                                className={`h-3.5 w-3.5 shrink-0 transition-transform ${
+                                  isExpanded ? 'rotate-90' : ''
+                                }`}
+                                aria-hidden="true"
+                              />
+                              <span>{group.row.label}</span>
                               <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-500">
                                 {selections.length} lines
                               </span>
                               <span className="text-[10px] font-normal text-slate-400">
                                 {group.row.settled} settled
                               </span>
-                            </span>
+                            </button>
                           }
                           row={group.row}
                         />
-                        {selections.map((row) => (
-                          <FeaturedRow
-                            key={row.key}
-                            label={
-                              <span className="flex items-center gap-2">
-                                <span
-                                  className="ml-3 h-1 w-1 shrink-0 rounded-full bg-slate-300"
-                                  aria-hidden="true"
-                                />
-                                {row.label}
-                              </span>
-                            }
-                            row={row}
-                          />
-                        ))}
-                      </Fragment>
+                        {isExpanded &&
+                          selections.map((row) => (
+                            <FeaturedRow
+                              key={row.key}
+                              label={
+                                <span className="flex items-center gap-2">
+                                  <span
+                                    className="ml-3 h-1 w-1 shrink-0 rounded-full bg-slate-300"
+                                    aria-hidden="true"
+                                  />
+                                  {row.label}
+                                </span>
+                              }
+                              row={row}
+                            />
+                          ))}
+                      </tbody>
                     );
                   })}
-                </tbody>
               </table>
             </div>
             <p className="border-t border-slate-100 px-4 py-2 text-[11px] text-slate-400">
               Roll-up rows repeat their selections&apos; totals. Selections use
               the same Home/Draw/Away, goal-line, BTTS, Double Chance and DNB
-              identities as the individual-market table. Click a heading to
-              sort.
+              identities as the individual-market table. Groups are collapsed
+              by default — click a heading to drill down. Click a column
+              heading to sort.
             </p>
           </div>
 
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
-              <div>
-                <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">
-                  Individual markets
-                </h2>
-                <p className="mt-0.5 text-[11px] text-slate-400">
-                  Every priced selection, rolled up by market then broken into
-                  Home/Away, goal lines, BTTS sides, Double Chance and DNB.
-                </p>
-                {selectionInsight && (
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    Best ROI (min 20 picks):{' '}
-                    <span className="font-semibold text-emerald-700">
-                      {selectionInsight.best.label} {signedPercent(selectionInsight.best.roi)}
-                    </span>
-                    <span className="mx-1.5 text-slate-300">·</span>
-                    Weakest:{' '}
-                    <span className="font-semibold text-red-600">
-                      {selectionInsight.worst.label} {signedPercent(selectionInsight.worst.roi)}
-                    </span>
+            <div className="border-b border-slate-200 px-4 py-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">
+                    Individual markets
+                  </h2>
+                  <p className="mt-0.5 text-[11px] text-slate-400">
+                    Every priced selection, rolled up by market then broken into
+                    Home/Away, goal lines, BTTS sides, Double Chance and DNB.
                   </p>
+                  {selectionInsight && (
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Best ROI (min 20 picks):{' '}
+                      <span className="font-semibold text-emerald-700">
+                        {selectionInsight.best.label} {signedPercent(selectionInsight.best.roi)}
+                      </span>
+                      <span className="mx-1.5 text-slate-300">·</span>
+                      Weakest:{' '}
+                      <span className="font-semibold text-red-600">
+                        {selectionInsight.worst.label} {signedPercent(selectionInsight.worst.roi)}
+                      </span>
+                    </p>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-4">
+                  <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showEmptySelections}
+                      onChange={(event) => setShowEmptySelections(event.target.checked)}
+                      className="h-3.5 w-3.5 rounded border-slate-300 accent-emerald-700"
+                    />
+                    Show lines with no picks yet
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedMarketGroups(
+                        allMarketsExpanded
+                          ? {}
+                          : Object.fromEntries(
+                              marketGroups.map((group) => [group.typeRow.key, true])
+                            )
+                      )
+                    }
+                    className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 cursor-pointer"
+                  >
+                    {allMarketsExpanded ? 'Collapse all' : 'Expand all'}
+                  </button>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+                <span className="text-[11px] font-semibold text-slate-500">
+                  Market win probability
+                </span>
+                <div
+                  role="group"
+                  aria-label="Filter markets by win probability"
+                  className="inline-flex flex-wrap gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5"
+                >
+                  {MARKET_PROBABILITY_FILTERS.map((threshold) => (
+                    <button
+                      key={threshold}
+                      type="button"
+                      onClick={() => setMinProbability(threshold)}
+                      aria-pressed={minProbability === threshold}
+                      className={`rounded-md px-2 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
+                        minProbability === threshold
+                          ? 'bg-white text-emerald-700 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      {threshold === 0 ? 'Any' : `≥${threshold}%`}
+                    </button>
+                  ))}
+                </div>
+                {minProbability > 0 && (
+                  <span className="text-[11px] text-slate-400">
+                    {matchingSelectionCount} matching selection
+                    {matchingSelectionCount === 1 ? '' : 's'}
+                  </span>
                 )}
               </div>
-              <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showEmptySelections}
-                  onChange={(event) => setShowEmptySelections(event.target.checked)}
-                  className="h-3.5 w-3.5 rounded border-slate-300 accent-emerald-700"
-                />
-                Show lines with no picks yet
-              </label>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[820px] text-left text-xs">
                 <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
                   <tr>
-                    <SortHeader
+                    <SortableTh
+                      label="Market / selection"
+                      columnKey="label"
                       sort={sort}
-                      onSort={setSort}
-                      sortKey="label"
+                      onSort={handleMarketSort}
                       align="left"
-                    >
-                      Market / selection
-                    </SortHeader>
-                    <SortHeader sort={sort} onSort={setSort} sortKey="settled">
-                      Picks
-                    </SortHeader>
-                    <th className="px-3 py-2 text-right font-semibold">W-L-V</th>
-                    <SortHeader sort={sort} onSort={setSort} sortKey="hitRate">
-                      Hit rate
-                    </SortHeader>
-                    <SortHeader sort={sort} onSort={setSort} sortKey="avgOdds">
-                      Avg odds
-                    </SortHeader>
-                    <SortHeader sort={sort} onSort={setSort} sortKey="netPnl">
-                      Net P&amp;L
-                    </SortHeader>
-                    <SortHeader sort={sort} onSort={setSort} sortKey="roi">
-                      ROI
-                    </SortHeader>
+                      className="px-4 py-2 font-semibold"
+                    />
+                    <SortableTh
+                      label="Picks"
+                      columnKey="settled"
+                      sort={sort}
+                      onSort={handleMarketSort}
+                      align="right"
+                      className="px-3 py-2 font-semibold"
+                    />
+                    <SortableTh
+                      label="W-L-V"
+                      columnKey="record"
+                      sort={sort}
+                      onSort={handleMarketSort}
+                      align="right"
+                      className="px-3 py-2 font-semibold"
+                    />
+                    <SortableTh
+                      label="Hit rate"
+                      columnKey="hitRate"
+                      sort={sort}
+                      onSort={handleMarketSort}
+                      align="right"
+                      className="px-3 py-2 font-semibold"
+                    />
+                    <SortableTh
+                      label="Win prob"
+                      columnKey="avgProbability"
+                      sort={sort}
+                      onSort={handleMarketSort}
+                      align="right"
+                      className="px-3 py-2 font-semibold"
+                      title="Average margin-adjusted win probability at the prices taken"
+                    />
+                    <SortableTh
+                      label="Avg odds"
+                      columnKey="avgOdds"
+                      sort={sort}
+                      onSort={handleMarketSort}
+                      align="right"
+                      className="px-3 py-2 font-semibold"
+                    />
+                    <SortableTh
+                      label="Net P&L"
+                      columnKey="netPnl"
+                      sort={sort}
+                      onSort={handleMarketSort}
+                      align="right"
+                      className="px-3 py-2 font-semibold"
+                    />
+                    <SortableTh
+                      label="ROI"
+                      columnKey="roi"
+                      sort={sort}
+                      onSort={handleMarketSort}
+                      align="right"
+                      className="px-4 py-2 font-semibold"
+                    />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -1080,28 +1275,64 @@ export function AnalyticsView({
                       netPnl: marketSummary?.netPnl ?? 0,
                       roi: marketSummary?.roi ?? null,
                       avgOdds: null,
+                      avgProbability: null,
                     }}
                   />
-                  {marketGroups.map((group) => {
-                    const selections = showEmptySelections
-                      ? group.selections
-                      : group.selections.filter((row) => row.settled > 0);
-                    if (selections.length === 0) return null;
-                    return (
-                      <Fragment key={group.typeRow.key}>
-                        <MarketRow
-                          variant="group"
-                          label={
-                            <span className="flex items-center gap-2">
-                              {group.typeRow.label}
-                              <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-500">
-                                {selections.length} lines
-                              </span>
+                  {marketGroups.length === 0 && minProbability > 0 && (
+                    <tr>
+                      <td
+                        colSpan={8}
+                        className="px-4 py-6 text-center text-xs text-slate-400"
+                      >
+                        No selections have a win probability of at least{' '}
+                        {minProbability}%.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+                {marketGroups.map((group) => {
+                  const selections = showEmptySelections
+                    ? group.selections
+                    : group.selections.filter((row) => row.settled > 0);
+                  if (selections.length === 0) return null;
+                  const isExpanded = Boolean(
+                    expandedMarketGroups[group.typeRow.key]
+                  );
+                  return (
+                    <tbody
+                      key={group.typeRow.key}
+                      id={groupPanelId('market-group', group.typeRow.key)}
+                      className="divide-y divide-slate-100 border-t border-slate-100"
+                    >
+                      <MarketRow
+                        variant="group"
+                        label={
+                          <button
+                            type="button"
+                            onClick={() => toggleMarketGroup(group.typeRow.key)}
+                            aria-expanded={isExpanded}
+                            aria-controls={groupPanelId(
+                              'market-group',
+                              group.typeRow.key
+                            )}
+                            className="flex w-full items-center gap-2 text-left cursor-pointer hover:text-slate-950"
+                          >
+                            <ChevronRight
+                              className={`h-3.5 w-3.5 shrink-0 transition-transform ${
+                                isExpanded ? 'rotate-90' : ''
+                              }`}
+                              aria-hidden="true"
+                            />
+                            <span>{group.typeRow.label}</span>
+                            <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-500">
+                              {selections.length} lines
                             </span>
-                          }
-                          row={group.typeRow}
-                        />
-                        {selections.map((row) => (
+                          </button>
+                        }
+                        row={group.typeRow}
+                      />
+                      {isExpanded &&
+                        selections.map((row) => (
                           <MarketRow
                             key={row.key}
                             label={
@@ -1116,16 +1347,16 @@ export function AnalyticsView({
                             row={row}
                           />
                         ))}
-                      </Fragment>
-                    );
-                  })}
-                </tbody>
+                    </tbody>
+                  );
+                })}
               </table>
             </div>
             <p className="border-t border-slate-100 px-4 py-2 text-[11px] text-slate-400">
               Roll-up rows repeat their selections&apos; totals. Voids return the
-              stake and stay out of hit rate and ROI. Click a heading to sort.
-              These are single selections, not accumulators.
+              stake and stay out of hit rate and ROI. Groups are collapsed by
+              default — click a heading to drill down. Click a column heading
+              to sort. These are single selections, not accumulators.
             </p>
           </div>
 

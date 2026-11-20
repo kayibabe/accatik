@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   Activity,
   Percent,
@@ -13,6 +14,14 @@ import type {
   OddsBandPerformance,
   SlipAnalytics,
 } from '../utils/slipAnalytics.ts';
+import {
+  SORT_DESC,
+  makeSortHandler,
+  sortRows,
+  type SortAccessors,
+  type SortState,
+} from '../utils/tableSort.ts';
+import { SortableTh } from './SortableTh.tsx';
 
 interface SlipPerformancePanelProps {
   analytics: SlipAnalytics;
@@ -42,6 +51,33 @@ const pnlTone = (value: number): string =>
 
 const recordLabel = (won: number, lost: number, voided: number): string =>
   `${won}W · ${lost}L · ${voided}V`;
+
+const DAY_ACCESSORS: SortAccessors<DayPerformance> = {
+  date: (row) => row.dateIso,
+  slips: (row) => row.slips,
+  record: (row) => recordLabel(row.won, row.lost, row.voided),
+  staked: (row) => row.settledStake,
+  returns: (row) => row.returns,
+  netPnl: (row) => row.netPnl,
+  roi: (row) => row.roi,
+};
+
+const MARKET_TYPE_ACCESSORS: SortAccessors<MarketTypePerformance> = {
+  marketType: (row) => row.marketType,
+  legs: (row) => row.legs,
+  record: (row) => recordLabel(row.won, row.lost, row.voided),
+  open: (row) => row.open,
+  hitRate: (row) => row.hitRate,
+};
+
+const ODDS_BAND_ACCESSORS: SortAccessors<OddsBandPerformance> = {
+  label: (row) => row.label,
+  slips: (row) => row.slips,
+  record: (row) => recordLabel(row.won, row.lost, row.voided),
+  netPnl: (row) => row.netPnl,
+  roi: (row) => row.roi,
+  hitRate: (row) => row.hitRate,
+};
 
 function shortDate(dateIso: string): string {
   if (!dateIso) return 'Start';
@@ -145,6 +181,25 @@ export function SlipPerformancePanel({
   const settled = analytics.won + analytics.lost + analytics.voided;
   const avgPnlPerSlip = settled > 0 ? analytics.netPnl / settled : null;
   const pnlUp = analytics.netPnl >= 0;
+
+  const [daySort, setDaySort] = useState<SortState>({
+    key: null,
+    direction: SORT_DESC,
+  });
+  const [marketTypeSort, setMarketTypeSort] = useState<SortState>({
+    key: null,
+    direction: SORT_DESC,
+  });
+  const [oddsBandSort, setOddsBandSort] = useState<SortState>({
+    key: null,
+    direction: SORT_DESC,
+  });
+  const handleDaySort = makeSortHandler(setDaySort, SORT_DESC);
+  const handleMarketTypeSort = makeSortHandler(setMarketTypeSort, SORT_DESC);
+  const handleOddsBandSort = makeSortHandler(setOddsBandSort, SORT_DESC);
+  const sortedDaily = sortRows(daily, daySort, DAY_ACCESSORS);
+  const sortedMarketTypes = sortRows(marketTypes, marketTypeSort, MARKET_TYPE_ACCESSORS);
+  const sortedOddsBands = sortRows(oddsBands, oddsBandSort, ODDS_BAND_ACCESSORS);
 
   return (
     <section aria-label="Slip performance analytics" className="space-y-4">
@@ -425,17 +480,65 @@ export function SlipPerformancePanel({
           <table className="w-full min-w-[640px] text-left text-xs">
             <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-4 py-2 font-semibold">Matchday</th>
-                <th className="px-3 py-2 text-right font-semibold">Slips</th>
-                <th className="px-3 py-2 text-right font-semibold">W-L-V</th>
-                <th className="px-3 py-2 text-right font-semibold">Staked</th>
-                <th className="px-3 py-2 text-right font-semibold">Returns</th>
-                <th className="px-3 py-2 text-right font-semibold">Net P&amp;L</th>
-                <th className="px-4 py-2 text-right font-semibold">ROI</th>
+                <SortableTh
+                  label="Matchday"
+                  columnKey="date"
+                  sort={daySort}
+                  onSort={handleDaySort}
+                  className="px-4 py-2 font-semibold"
+                />
+                <SortableTh
+                  label="Slips"
+                  columnKey="slips"
+                  sort={daySort}
+                  onSort={handleDaySort}
+                  align="right"
+                  className="px-3 py-2 font-semibold"
+                />
+                <SortableTh
+                  label="W-L-V"
+                  columnKey="record"
+                  sort={daySort}
+                  onSort={handleDaySort}
+                  align="right"
+                  className="px-3 py-2 font-semibold"
+                />
+                <SortableTh
+                  label="Staked"
+                  columnKey="staked"
+                  sort={daySort}
+                  onSort={handleDaySort}
+                  align="right"
+                  className="px-3 py-2 font-semibold"
+                />
+                <SortableTh
+                  label="Returns"
+                  columnKey="returns"
+                  sort={daySort}
+                  onSort={handleDaySort}
+                  align="right"
+                  className="px-3 py-2 font-semibold"
+                />
+                <SortableTh
+                  label="Net P&L"
+                  columnKey="netPnl"
+                  sort={daySort}
+                  onSort={handleDaySort}
+                  align="right"
+                  className="px-3 py-2 font-semibold"
+                />
+                <SortableTh
+                  label="ROI"
+                  columnKey="roi"
+                  sort={daySort}
+                  onSort={handleDaySort}
+                  align="right"
+                  className="px-4 py-2 font-semibold"
+                />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {daily.map((day) => (
+              {sortedDaily.map((day) => (
                 <tr key={day.dateIso}>
                   <td className="px-4 py-2 font-medium text-slate-800">
                     {shortDate(day.dateIso)}
@@ -498,17 +601,49 @@ export function SlipPerformancePanel({
               <table className="w-full min-w-[420px] text-left text-xs">
                 <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
                   <tr>
-                    <th className="px-4 py-2 font-semibold">Market</th>
-                    <th className="px-3 py-2 text-right font-semibold">Legs</th>
-                    <th className="px-3 py-2 text-right font-semibold">W-L-V</th>
-                    <th className="px-3 py-2 text-right font-semibold">Open</th>
-                    <th className="px-4 py-2 text-right font-semibold">
-                      Hit rate
-                    </th>
+                    <SortableTh
+                      label="Market"
+                      columnKey="marketType"
+                      sort={marketTypeSort}
+                      onSort={handleMarketTypeSort}
+                      className="px-4 py-2 font-semibold"
+                    />
+                    <SortableTh
+                      label="Legs"
+                      columnKey="legs"
+                      sort={marketTypeSort}
+                      onSort={handleMarketTypeSort}
+                      align="right"
+                      className="px-3 py-2 font-semibold"
+                    />
+                    <SortableTh
+                      label="W-L-V"
+                      columnKey="record"
+                      sort={marketTypeSort}
+                      onSort={handleMarketTypeSort}
+                      align="right"
+                      className="px-3 py-2 font-semibold"
+                    />
+                    <SortableTh
+                      label="Open"
+                      columnKey="open"
+                      sort={marketTypeSort}
+                      onSort={handleMarketTypeSort}
+                      align="right"
+                      className="px-3 py-2 font-semibold"
+                    />
+                    <SortableTh
+                      label="Hit rate"
+                      columnKey="hitRate"
+                      sort={marketTypeSort}
+                      onSort={handleMarketTypeSort}
+                      align="right"
+                      className="px-4 py-2 font-semibold"
+                    />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {marketTypes.map((row) => (
+                  {sortedMarketTypes.map((row) => (
                     <tr key={row.marketType}>
                       <td className="px-4 py-2 font-medium text-slate-800">
                         {row.marketType}
@@ -547,16 +682,57 @@ export function SlipPerformancePanel({
             <table className="w-full min-w-[520px] text-left text-xs">
               <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="px-4 py-2 font-semibold">Odds</th>
-                  <th className="px-3 py-2 text-right font-semibold">Slips</th>
-                  <th className="px-3 py-2 text-right font-semibold">W-L-V</th>
-                  <th className="px-3 py-2 text-right font-semibold">Net P&amp;L</th>
-                  <th className="px-3 py-2 text-right font-semibold">ROI</th>
-                  <th className="px-4 py-2 text-right font-semibold">Hit rate</th>
+                  <SortableTh
+                    label="Odds"
+                    columnKey="label"
+                    sort={oddsBandSort}
+                    onSort={handleOddsBandSort}
+                    className="px-4 py-2 font-semibold"
+                  />
+                  <SortableTh
+                    label="Slips"
+                    columnKey="slips"
+                    sort={oddsBandSort}
+                    onSort={handleOddsBandSort}
+                    align="right"
+                    className="px-3 py-2 font-semibold"
+                  />
+                  <SortableTh
+                    label="W-L-V"
+                    columnKey="record"
+                    sort={oddsBandSort}
+                    onSort={handleOddsBandSort}
+                    align="right"
+                    className="px-3 py-2 font-semibold"
+                  />
+                  <SortableTh
+                    label="Net P&L"
+                    columnKey="netPnl"
+                    sort={oddsBandSort}
+                    onSort={handleOddsBandSort}
+                    align="right"
+                    className="px-3 py-2 font-semibold"
+                  />
+                  <SortableTh
+                    label="ROI"
+                    columnKey="roi"
+                    sort={oddsBandSort}
+                    onSort={handleOddsBandSort}
+                    align="right"
+                    className="px-3 py-2 font-semibold"
+                  />
+                  <SortableTh
+                    label="Hit rate"
+                    columnKey="hitRate"
+                    sort={oddsBandSort}
+                    onSort={handleOddsBandSort}
+                    align="right"
+                    className="px-4 py-2 font-semibold"
+                  />
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {oddsBands.map((band) => (
+                {sortedOddsBands.map((band) => (
                   <tr key={band.id}>
                     <td className="px-4 py-2 font-medium text-slate-800">
                       {band.label}

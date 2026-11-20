@@ -40,6 +40,21 @@ export function toggleSort(
   return { key, direction: defaultDirection };
 }
 
+/** Structural type accepted by `useState<SortState>`'s setter. */
+export type SortSetter = (update: (current: SortState) => SortState) => void;
+
+/**
+ * Builds the `onSort(key, defaultDirection)` callback expected by `SortableTh`,
+ * so every table flips/restarts sorting with identical rules.
+ */
+export function makeSortHandler(
+  setter: SortSetter,
+  defaultDirection: SortDirection = SORT_ASC
+): (key: string, direction?: SortDirection) => void {
+  return (key, direction) =>
+    setter((current) => toggleSort(current, key, direction ?? defaultDirection));
+}
+
 const isMissing = (value: SortValue): boolean =>
   value === null || value === undefined || value === '';
 

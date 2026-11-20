@@ -22,6 +22,7 @@ import {
   compareSelections,
   resolveMarketSelection,
 } from '../../src/utils/marketSelection.ts';
+import { marketProbability } from '../../src/utils/probability.ts';
 import { mapWithConcurrency } from './appwriteData.ts';
 import { createTtlCache } from './cache.ts';
 import { listArchivedSlateDates, readArchivedSlate } from './slateArchive.ts';
@@ -51,6 +52,8 @@ interface Tally {
   returns: number;
   oddsSum: number;
   oddsCount: number;
+  probabilitySum: number;
+  probabilityCount: number;
 }
 
 interface SelectionTally extends Tally {
@@ -74,6 +77,8 @@ const newTally = (key: string, label: string): Tally => ({
   returns: 0,
   oddsSum: 0,
   oddsCount: 0,
+  probabilitySum: 0,
+  probabilityCount: 0,
 });
 
 const round1 = (value: number): number => Math.round(value * 10) / 10;
@@ -97,6 +102,11 @@ function record(tally: Tally, market: MarketOption, status: SettlementStatus): v
   tally.stake += STAKE_PER_PICK;
   tally.oddsSum += market.odds;
   tally.oddsCount += 1;
+  const probability = marketProbability(market);
+  if (Number.isFinite(probability)) {
+    tally.probabilitySum += probability;
+    tally.probabilityCount += 1;
+  }
   if (status === 'Win') {
     tally.wins += 1;
     tally.returns += STAKE_PER_PICK * market.odds;
@@ -121,6 +131,10 @@ function toRow(tally: Tally): PickAnalyticsRow {
     netPnl,
     roi: tally.stake > 0 ? round1((netPnl / tally.stake) * 100) : null,
     avgOdds: tally.oddsCount > 0 ? round2(tally.oddsSum / tally.oddsCount) : null,
+    avgProbability:
+      tally.probabilityCount > 0
+        ? round1(tally.probabilitySum / tally.probabilityCount)
+        : null,
   };
 }
 

@@ -22,6 +22,8 @@ export interface PickAnalyticsRow {
   netPnl: number;
   roi: number | null;
   avgOdds: number | null;
+  /** Average margin-adjusted win probability (percent) at the prices taken. */
+  avgProbability: number | null;
 }
 
 export interface MarketAnalyticsRow extends PickAnalyticsRow {

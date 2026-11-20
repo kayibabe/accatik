@@ -1,10 +1,11 @@
+import type { ReactNode } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import type { SortDirection, SortState } from '../utils/tableSort.ts';
 import { SORT_ASC } from '../utils/tableSort.ts';
 
 interface SortableThProps {
-  /** Visible column name. */
-  label: string;
+  /** Visible column name (or richer label such as a value plus a unit). */
+  label: ReactNode;
   /** Key passed back to `onSort`, matching an accessor in the table. */
   columnKey: string;
   sort: SortState;

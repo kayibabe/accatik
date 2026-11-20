@@ -101,8 +101,13 @@ test('pick analytics prices featured picks and individual markets at one flat un
     { wins: 2, hitRate: 100, returns: 3, netPnl: 1, roi: 50 }
   );
   assert.deepEqual(
-    { netPnl: note.netPnl, roi: note.roi, avgOdds: note.avgOdds },
-    { netPnl: 1.5, roi: 75, avgOdds: 1.75 }
+    {
+      netPnl: note.netPnl,
+      roi: note.roi,
+      avgOdds: note.avgOdds,
+      avgProbability: note.avgProbability,
+    },
+    { netPnl: 1.5, roi: 75, avgOdds: 1.75, avgProbability: 58.4 }
   );
 
   assert.deepEqual(
@@ -112,10 +117,11 @@ test('pick analytics prices featured picks and individual markets at one flat un
       row.losses,
       row.netPnl,
       row.roi,
+      row.avgProbability,
     ]),
     [
-      ['1X2', 1, 1, 0, 0],
-      ['Goals', 2, 0, 1, 50],
+      ['1X2', 1, 1, 0, 0, 50],
+      ['Goals', 2, 0, 1, 50, 66.7],
     ]
   );
 

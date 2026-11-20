@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { MapPin, X } from 'lucide-react';
 import type { AccaLeg, Fixture, MarketOption, SavedTicket } from '../types/fixtures.ts';
@@ -7,7 +7,14 @@ import {
   getFixtureMatchResultSummary,
 } from '../utils/accaMath.ts';
 import { pickMoreAdvancedFixture } from '../utils/fixtureSnapshots.ts';
+import {
+  SORT_DESC,
+  makeSortHandler,
+  sortRows,
+  type SortState,
+} from '../utils/tableSort.ts';
 import { SettlementLabel } from './SettlementLabel.tsx';
+import { SortableTh } from './SortableTh.tsx';
 
 interface SavedMatchDetailDialogProps {
   ticket: SavedTicket;
@@ -50,6 +57,11 @@ export function SavedMatchDetailDialog({
   onClose,
 }: SavedMatchDetailDialogProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const [marketSort, setMarketSort] = useState<SortState>({
+    key: null,
+    direction: SORT_DESC,
+  });
+  const handleMarketSort = makeSortHandler(setMarketSort, SORT_DESC);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -100,6 +112,16 @@ export function SavedMatchDetailDialog({
   const pricedAt = formatCatDateTime(detailSource?.pricedAt);
 
   const markets = detailSource?.markets ?? [];
+  const sortedMarkets = sortRows(markets, marketSort, {
+    label: (market) => market.label,
+    odds: (market) => market.odds,
+    fair: (market) => market.fairProbability ?? market.impliedProbability ?? null,
+    book: (market) => market.bookmaker ?? null,
+    result: (market) =>
+      statusFixture
+        ? evaluateMarketSettlement(statusFixture, market)
+        : 'Pending',
+  });
   const formHome = detailSource?.formHome;
   const formAway = detailSource?.formAway;
   const showForm = hasValue(formHome) || hasValue(formAway);
@@ -228,15 +250,47 @@ export function SavedMatchDetailDialog({
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50 text-slate-500">
-                      <th scope="col" className="px-3 py-2 font-medium">Market</th>
-                      <th scope="col" className="px-3 py-2 font-medium text-right">Odds</th>
-                      <th scope="col" className="px-3 py-2 font-medium text-right">Fair</th>
-                      <th scope="col" className="px-3 py-2 font-medium">Book</th>
-                      <th scope="col" className="px-3 py-2 font-medium">Result</th>
+                      <SortableTh
+                        label="Market"
+                        columnKey="label"
+                        sort={marketSort}
+                        onSort={handleMarketSort}
+                        className="px-3 py-2 font-medium"
+                      />
+                      <SortableTh
+                        label="Odds"
+                        columnKey="odds"
+                        sort={marketSort}
+                        onSort={handleMarketSort}
+                        align="right"
+                        className="px-3 py-2 font-medium"
+                      />
+                      <SortableTh
+                        label="Fair"
+                        columnKey="fair"
+                        sort={marketSort}
+                        onSort={handleMarketSort}
+                        align="right"
+                        className="px-3 py-2 font-medium"
+                      />
+                      <SortableTh
+                        label="Book"
+                        columnKey="book"
+                        sort={marketSort}
+                        onSort={handleMarketSort}
+                        className="px-3 py-2 font-medium"
+                      />
+                      <SortableTh
+                        label="Result"
+                        columnKey="result"
+                        sort={marketSort}
+                        onSort={handleMarketSort}
+                        className="px-3 py-2 font-medium"
+                      />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200/80">
-                    {markets.map((market) => {
+                    {sortedMarkets.map((market) => {
                       const isPicked = market.id === leg.marketId;
                       return (
                         <tr
