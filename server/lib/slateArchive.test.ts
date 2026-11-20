@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  chunkFixturesForStorage,
   isFixtureFinal,
   isSlateSettled,
   mergeArchivedPrices,
+  parseArchiveFixturePayloads,
 } from './slateArchive.ts';
 import { makeFixture, makeMarket } from '../../src/utils/testFactories.ts';
 
@@ -105,4 +107,49 @@ test('fixtures that were not archived pass through untouched', () => {
   const fresh = priced('new');
   const [merged] = mergeArchivedPrices([], [fresh]);
   assert.equal(merged, fresh);
+});
+
+test('archive chunks stay under the Appwrite document limit and round-trip', () => {
+  const fixtures = Array.from({ length: 12 }, (_, index) =>
+    makeFixture({
+      id: `fixture-${index}`,
+      kickoffTimestamp: index,
+      markets: [makeMarket(`market-${index}`, 1.8 + index / 100)],
+    })
+  );
+  const maxChars = 1200;
+
+  const chunks = chunkFixturesForStorage(fixtures, maxChars);
+
+  assert.ok(chunks.length > 1, 'expected more than one chunk');
+  for (const chunk of chunks) {
+    assert.ok(JSON.stringify(chunk).length <= maxChars);
+  }
+  assert.deepEqual(
+    parseArchiveFixturePayloads(chunks).map((fixture) => fixture.id),
+    fixtures.map((fixture) => fixture.id)
+  );
+});
+
+test('an empty slate still writes one distinguishable chunk', () => {
+  assert.deepEqual(chunkFixturesForStorage([]), ['[]']);
+});
+
+test('archive parsing prefers chunked copies and ignores corrupt documents', () => {
+  const legacy = makeFixture({ id: 'shared', homeTeam: 'Legacy FC' });
+  const chunked = makeFixture({
+    id: 'shared',
+    homeTeam: 'Chunked FC',
+    kickoffTimestamp: 1,
+  });
+  const later = makeFixture({ id: 'later', kickoffTimestamp: 2 });
+
+  const fixtures = parseArchiveFixturePayloads([
+    JSON.stringify(legacy),
+    '{not valid json',
+    JSON.stringify([chunked, later]),
+  ]);
+
+  assert.deepEqual(fixtures.map((fixture) => fixture.id), ['shared', 'later']);
+  assert.equal(fixtures[0].homeTeam, 'Chunked FC');
 });

@@ -27,6 +27,14 @@ import { APPWRITE_DATABASE_ID } from './auth.ts';
 
 const RESULT_GRACE_MS = 1000 * 60 * 60 * 36;
 
+/**
+ * Appwrite documents are capped at 64 KB. A full matchday of priced fixtures
+ * is larger, so the archive stores a handful of chunk documents instead of one
+ * document per fixture. Keep the payload well below the cap to leave room for
+ * the metadata attributes and multi-byte team names.
+ */
+export const ARCHIVE_CHUNK_MAX_CHARS = 40_000;
+
 export interface ArchivedSlate {
   dateIso: string;
   /** First time this matchday was captured. */
@@ -51,6 +59,67 @@ export function archivePathFor(dateIso: string): string {
   return fileFor(dateIso);
 }
 
+/**
+ * Packs fixtures into JSON arrays small enough for one Appwrite document each.
+ * Pure so the chunking boundary can be tested without a live database.
+ */
+export function chunkFixturesForStorage(
+  fixtures: Fixture[],
+  maxChars = ARCHIVE_CHUNK_MAX_CHARS
+): string[] {
+  const chunks: string[] = [];
+  let batch: Fixture[] = [];
+
+  for (const fixture of fixtures) {
+    const candidate = [...batch, fixture];
+    if (batch.length > 0 && JSON.stringify(candidate).length > maxChars) {
+      chunks.push(JSON.stringify(batch));
+      batch = [fixture];
+    } else {
+      batch = candidate;
+    }
+  }
+  // Always write at least one chunk so an empty slate is distinguishable from
+  // a missing archive.
+  chunks.push(JSON.stringify(batch));
+  return chunks;
+}
+
+/**
+ * Reads both the current chunk payloads (arrays of fixtures) and the legacy
+ * one-document-per-fixture payloads (single fixtures), preferring the newer
+ * format and de-duplicating by fixture ID.
+ */
+export function parseArchiveFixturePayloads(payloads: string[]): Fixture[] {
+  const legacy: Fixture[] = [];
+  const chunked: Fixture[] = [];
+
+  for (const payload of payloads) {
+    try {
+      const parsed = JSON.parse(payload) as unknown;
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          if (item && typeof (item as Fixture).id === 'string') {
+            chunked.push(item as Fixture);
+          }
+        }
+      } else if (parsed && typeof (parsed as Fixture).id === 'string') {
+        legacy.push(parsed as Fixture);
+      }
+    } catch {
+      // A single corrupt document must not lose the rest of the archive.
+    }
+  }
+
+  const byId = new Map<string, Fixture>();
+  for (const fixture of [...legacy, ...chunked]) byId.set(fixture.id, fixture);
+  return [...byId.values()].sort(
+    (a, b) =>
+      (a.kickoffTimestamp ?? 0) - (b.kickoffTimestamp ?? 0) ||
+      String(a.id).localeCompare(String(b.id))
+  );
+}
+
 async function readSlateFromAppwrite(
   databases: Databases,
   dateIso: string
@@ -64,13 +133,8 @@ async function readSlateFromAppwrite(
     const documents = await listAllDocuments(databases, 'slate_fixtures', [
       Query.equal('dateIso', dateIso),
     ]);
-    const fixtures = documents.map(
-      (document) => JSON.parse(String(document.payloadJson)) as Fixture
-    );
-    fixtures.sort(
-      (a, b) =>
-        (a.kickoffTimestamp ?? 0) - (b.kickoffTimestamp ?? 0) ||
-        String(a.id).localeCompare(String(b.id))
+    const fixtures = parseArchiveFixturePayloads(
+      documents.map((document) => String(document.payloadJson))
     );
     return {
       dateIso,
@@ -95,18 +159,21 @@ async function writeSlateToAppwrite(
     fixtureCount: fixtures.length,
   });
 
-  const wanted = new Set(fixtures.map((fixture) => `${dateIso}_${fixture.id}`));
-  await mapWithConcurrency(fixtures, 8, async (fixture) => {
+  const payloads = chunkFixturesForStorage(fixtures);
+  const wanted = new Set(
+    payloads.map((_, index) => `${dateIso}_chunk_${index}`)
+  );
+  await mapWithConcurrency(payloads, 4, async (payloadJson, index) => {
     await upsertDocument(
       databases,
       'slate_fixtures',
-      `${dateIso}_${fixture.id}`,
+      `${dateIso}_chunk_${index}`,
       {
         dateIso,
-        fixtureId: String(fixture.id),
+        fixtureId: `chunk_${index}`,
         capturedAt,
         updatedAt,
-        payloadJson: JSON.stringify(fixture),
+        payloadJson,
       }
     );
   });

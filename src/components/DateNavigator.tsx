@@ -3,7 +3,6 @@ import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 interface DateNavigatorProps {
   selectedDate: string;
   todayDate: string;
-  isFetchingDate: boolean;
   onChangeDate: (date: string) => void;
 }
 
@@ -17,29 +16,29 @@ export function shiftIsoDate(isoDate: string, deltaDays: number): string {
 export function DateNavigator({
   selectedDate,
   todayDate,
-  isFetchingDate,
   onChangeDate,
 }: DateNavigatorProps) {
   const yesterdayDate = shiftIsoDate(todayDate, -1);
   const tomorrowDate = shiftIsoDate(todayDate, 1);
   const isToday = selectedDate === todayDate;
 
+  // Date controls stay enabled while a slate loads. fetchSlateForDate aborts
+  // the previous request and ignores stale responses, so rapid clicks are safe
+  // and feel immediate instead of being swallowed by a disabled state.
   return (
     <div className="flex flex-wrap items-center gap-2 shrink-0">
       <div className="inline-flex items-center gap-1 p-1 bg-white border border-slate-200 rounded-lg">
         <button
           type="button"
           onClick={() => onChangeDate(shiftIsoDate(selectedDate, -1))}
-          disabled={isFetchingDate}
           aria-label="Previous day"
-          className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors disabled:opacity-50 cursor-pointer"
+          className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
         >
           <ChevronLeft className="w-4 h-4" aria-hidden="true" />
         </button>
         <button
           type="button"
           onClick={() => onChangeDate(yesterdayDate)}
-          disabled={isFetchingDate}
           className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
             selectedDate === yesterdayDate
               ? 'bg-slate-900 text-white'
@@ -51,7 +50,6 @@ export function DateNavigator({
         <button
           type="button"
           onClick={() => onChangeDate(todayDate)}
-          disabled={isFetchingDate}
           className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
             isToday
               ? 'bg-emerald-700 text-white'
@@ -63,7 +61,6 @@ export function DateNavigator({
         <button
           type="button"
           onClick={() => onChangeDate(tomorrowDate)}
-          disabled={isFetchingDate}
           className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
             selectedDate === tomorrowDate
               ? 'bg-slate-900 text-white'
@@ -75,9 +72,8 @@ export function DateNavigator({
         <button
           type="button"
           onClick={() => onChangeDate(shiftIsoDate(selectedDate, 1))}
-          disabled={isFetchingDate}
           aria-label="Next day"
-          className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors disabled:opacity-50 cursor-pointer"
+          className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
         >
           <ChevronRight className="w-4 h-4" aria-hidden="true" />
         </button>
@@ -94,7 +90,6 @@ export function DateNavigator({
           onChange={(e) => {
             if (e.target.value) onChangeDate(e.target.value);
           }}
-          disabled={isFetchingDate}
           aria-label="Select any match date"
           className="h-9 pl-8 pr-2.5 text-xs font-mono font-medium text-slate-800 bg-white border border-slate-200 rounded-lg tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700 cursor-pointer"
         />

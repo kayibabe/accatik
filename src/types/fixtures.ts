@@ -81,6 +81,12 @@ export interface Fixture {
   pricedAt?: string;
   /** Whether this price block was captured before or after kickoff. */
   priceQuality?: PriceQuality;
+  /**
+   * When the model snapshot (advice, probabilities and form) was captured into
+   * the archive. Presence means a date change can reuse the durable copy
+   * instead of paying for another `/predictions` upstream call.
+   */
+  modelDataAt?: string;
 }
 
 /**
@@ -99,6 +105,20 @@ export interface PublicFixture {
   status: Fixture['status'];
 }
 
+/**
+ * Phase timings for one slate delivery. `persistMs` and `ledgerMs` measure the
+ * hand-off to background bookkeeping — the real durations are logged when that
+ * work settles, since it is deliberately not awaited before the response.
+ */
+export interface ServerTimings {
+  archiveReadMs: number;
+  buildMs: number;
+  predictionsMs: number;
+  persistMs: number;
+  ledgerMs: number;
+  totalMs: number;
+}
+
 /** Response returned by GET /api/fixtures/public/today. */
 export interface PublicSlateResponse {
   date: string;
@@ -106,6 +126,7 @@ export interface PublicSlateResponse {
   timezoneLabel: string;
   fixtures: PublicFixture[];
   cachedAt: string;
+  serverTimings?: ServerTimings;
 }
 
 export interface AccaLeg {
@@ -185,6 +206,8 @@ export interface DailySlateResponse {
   slateSource?: 'live' | 'archive';
   /** When this matchday's prices were first captured into the archive. */
   capturedAt?: string;
+  /** Per-phase server timings for this response. */
+  serverTimings?: ServerTimings;
 }
 
 export interface SavedTicket {

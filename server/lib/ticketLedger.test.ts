@@ -4,8 +4,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { Fixture } from '../../src/types/fixtures.ts';
+import type { LedgerTicket } from '../../src/types/ledger.ts';
 import { makeFixture, makeMarket } from '../../src/utils/testFactories.ts';
 import {
+  planLedgerWrites,
   readLedger,
   recordShadowTickets,
   settleTicketsWithFixtures,
@@ -158,4 +160,64 @@ test('ignores quotes captured after kickoff when closing the line', async () => 
     ),
     'a stale Scheduled fixture must not contribute an in-play closing quote'
   );
+});
+
+function shadowTicket(id: string, status: LedgerTicket['status'] = 'Pending'): LedgerTicket {
+  return {
+    id,
+    dateIso: '2026-11-22',
+    createdAt: new Date(NOW).toISOString(),
+    kind: 'strategy',
+    strategy: 'balanced',
+    label: 'Balanced',
+    targetOdds: 2.8,
+    maxLegs: 3,
+    priceQuality: 'prematch',
+    legCount: 1,
+    totalOdds: 2.8,
+    fairProbability: null,
+    stake: 1,
+    status,
+    legs: [],
+  };
+}
+
+test('unchanged ledger documents cost no writes', () => {
+  const ticket = shadowTicket('unchanged');
+  const plan = planLedgerWrites(
+    [{ $id: ticket.id, payloadJson: JSON.stringify(ticket) }],
+    [ticket]
+  );
+
+  assert.equal(plan.changed, false);
+  assert.deepEqual(plan.toWrite, []);
+  assert.deepEqual(plan.staleIds, []);
+});
+
+test('only moved tickets are rewritten and vanished ones are pruned', () => {
+  const kept = shadowTicket('kept');
+  const moved = shadowTicket('moved', 'Win');
+
+  const plan = planLedgerWrites(
+    [
+      { $id: kept.id, payloadJson: JSON.stringify(kept) },
+      { $id: moved.id, payloadJson: JSON.stringify(shadowTicket('moved')) },
+      { $id: 'deleted', payloadJson: '{}' },
+    ],
+    [kept, moved]
+  );
+
+  assert.equal(plan.changed, true);
+  assert.deepEqual(plan.toWrite, [moved]);
+  assert.deepEqual(plan.staleIds, ['deleted']);
+});
+
+test('a failed/empty ledger read never prunes stored documents', () => {
+  const plan = planLedgerWrites(
+    [{ $id: 'survivor', payloadJson: '{}' }],
+    []
+  );
+
+  assert.equal(plan.changed, false);
+  assert.deepEqual(plan.staleIds, []);
 });

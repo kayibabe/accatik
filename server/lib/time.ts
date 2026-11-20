@@ -9,6 +9,14 @@ export function getTodayIsoDate(): string {
   }).format(new Date());
 }
 
+/** Shifts a YYYY-MM-DD date without dragging local timezone offsets into it. */
+export function addDaysToIsoDate(isoDate: string, deltaDays: number): string {
+  const parsed = new Date(`${isoDate}T12:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return isoDate;
+  parsed.setUTCDate(parsed.getUTCDate() + deltaDays);
+  return parsed.toISOString().slice(0, 10);
+}
+
 export function formatDisplayDate(isoDate: string): string {
   const parsed = new Date(`${isoDate}T12:00:00+02:00`);
   if (Number.isNaN(parsed.getTime())) return isoDate;

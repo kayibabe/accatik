@@ -46,26 +46,15 @@ import {
   withSnapshot,
   type FixtureSnapshots,
 } from './utils/fixtureSnapshots.ts';
+import {
+  deleteCachedSlate,
+  getCachedSlateOwner,
+  readCachedSlate,
+  setCachedSlateOwner,
+  writeCachedSlate,
+} from './utils/slateClientCache.ts';
 
 const SAVED_STORAGE_KEY = 'matchslip_saved_tickets_v1';
-
-// Micro-cache for instant revisits. The durable archive remains the real cache;
-// this only saves a round trip while the page is open.
-const SLATE_CLIENT_TTL_MS = 1000 * 60 * 5;
-const SLATE_CLIENT_MAX_ENTRIES = 30;
-const slateResponseCache = new Map<
-  string,
-  { response: DailySlateResponse; expiresAt: number }
->();
-
-function slateCacheKey(
-  dateIso: string,
-  strategy: AccaStrategy,
-  minOdds: number,
-  maxLegs: number
-): string {
-  return `${dateIso}|${strategy}|${minOdds}|${maxLegs}`;
-}
 
 type TicketSource = 'local' | 'server';
 
@@ -211,14 +200,23 @@ export default function App() {
     if (authLoading) return;
     let cancelled = false;
 
+    // Read the owner from storage, not a ref: a different account can reopen
+    // the app in a fresh page load, and its priced slates must not be reused.
+    const cacheOwner = user?.id ?? 'guest';
+    const previousOwner = getCachedSlateOwner();
+    if (previousOwner !== null && previousOwner !== cacheOwner) {
+      deleteCachedSlate();
+    }
+    setCachedSlateOwner(cacheOwner);
+
     if (!user) {
       setTicketSource('local');
       setSavedTickets(loadLocalTickets());
       setFilters(loadSlateFilterState());
       setImportPrompt(null);
       setAdminOpen(false);
-      // A guest must not keep a priced slate from a previous signed-in session.
-      slateResponseCache.clear();
+      // Priced slates are cleared above on the identity change; guests never
+      // receive one from the public endpoint in the first place.
       setSlate(null);
       setSelectedLegs([]);
       setActiveTab('slate');
@@ -359,19 +357,15 @@ export default function App() {
       // ignoring its response after it has consumed server work.
       slateAbortRef.current?.abort();
 
-      const key = slateCacheKey(
-        targetDate,
-        targetStrategy,
-        targetMinOdds,
-        targetMaxLegs
-      );
-      const cached = slateResponseCache.get(key);
-      if (!forceRefresh && cached && cached.expiresAt > Date.now()) {
+      // The response is keyed by date only; applySlateResponse rebuilds the
+      // legs for whatever strategy and odds are active at render time.
+      const cached = forceRefresh ? null : readCachedSlate(targetDate);
+      if (cached) {
         ++requestIdRef.current;
         setErrorMessage(null);
         setIsLoading(false);
         applySlateResponse(
-          cached.response,
+          cached,
           targetStrategy,
           targetMinOdds,
           targetMaxLegs
@@ -400,22 +394,7 @@ export default function App() {
         });
         if (requestId !== requestIdRef.current) return;
 
-        if (forceRefresh) {
-          for (const existing of [...slateResponseCache.keys()]) {
-            if (existing.startsWith(`${targetDate}|`)) {
-              slateResponseCache.delete(existing);
-            }
-          }
-        }
-        slateResponseCache.delete(key);
-        if (slateResponseCache.size >= SLATE_CLIENT_MAX_ENTRIES) {
-          const oldest = slateResponseCache.keys().next().value;
-          if (oldest !== undefined) slateResponseCache.delete(oldest);
-        }
-        slateResponseCache.set(key, {
-          response: typed,
-          expiresAt: Date.now() + SLATE_CLIENT_TTL_MS,
-        });
+        writeCachedSlate(targetDate, typed);
         applySlateResponse(typed, targetStrategy, targetMinOdds, targetMaxLegs);
       } catch (err) {
         if (requestId === requestIdRef.current) {
@@ -1051,7 +1030,6 @@ export default function App() {
           <DateNavigator
             selectedDate={selectedDate}
             todayDate={todayDate}
-            isFetchingDate={isLoading}
             onChangeDate={handleChangeDate}
           />
         </div>

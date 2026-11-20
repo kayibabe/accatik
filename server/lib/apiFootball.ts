@@ -63,6 +63,58 @@ export function resolveApiFootballBaseUrl(): string | undefined {
 
 let detectedProvider: ApiProvider | null = null;
 
+/**
+ * API-Football publishes its quota in response headers. Keeping the last
+ * observation makes the plan limit diagnosable from /api/health without an
+ * extra upstream call (and without exposing the key).
+ */
+export interface ApiFootballLimits {
+  requestsLimit: number | null;
+  requestsRemaining: number | null;
+  requestsResetAt: string | null;
+  planHint: 'free-or-limited' | 'metered' | 'unknown';
+}
+
+let lastLimits: ApiFootballLimits | null = null;
+let warnedAboutQuota = false;
+
+export function getApiFootballLimits(): ApiFootballLimits | null {
+  return lastLimits;
+}
+
+function captureRateLimits(res: Response): void {
+  const limitRaw = res.headers.get('x-ratelimit-requests-limit');
+  if (!limitRaw) return;
+
+  const limit = Number(limitRaw);
+  const remainingRaw = res.headers.get('x-ratelimit-requests-remaining');
+  const resetRaw = res.headers.get('x-ratelimit-requests-reset');
+  const resetSeconds = resetRaw === null ? Number.NaN : Number(resetRaw);
+
+  lastLimits = {
+    requestsLimit: Number.isFinite(limit) ? limit : null,
+    requestsRemaining:
+      remainingRaw !== null && Number.isFinite(Number(remainingRaw))
+        ? Number(remainingRaw)
+        : null,
+    requestsResetAt: Number.isFinite(resetSeconds)
+      ? new Date(resetSeconds * 1000).toISOString()
+      : null,
+    planHint: Number.isFinite(limit) && limit <= 100 ? 'free-or-limited' : 'metered',
+  };
+
+  const lowLimit = lastLimits.requestsLimit !== null && lastLimits.requestsLimit <= 100;
+  const lowRemaining =
+    lastLimits.requestsRemaining !== null && lastLimits.requestsRemaining <= 10;
+  if (!warnedAboutQuota && (lowLimit || lowRemaining)) {
+    warnedAboutQuota = true;
+    console.warn(
+      `[api-football] quota is limited (limit=${lastLimits.requestsLimit ?? '?'} remaining=${lastLimits.requestsRemaining ?? '?'}). A cold slate build costs up to ~20 requests; archive hits are free.`,
+      lastLimits
+    );
+  }
+}
+
 export interface ApiFootballResponse<T> {
   errors?: Record<string, string> | string[];
   paging?: { current?: number; total?: number };
@@ -207,6 +259,8 @@ export async function fetchApiFootball<T>(
           : 'API-Football is unreachable from this server (network error). Check its outbound internet access and try again.'
       );
     }
+
+    captureRateLimits(res);
 
     const json = (await res.json().catch(() => ({}))) as ApiFootballResponse<T> & {
       message?: string;

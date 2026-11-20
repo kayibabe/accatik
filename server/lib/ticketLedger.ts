@@ -92,16 +92,58 @@ async function readLedgerFromAppwrite(
   return { version: 1, updatedAt, tickets };
 }
 
+export interface LedgerWritePlan {
+  toWrite: LedgerTicket[];
+  staleIds: string[];
+  changed: boolean;
+}
+
+/**
+ * Pure diff between the stored ledger documents and the in-memory ledger. Only
+ * tickets whose serialized payload moved are rewritten, so the common
+ * bookkeeping pass costs a read plus a handful of writes instead of one write
+ * per accumulated ticket.
+ */
+export function planLedgerWrites(
+  existing: Array<{ $id: string; payloadJson?: unknown }>,
+  tickets: LedgerTicket[]
+): LedgerWritePlan {
+  const storedPayloads = new Map(
+    existing.map((document) => [document.$id, String(document.payloadJson ?? '')])
+  );
+  const wanted = new Set<string>();
+  const toWrite: LedgerTicket[] = [];
+
+  for (const ticket of tickets) {
+    wanted.add(ticket.id);
+    if (storedPayloads.get(ticket.id) === JSON.stringify(ticket)) continue;
+    toWrite.push(ticket);
+  }
+
+  // Never prune from a failed/empty read: an API hiccup must not erase the ledger.
+  const staleIds =
+    tickets.length === 0
+      ? []
+      : existing
+          .filter((document) => !wanted.has(document.$id))
+          .map((document) => document.$id);
+
+  return {
+    toWrite,
+    staleIds,
+    changed: toWrite.length > 0 || staleIds.length > 0,
+  };
+}
+
 async function writeLedgerToAppwrite(
   databases: Databases,
   ledger: LedgerFile
 ): Promise<void> {
-  await upsertDocument(databases, 'ledger_meta', 'state', {
-    updatedAt: ledger.updatedAt,
-  });
+  const existing = await listAllDocuments(databases, 'ledger_tickets');
+  const plan = planLedgerWrites(existing, ledger.tickets);
+  if (!plan.changed) return;
 
-  const wanted = new Set(ledger.tickets.map((ticket) => ticket.id));
-  await mapWithConcurrency(ledger.tickets, 8, async (ticket) => {
+  await mapWithConcurrency(plan.toWrite, 8, async (ticket) => {
     await upsertDocument(databases, 'ledger_tickets', ticket.id, {
       ticketId: ticket.id,
       dateIso: ticket.dateIso,
@@ -112,17 +154,17 @@ async function writeLedgerToAppwrite(
     });
   });
 
-  // Never prune from a failed/empty read: an API hiccup must not erase the ledger.
-  if (ledger.tickets.length === 0) return;
-  const existing = await listAllDocuments(databases, 'ledger_tickets');
-  for (const document of existing) {
-    if (wanted.has(document.$id)) continue;
+  for (const documentId of plan.staleIds) {
     await databases.deleteDocument({
       databaseId: APPWRITE_DATABASE_ID,
       collectionId: 'ledger_tickets',
-      documentId: document.$id,
+      documentId,
     });
   }
+
+  await upsertDocument(databases, 'ledger_meta', 'state', {
+    updatedAt: ledger.updatedAt,
+  });
 }
 
 async function readLedgerFile(): Promise<LedgerFile> {
@@ -153,6 +195,7 @@ async function readLedgerFile(): Promise<LedgerFile> {
 }
 
 async function writeLedgerFile(ledger: LedgerFile): Promise<void> {
+  ledger.updatedAt = new Date().toISOString();
   const databases = getDataDatabases();
   if (databases) {
     await writeLedgerToAppwrite(databases, ledger);
@@ -161,7 +204,6 @@ async function writeLedgerFile(ledger: LedgerFile): Promise<void> {
   const target = ledgerFile();
   await fs.mkdir(path.dirname(target), { recursive: true });
   const temp = `${target}.${process.pid}.tmp`;
-  ledger.updatedAt = new Date().toISOString();
   await fs.writeFile(temp, JSON.stringify(ledger), 'utf8');
   await fs.rename(temp, target);
 }

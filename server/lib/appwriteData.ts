@@ -115,13 +115,13 @@ export async function upsertDocument(
 export async function mapWithConcurrency<T>(
   items: T[],
   concurrency: number,
-  handler: (item: T) => Promise<void>
+  handler: (item: T, index: number) => Promise<void>
 ): Promise<void> {
   let next = 0;
   const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
     while (next < items.length) {
-      const item = items[next++];
-      await handler(item);
+      const index = next++;
+      await handler(items[index], index);
     }
   });
   await Promise.all(workers);

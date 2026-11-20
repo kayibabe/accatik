@@ -77,6 +77,20 @@
             "timeout": 60,
             "enabled": true,
             "logging": true
+        },
+        {
+            "$id": "accatik-prewarm",
+            "name": "AccaTik Slate Prewarm",
+            "runtime": "node-22",
+            "path": ".",
+            "entrypoint": "appwrite-prewarm.ts",
+            "commands": "npm install",
+            "execute": ["any"],
+            "events": [],
+            "schedule": "0 2,18 * * *",
+            "timeout": 300,
+            "enabled": true,
+            "logging": true
         }
     ]
 }

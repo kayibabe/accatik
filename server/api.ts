@@ -1,3 +1,4 @@
+import { performance } from 'node:perf_hooks';
 import type {
   DailySlateResponse,
   DeepAnalysisResponse,
@@ -6,6 +7,7 @@ import type {
   PublicFixture,
   PublicSlateResponse,
   RecommendedPickRef,
+  ServerTimings,
   SettlementStatus,
 } from '../src/types/fixtures.ts';
 import type { LedgerSummary, LedgerTicket } from '../src/types/ledger.ts';
@@ -29,6 +31,7 @@ import type {
 } from './lib/apiFootball.ts';
 import {
   fetchApiFootball,
+  getApiFootballLimits,
   resolveApiFootballBaseUrl,
   resolveApiFootballKey,
 } from './lib/apiFootball.ts';
@@ -92,6 +95,57 @@ interface LoadedSlate {
   source: 'live' | 'archive';
   /** Only the request that rebuilt the slate needs to write the archive. */
   needsArchive?: boolean;
+  /** Measured inside getSlate, before per-request prediction enrichment. */
+  timings?: Pick<ServerTimings, 'archiveReadMs' | 'buildMs'>;
+}
+
+const emptyTimings = (): ServerTimings => ({
+  archiveReadMs: 0,
+  buildMs: 0,
+  predictionsMs: 0,
+  persistMs: 0,
+  ledgerMs: 0,
+  totalMs: 0,
+});
+
+const ms = (value: number): string => `${value.toFixed(1)}ms`;
+
+/** One structured line per phase snapshot, easy to grep in Appwrite logs. */
+function logSlateTimings(
+  dateIso: string,
+  source: string,
+  timings: ServerTimings,
+  phase: 'response' | 'background'
+): void {
+  console.log(
+    `[slate timings] ${phase} date=${dateIso} source=${source} ` +
+      `archiveRead=${ms(timings.archiveReadMs)} build=${ms(timings.buildMs)} ` +
+      `predictions=${ms(timings.predictionsMs)} persist=${ms(timings.persistMs)} ` +
+      `ledger=${ms(timings.ledgerMs)} total=${ms(timings.totalMs)}`
+  );
+}
+
+/** Marks the response boundary and emits the blocking-phase log line. */
+function finalizeTimings(
+  dateIso: string,
+  source: string,
+  timings: ServerTimings,
+  started: number
+): ServerTimings {
+  timings.totalMs = performance.now() - started;
+  logSlateTimings(dateIso, source, timings, 'response');
+  return timings;
+}
+
+/**
+ * Bookkeeping must never hold the response open. Errors are already contained
+ * inside persistSlate / refreshLedgerForSlate, but keep a final guard so a
+ * future change cannot turn background work into an unhandled rejection.
+ */
+function scheduleBackground(label: string, task: Promise<void>): void {
+  void task.catch((error) => {
+    console.warn(`[slate] background ${label} failed`, error);
+  });
 }
 
 const slateCache = createTtlCache<LoadedSlate>(SLATE_TTL_MS, 60);
@@ -432,7 +486,9 @@ async function getSlate(dateIso: string, force = false): Promise<LoadedSlate> {
   }
 
   return slateFlight.run(`${dateIso}:${force ? 'force' : 'normal'}`, async () => {
+    const archiveStart = performance.now();
     const archived = await readArchivedSlate(dateIso);
+    const archiveReadMs = performance.now() - archiveStart;
     const nowMs = Date.now();
 
     // Stale-while-revalidate: a saved matchday is served immediately. A stale
@@ -444,6 +500,7 @@ async function getSlate(dateIso: string, force = false): Promise<LoadedSlate> {
         fixtures: archived.fixtures,
         capturedAt: archived.capturedAt,
         source: 'archive',
+        timings: { archiveReadMs, buildMs: 0 },
       };
       slateCache.set(dateIso, served);
       if (!isSlateSettled(archived.fixtures, nowMs)) {
@@ -453,8 +510,11 @@ async function getSlate(dateIso: string, force = false): Promise<LoadedSlate> {
     }
 
     let fixtures: Fixture[];
+    let buildMs = 0;
     try {
+      const buildStart = performance.now();
       const fresh = await buildSlate(dateIso);
+      buildMs = performance.now() - buildStart;
       fixtures = archived
         ? mergeArchivedPrices(archived.fixtures, fresh)
         : fresh;
@@ -469,6 +529,7 @@ async function getSlate(dateIso: string, force = false): Promise<LoadedSlate> {
         fixtures: archived.fixtures,
         capturedAt: archived.capturedAt,
         source: 'archive',
+        timings: { archiveReadMs, buildMs },
       };
       slateCache.set(dateIso, fallback);
       return fallback;
@@ -496,6 +557,7 @@ async function getSlate(dateIso: string, force = false): Promise<LoadedSlate> {
       capturedAt,
       source: 'live',
       needsArchive: true,
+      timings: { archiveReadMs, buildMs },
     };
     slateCache.set(dateIso, loaded);
     return loaded;
@@ -518,27 +580,55 @@ async function fetchPrediction(fixtureId: string): Promise<RawApiPrediction | nu
 }
 
 /**
+ * A fixture carrying `modelDataAt` already has the model snapshot persisted in
+ * the archive, so a date change can reuse it instead of paying for another
+ * upstream `/predictions` call. Explicit refresh is the only reason to refetch.
+ */
+export function needsPredictionRefresh(
+  fixture: Fixture | undefined,
+  force: boolean
+): boolean {
+  if (!fixture) return false;
+  return force || !fixture.modelDataAt;
+}
+
+/**
  * Attaches form and model advice to the curated legs. Works on the per-request
- * fixture copies so the cached slate is never mutated.
+ * fixture copies so the cached slate is never mutated. Returns the time spent
+ * waiting on the prediction feed (0 when the durable archive was enough).
  */
 async function enrichWithPredictions(
   fixtures: Fixture[],
-  fixtureIds: string[]
-): Promise<void> {
+  fixtureIds: string[],
+  force = false
+): Promise<number> {
+  const started = performance.now();
   const uniqueIds = [...new Set(fixtureIds)];
-  if (uniqueIds.length === 0) return;
+  if (uniqueIds.length === 0) return 0;
+
+  const pendingIds = uniqueIds.filter((fixtureId) =>
+    needsPredictionRefresh(
+      fixtures.find((fixture) => fixture.id === fixtureId),
+      force
+    )
+  );
+  if (pendingIds.length === 0) return 0;
 
   const predictions = await Promise.all(
-    uniqueIds.map(async (fixtureId) => ({
+    pendingIds.map(async (fixtureId) => ({
       fixtureId,
       data: await fetchPrediction(fixtureId),
     }))
   );
 
   for (const { fixtureId, data } of predictions) {
-    if (!data) continue;
     const target = fixtures.find((fixture) => fixture.id === fixtureId);
     if (!target) continue;
+
+    // Mark the attempt even when the provider returned nothing; otherwise a
+    // permanently unavailable prediction would be re-requested on every visit.
+    target.modelDataAt = new Date().toISOString();
+    if (!data) continue;
 
     const homeForm = data.teams?.home?.league?.form?.slice(-5);
     const awayForm = data.teams?.away?.league?.form?.slice(-5);
@@ -559,6 +649,8 @@ async function enrichWithPredictions(
       };
     }
   }
+
+  return performance.now() - started;
 }
 
 const SOURCE_LINKS = (dateIso: string): GroundingSource[] => [
@@ -582,6 +674,8 @@ export function getHealth(): ApiResult<{
   hasApiFootballKey: boolean;
   apiFootballHost: string;
   rateLimitPerMinute: number;
+  /** Last quota snapshot observed on an upstream response, if any. */
+  apiFootballLimits: ReturnType<typeof getApiFootballLimits>;
 }> {
   return ok({
     ok: true,
@@ -589,6 +683,7 @@ export function getHealth(): ApiResult<{
     hasApiFootballKey: Boolean(resolveApiFootballKey()),
     apiFootballHost: apiFootballHostLabel(),
     rateLimitPerMinute: Number(process.env.API_RATE_LIMIT_PER_MIN) || 60,
+    apiFootballLimits: getApiFootballLimits(),
   });
 }
 
@@ -621,16 +716,33 @@ export async function getPublicTodayFixtures(): Promise<
   const missing = missingApiKey();
   if (missing) return missing;
 
+  const started = performance.now();
+  const timings = emptyTimings();
+
   try {
     const dateIso = getTodayIsoDate();
     const loaded = await getSlate(dateIso);
-    await persistSlate(dateIso, loaded);
+    if (loaded.timings) Object.assign(timings, loaded.timings);
+
+    // Archive writes are bookkeeping, not a precondition for serving the list.
+    if (loaded.needsArchive) {
+      const persistStart = performance.now();
+      scheduleBackground(
+        'persist',
+        persistSlate(dateIso, loaded).then(() => {
+          timings.persistMs = performance.now() - persistStart;
+          logSlateTimings(dateIso, loaded.source, timings, 'background');
+        })
+      );
+    }
+
     return ok({
       date: dateIso,
       displayDate: formatDisplayDate(dateIso),
       timezoneLabel: 'CAT (GMT+2) Kickoff Times',
       fixtures: loaded.fixtures.map(toPublicFixture),
       cachedAt: new Date().toISOString(),
+      serverTimings: finalizeTimings(dateIso, loaded.source, timings, started),
     });
   } catch (error) {
     console.error('Error fetching public match list:', error);
@@ -643,6 +755,9 @@ export async function getTodayFixtures(
 ): Promise<ApiResult<DailySlateResponse | ErrorBody>> {
   const missing = missingApiKey();
   if (missing) return missing;
+
+  const started = performance.now();
+  const timings = emptyTimings();
 
   try {
     const source =
@@ -674,6 +789,7 @@ export async function getTodayFixtures(
     }
 
     const loaded = await getSlate(requestedDate, forceRefresh);
+    if (loaded.timings) Object.assign(timings, loaded.timings);
     // Shallow copies: prediction enrichment writes to these, not to the cache.
     const fixtures = loaded.fixtures.map((fixture) => ({ ...fixture }));
 
@@ -687,21 +803,56 @@ export async function getTodayFixtures(
     const legs = guard.legs;
 
     // Sealed matchdays skip the prediction feed entirely: the match is over.
-    // A stale archive served by SWR still gets model data for unsettled games.
+    // A stale archive served by SWR reuses the model data captured with it.
+    const hadModelData = fixtures.map((fixture) => Boolean(fixture.modelDataAt));
     if (!isSlateSettled(fixtures, Date.now())) {
-      await enrichWithPredictions(
+      timings.predictionsMs = await enrichWithPredictions(
         fixtures,
-        legs.map((leg) => leg.fixtureId)
+        legs.map((leg) => leg.fixtureId),
+        forceRefresh
       );
+    }
+    // An archive hit can still gain model data. Persist those markers so the
+    // next visit (or a fresh server process) reuses them instead of paying for
+    // another upstream /predictions call.
+    const needsModelPersist = fixtures.some(
+      (fixture, index) => fixture.modelDataAt && !hadModelData[index]
+    );
+    // Keep the in-memory cache in step with the durable copy so a burst of
+    // requests does not re-enter the prediction path before the archive write.
+    loaded.fixtures = fixtures;
 
-      }
-
-    // A rebuilt slate is archived once, carrying the model data added above.
-    await persistSlate(requestedDate, { ...loaded, fixtures });
+    // Bookkeeping is deliberately not awaited: the slate is served as soon as
+    // predictions are attached. Both helpers swallow their own errors, and
+    // scheduleBackground is a final guard against an unhandled rejection.
+    const bookkeeping: Promise<void>[] = [];
+    if (loaded.needsArchive || needsModelPersist) {
+      const persistStart = performance.now();
+      bookkeeping.push(
+        persistSlate(requestedDate, {
+          ...loaded,
+          fixtures,
+          needsArchive: true,
+        }).then(() => {
+          timings.persistMs = performance.now() - persistStart;
+        })
+      );
+    }
 
     // Closing prices, settlement and shadow recording share one ledger pass,
     // time-gated so repeated slate requests do not pay for it again.
-    await refreshLedgerForSlate(requestedDate, fixtures);
+    const ledgerStart = performance.now();
+    bookkeeping.push(
+      refreshLedgerForSlate(requestedDate, fixtures).then(() => {
+        timings.ledgerMs = performance.now() - ledgerStart;
+      })
+    );
+    scheduleBackground(
+      'bookkeeping',
+      Promise.all(bookkeeping).then(() => {
+        logSlateTimings(requestedDate, loaded.source, timings, 'background');
+      })
+    );
 
     const recommendedLegIds: RecommendedPickRef[] = legs.map((leg) => ({
       fixtureId: leg.fixtureId,
@@ -732,6 +883,7 @@ export async function getTodayFixtures(
       cachedAt: new Date().toISOString(),
       slateSource: loaded.source,
       capturedAt: loaded.capturedAt,
+      serverTimings: finalizeTimings(requestedDate, loaded.source, timings, started),
     });
   } catch (error) {
     console.error('Error fetching today fixtures:', error);
@@ -739,6 +891,82 @@ export async function getTodayFixtures(
       500,
       errorMessage(error, 'Failed to load today’s fixtures.')
     );
+  }
+}
+
+export interface PrewarmResult {
+  dateIso: string;
+  source: 'live' | 'archive';
+  fixtureCount: number;
+  /** False when an existing archive already had everything needed. */
+  archived: boolean;
+  serverTimings: ServerTimings;
+}
+
+/**
+ * Scheduled-entrypoint work: build (or reuse) a matchday, attach model advice
+ * for the default curated shape and write it to the archive with an awaited
+ * persist, so the first user request of the day is a pure archive read.
+ */
+export async function prewarmSlate(
+  dateIso?: string
+): Promise<ApiResult<PrewarmResult | ErrorBody>> {
+  const missing = missingApiKey();
+  if (missing) return missing;
+
+  const started = performance.now();
+  const timings = emptyTimings();
+  const target =
+    typeof dateIso === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateIso)
+      ? dateIso
+      : getTodayIsoDate();
+
+  try {
+    const loaded = await getSlate(target);
+    if (loaded.timings) Object.assign(timings, loaded.timings);
+    const fixtures = loaded.fixtures.map((fixture) => ({ ...fixture }));
+
+    const hadModelData = fixtures.map((fixture) => Boolean(fixture.modelDataAt));
+    if (!isSlateSettled(fixtures, Date.now())) {
+      const rawLegs = buildRecommendedAcca(
+        fixtures,
+        DEFAULT_TARGET_ODDS,
+        'balanced',
+        DEFAULT_MAX_LEGS
+      );
+      const legs = guardTicket(rawLegs, {
+        maxLegs: Math.min(DEFAULT_MAX_LEGS, MAX_RECOMMENDED_LEGS),
+      }).legs;
+      timings.predictionsMs = await enrichWithPredictions(
+        fixtures,
+        legs.map((leg) => leg.fixtureId)
+      );
+    }
+    const needsModelPersist = fixtures.some(
+      (fixture, index) => fixture.modelDataAt && !hadModelData[index]
+    );
+    loaded.fixtures = fixtures;
+
+    if (loaded.needsArchive || needsModelPersist) {
+      const persistStart = performance.now();
+      await persistSlate(target, {
+        ...loaded,
+        fixtures,
+        needsArchive: true,
+      });
+      timings.persistMs = performance.now() - persistStart;
+    }
+
+    return ok({
+      dateIso: target,
+      source: loaded.source,
+      fixtureCount: fixtures.length,
+      archived: loaded.needsArchive === true || needsModelPersist,
+      serverTimings: finalizeTimings(target, loaded.source, timings, started),
+    });
+  } catch (error) {
+    console.error(`[prewarm] failed for ${target}`, error);
+    return fail(500, errorMessage(error, 'Failed to pre-warm the slate.'));
   }
 }
 

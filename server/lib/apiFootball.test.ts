@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  fetchApiFootball,
+  getApiFootballLimits,
   resolveApiFootballBaseUrl,
   resolveApiFootballKey,
 } from './apiFootball.ts';
@@ -131,4 +133,60 @@ test('blank API key values are ignored', () => {
     process.env.RAPIDAPI_KEY = 'rapid-key';
     assert.equal(resolveApiFootballKey(), 'rapid-key');
   });
+});
+
+test('upstream quota headers are captured for /health without an extra request', async () => {
+  const envNames = [...new Set([...KEY_ENV_NAMES, ...BASE_URL_ENV_NAMES])];
+  const savedEnv = envNames.map(
+    (name) => [name, process.env[name]] as const
+  );
+  const originalFetch = globalThis.fetch;
+  let requests = 0;
+  let quotaHeaders: Record<string, string> = {
+    'x-ratelimit-requests-limit': '100',
+    'x-ratelimit-requests-remaining': '7',
+    'x-ratelimit-requests-reset': String(
+      Math.floor(Date.now() / 1000) + 60
+    ),
+  };
+
+  try {
+    for (const name of envNames) delete process.env[name];
+    process.env.API_FOOTBALL_KEY = 'unit-test-key';
+    process.env.API_FOOTBALL_BASE_URL = 'https://gateway.example.com';
+    globalThis.fetch = (async () => {
+      requests += 1;
+      return new Response(JSON.stringify({ response: [] }), {
+        status: 200,
+        headers: new Headers(quotaHeaders),
+      });
+    }) as typeof fetch;
+
+    await fetchApiFootball('/status', {});
+    const limited = getApiFootballLimits();
+    assert.ok(limited);
+    assert.equal(limited.requestsLimit, 100);
+    assert.equal(limited.requestsRemaining, 7);
+    assert.equal(limited.planHint, 'free-or-limited');
+    assert.ok(limited.requestsResetAt?.includes('T'));
+
+    quotaHeaders = {
+      'x-ratelimit-requests-limit': '3000',
+      'x-ratelimit-requests-remaining': '2900',
+    };
+    await fetchApiFootball('/status', {});
+    const metered = getApiFootballLimits();
+    assert.ok(metered);
+    assert.equal(metered.requestsLimit, 3000);
+    assert.equal(metered.requestsRemaining, 2900);
+    assert.equal(metered.planHint, 'metered');
+    assert.equal(metered.requestsResetAt, null);
+    assert.equal(requests, 2, 'quota visibility must not call upstream by itself');
+  } finally {
+    globalThis.fetch = originalFetch;
+    for (const [name, value] of savedEnv) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
 });
