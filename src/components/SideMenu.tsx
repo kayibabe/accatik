@@ -159,12 +159,7 @@ export function SideMenu({
 
   return (
     <>
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-slate-200 bg-white lg:flex">
-        <div className="flex h-16 shrink-0 items-center border-b border-slate-200 px-5">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Workspace
-          </span>
-        </div>
+      <aside className="fixed top-16 bottom-0 left-0 z-30 hidden w-56 flex-col border-r border-slate-200 bg-white sm:flex lg:w-64">
         {navContent}
       </aside>
 

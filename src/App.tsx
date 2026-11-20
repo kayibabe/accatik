@@ -877,7 +877,11 @@ export default function App() {
   // Derived from current state, never from the last server payload, so the
   // Curated Acca heading always matches the strategy actually applied to the legs.
   const strategyCopy = describeStrategy(strategy, minOdds);
-  const contentInset = isGuest ? '' : 'lg:pl-64';
+  // Full-width gutters: the fixed side menu is the only reserved horizontal
+  // space on signed-in pages; everything else gets just a small edge inset.
+  const contentInset = isGuest
+    ? 'px-2 sm:px-3'
+    : 'px-2 sm:pr-3 sm:pl-56 lg:pl-64';
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
@@ -924,7 +928,7 @@ export default function App() {
           }
         >
           <div
-            className={`max-w-[1380px] mx-auto px-4 sm:px-6 ${contentInset} py-2.5 flex items-center justify-between gap-3 text-xs ${
+            className={`${contentInset} py-2.5 flex items-center justify-between gap-3 text-xs ${
               noticeTone === 'error' ? 'text-amber-900' : 'text-emerald-900'
             }`}
           >
@@ -967,7 +971,7 @@ export default function App() {
 
       {user && !user.emailVerified && (
         <div className="bg-amber-50 border-b border-amber-200" role="status">
-          <div className={`max-w-[1380px] mx-auto px-4 sm:px-6 ${contentInset} py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-amber-900`}>
+          <div className={`${contentInset} py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-amber-900`}>
             <div>
               <span className="font-semibold">Verify your email address.</span>{' '}
               <span className="text-amber-800">
@@ -993,7 +997,7 @@ export default function App() {
 
       {importPrompt && (
         <div className="bg-indigo-50 border-b border-indigo-200">
-          <div className={`max-w-[1380px] mx-auto px-4 sm:px-6 ${contentInset} py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
+          <div className={`${contentInset} py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
             <div className="text-xs text-indigo-900">
               <span className="font-semibold">
                 Bring your {importPrompt.length} saved slip
@@ -1032,7 +1036,7 @@ export default function App() {
           isGuest ? 'hidden' : ''
         }`}
       >
-        <div className={`max-w-[1380px] mx-auto px-4 sm:px-6 ${contentInset} py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5`}>
+        <div className={`${contentInset} py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5`}>
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
             <span className="font-semibold text-slate-900">
               Matchday Schedule
@@ -1058,7 +1062,7 @@ export default function App() {
       </div>
 
       <main
-        className={`flex-1 w-full max-w-[1380px] mx-auto px-4 sm:px-6 ${contentInset} ${
+        className={`flex-1 w-full ${contentInset} ${
           isGuest ? 'py-8 sm:py-12' : 'py-6 sm:py-8'
         }`}
       >
@@ -1283,7 +1287,7 @@ export default function App() {
       </main>
 
       <footer className="border-t border-slate-200 bg-white mt-12">
-        <div className={`max-w-[1380px] mx-auto px-4 sm:px-6 ${contentInset} py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500`}>
+        <div className={`${contentInset} py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500`}>
           <span>MatchSlip · Built on evidence, not hunches.</span>
           <span>
             18+ only · Bet responsibly · Odds and match schedules should be

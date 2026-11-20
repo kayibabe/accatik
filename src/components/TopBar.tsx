@@ -54,8 +54,10 @@ export function TopBar({
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white">
       <div
-        className={`mx-auto h-16 max-w-[1380px] px-4 sm:px-6 flex items-center gap-3 ${
-          guest ? '' : 'lg:pl-64'
+        className={`h-16 flex items-center gap-3 ${
+          guest
+            ? 'px-2 sm:px-3'
+            : 'px-2 sm:pr-3 sm:pl-56 lg:pl-64'
         }`}
       >
         {!guest && (
@@ -64,7 +66,7 @@ export function TopBar({
             onClick={onToggleMenu}
             aria-label="Open navigation menu"
             aria-expanded={isMenuOpen}
-            className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 lg:hidden"
+            className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 sm:hidden"
           >
             <Menu className="h-5 w-5" aria-hidden="true" />
           </button>
@@ -100,7 +102,7 @@ export function TopBar({
             ))}
           </nav>
         ) : (
-          <div className="hidden flex-1 lg:block" />
+          <div className="hidden flex-1 sm:block" />
         )}
 
         {/* Account + primary action */}
@@ -202,7 +204,7 @@ export function TopBar({
       {guest && (
         <nav
           aria-label="Mobile navigation"
-          className="flex md:hidden items-center gap-4 px-4 pb-2.5 overflow-x-auto text-xs font-medium border-t border-slate-100"
+          className="flex md:hidden items-center gap-4 px-2 sm:px-3 pb-2.5 overflow-x-auto text-xs font-medium border-t border-slate-100"
         >
           {guestNavItems.map((item) => (
             <a
