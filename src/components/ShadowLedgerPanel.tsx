@@ -3,33 +3,29 @@ import { BarChart3, Calendar, Filter, RefreshCw } from 'lucide-react';
 import type { LedgerBreakdownRow, LedgerSummary } from '../types/ledger.ts';
 import { apiFetch } from '../utils/api.ts';
 import {
+  fmtCount,
+  fmtOdds,
+  fmtPercent,
+  fmtSignedPercent,
+} from '../utils/format.ts';
+import {
   SORT_DESC,
   makeSortHandler,
   sortRows,
   type SortAccessors,
   type SortState,
 } from '../utils/tableSort.ts';
+import { pnlTone } from '../utils/uiTone.ts';
 import {
   selectShadowRoiShortlist,
   SHADOW_ROI_SHORTLIST,
 } from '../utils/shadowRoiFilter.ts';
-import { SortableTh } from './SortableTh.tsx';
-
-const percent = (value: number | null): string =>
-  value === null ? '—' : `${value.toFixed(1)}%`;
-
-const signedPercent = (value: number | null): string => {
-  if (value === null) return '—';
-  if (value > 0) return `+${value.toFixed(1)}%`;
-  if (value < 0) return `${value.toFixed(1)}%`;
-  return '0.0%';
-};
-
-const pnlTone = (value: number): string =>
-  value > 0 ? 'text-emerald-700' : value < 0 ? 'text-red-600' : 'text-slate-700';
-
-const recordLabel = (row: LedgerBreakdownRow): string =>
-  `${row.won}W · ${row.lost}L · ${row.voided}V`;
+import { DataTable, type DataTableColumn } from './ui/DataTable.tsx';
+import { DataStatus } from './ui/DataStatus.tsx';
+import { MetricCard, MetricGrid } from './ui/DataCard.tsx';
+import { EmptyState } from './ui/States.tsx';
+import { recordLabel } from './performance/format.ts';
+import { SortHeaderButton, SortStatus } from './performance/SortHeaderButton.tsx';
 
 const SHORTLIST_RULE =
   `ROI ≥ ${SHADOW_ROI_SHORTLIST.minRoiPct}% · ` +
@@ -39,7 +35,7 @@ const SHORTLIST_RULE =
 const VARIANT_ACCESSORS: SortAccessors<LedgerBreakdownRow> = {
   label: (row) => row.label,
   tickets: (row) => row.tickets,
-  record: (row) => recordLabel(row),
+  record: (row) => recordLabel(row.won, row.lost, row.voided),
   hitRate: (row) => row.hitRate,
   breakEven: (row) => row.breakEvenHitRate,
   roi: (row) => row.roi,
@@ -77,6 +73,141 @@ export function ShadowLedgerPanel() {
     variantSort,
     VARIANT_ACCESSORS
   );
+
+  const columns: DataTableColumn<LedgerBreakdownRow>[] = [
+    {
+      key: 'label',
+      header: (
+        <SortHeaderButton
+          label="Variant"
+          columnKey="label"
+          sort={variantSort}
+          onSort={handleVariantSort}
+        />
+      ),
+      cell: (row) => <span className="font-medium text-slate-800">{row.label}</span>,
+      priority: 'primary',
+    },
+    {
+      key: 'tickets',
+      header: (
+        <SortHeaderButton
+          label="Tickets"
+          columnKey="tickets"
+          sort={variantSort}
+          onSort={handleVariantSort}
+          align="right"
+        />
+      ),
+      cell: (row) => fmtCount(row.tickets),
+      align: 'right',
+      priority: 'secondary',
+    },
+    {
+      key: 'record',
+      header: (
+        <SortHeaderButton
+          label="W-L-V"
+          columnKey="record"
+          sort={variantSort}
+          onSort={handleVariantSort}
+          align="right"
+        />
+      ),
+      cell: (row) => recordLabel(row.won, row.lost, row.voided),
+      align: 'right',
+      priority: 'tertiary',
+    },
+    {
+      key: 'hitRate',
+      header: (
+        <SortHeaderButton
+          label="Hit"
+          columnKey="hitRate"
+          sort={variantSort}
+          onSort={handleVariantSort}
+          align="right"
+        />
+      ),
+      cell: (row) => (
+        <span className="font-semibold text-slate-800">{fmtPercent(row.hitRate)}</span>
+      ),
+      align: 'right',
+      priority: 'primary',
+    },
+    {
+      key: 'breakEven',
+      header: (
+        <SortHeaderButton
+          label="Break-even"
+          columnKey="breakEven"
+          sort={variantSort}
+          onSort={handleVariantSort}
+          align="right"
+        />
+      ),
+      cell: (row) => fmtPercent(row.breakEvenHitRate),
+      align: 'right',
+      priority: 'tertiary',
+    },
+    {
+      key: 'roi',
+      header: (
+        <SortHeaderButton
+          label="ROI"
+          columnKey="roi"
+          sort={variantSort}
+          onSort={handleVariantSort}
+          align="right"
+        />
+      ),
+      cell: (row) => (
+        <span
+          className={`font-semibold ${
+            row.roi === null ? 'text-slate-400' : pnlTone(row.roi)
+          }`}
+        >
+          {fmtSignedPercent(row.roi)}
+        </span>
+      ),
+      align: 'right',
+      priority: 'primary',
+    },
+    {
+      key: 'avgClv',
+      header: (
+        <SortHeaderButton
+          label="Avg CLV"
+          columnKey="avgClv"
+          sort={variantSort}
+          onSort={handleVariantSort}
+          align="right"
+        />
+      ),
+      cell: (row) => (
+        <span className={row.avgClv === null ? 'text-slate-400' : pnlTone(row.avgClv)}>
+          {fmtSignedPercent(row.avgClv)}
+        </span>
+      ),
+      align: 'right',
+      priority: 'secondary',
+    },
+    {
+      key: 'avgOdds',
+      header: (
+        <SortHeaderButton
+          label="Avg odds"
+          columnKey="avgOdds"
+          sort={variantSort}
+          onSort={handleVariantSort}
+          align="right"
+        />
+      ),
+      cell: (row) => fmtOdds(row.avgOdds > 0 ? row.avgOdds : null),
+      align: 'right',
+      priority: 'tertiary',
+    },
+  ];
 
   const load = useCallback(async () => {
     const requestId = ++requestIdRef.current;
@@ -177,7 +308,7 @@ export function ShadowLedgerPanel() {
           <span className="text-[11px] text-slate-500 font-mono tabular-nums">
             {selectedDateIso
               ? `Scoped to ${selectedDateIso}`
-              : `Inception to date${summary ? ` · ${summary.availableDates.length} days recorded` : ''}`}
+              : `Inception to date${summary ? ` · ${fmtCount(summary.availableDates.length)} days recorded` : ''}`}
           </span>
         </div>
         {summary && summary.availableDates.length > 0 && (
@@ -211,31 +342,26 @@ export function ShadowLedgerPanel() {
           {isLoading ? 'Reading the ledger…' : 'No ledger data yet.'}
         </div>
       ) : selectedDateIso && summary.tickets === 0 ? (
-        <div className="px-4 py-8 text-center space-y-2">
-          <p className="text-sm font-semibold text-slate-800">
-            No shadow tickets for {selectedDateIso}
-          </p>
-          <p className="mx-auto max-w-md text-xs leading-relaxed text-slate-500">
-            Pick another matchday or return to the inception-to-date scorecard.
-          </p>
-          <button
-            type="button"
-            onClick={() => setSelectedDateIso('')}
-            className="font-semibold text-emerald-700 underline cursor-pointer"
-          >
-            Show all days
-          </button>
-        </div>
+        <EmptyState
+          className="!border-0"
+          title={`No shadow tickets for ${selectedDateIso}`}
+          description="Pick another matchday or return to the inception-to-date scorecard."
+          action={
+            <button
+              type="button"
+              onClick={() => setSelectedDateIso('')}
+              className="font-semibold text-emerald-700 underline cursor-pointer"
+            >
+              Show all days
+            </button>
+          }
+        />
       ) : summary.tickets === 0 ? (
-        <div className="px-4 py-8 text-center space-y-1">
-          <p className="text-sm font-semibold text-slate-800">
-            No shadow tickets recorded yet
-          </p>
-          <p className="mx-auto max-w-md text-xs leading-relaxed text-slate-500">
-            Open a matchday with scheduled fixtures. The server will start
-            recording every strategy and leg budget automatically.
-          </p>
-        </div>
+        <EmptyState
+          className="!border-0"
+          title="No shadow tickets recorded yet"
+          description="Open a matchday with scheduled fixtures. The server will start recording every strategy and leg budget automatically."
+        />
       ) : (
         <>
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-100 bg-emerald-50/40 px-4 py-2.5">
@@ -257,203 +383,110 @@ export function ShadowLedgerPanel() {
             </label>
             <span className="text-[11px] text-slate-500 font-mono tabular-nums">
               {shortlistOnly
-                ? `${shortlistedVariants.length} of ${summary.byVariant.length} variants`
-                : `Showing all ${summary.byVariant.length} variants`}
+                ? `${fmtCount(shortlistedVariants.length)} of ${fmtCount(summary.byVariant.length)} variants`
+                : `Showing all ${fmtCount(summary.byVariant.length)} variants`}
             </span>
           </div>
 
-          <div className="grid grid-cols-2 divide-x divide-y divide-slate-200 sm:grid-cols-5 sm:divide-y-0">
-            <div className="px-4 py-3">
-              <p className="text-[11px] font-medium text-slate-500">Record</p>
-              <p className="mt-1 font-mono text-lg font-bold tabular-nums">
-                <span className="text-emerald-700">{summary.won}</span>
-                <span className="text-slate-300"> / </span>
-                <span className="text-red-600">{summary.lost}</span>
-                <span className="text-slate-300"> / </span>
-                <span className="text-amber-700">{summary.voided}</span>
-              </p>
-              <p className="text-[10px] text-slate-400">
-                {summary.tickets} tickets · {summary.live + summary.pending} open
-              </p>
-            </div>
-            <div className="px-4 py-3">
-              <p className="text-[11px] font-medium text-slate-500">Hit rate</p>
-              <p className="mt-1 font-mono text-lg font-bold tabular-nums text-slate-900">
-                {percent(summary.hitRate)}
-              </p>
-              <p className="text-[10px] text-slate-400">
-                {summary.decided} decided tickets
-              </p>
-            </div>
-            <div className="px-4 py-3">
-              <p className="text-[11px] font-medium text-slate-500">
-                Break-even
-              </p>
-              <p className="mt-1 font-mono text-lg font-bold tabular-nums text-slate-900">
-                {percent(summary.breakEvenHitRate)}
-              </p>
-              <p className="text-[10px] text-slate-400">
-                Needed at {summary.avgOdds.toFixed(2)} avg odds
-              </p>
-            </div>
-            <div className="px-4 py-3">
-              <p className="text-[11px] font-medium text-slate-500">ROI</p>
-              <p
-                className={`mt-1 font-mono text-lg font-bold tabular-nums ${
-                  summary.roi === null
-                    ? 'text-slate-400'
-                    : pnlTone(summary.roi)
-                }`}
-              >
-                {signedPercent(summary.roi)}
-              </p>
-              <p className="text-[10px] text-slate-400">
-                Flat stake · void excluded
-              </p>
-            </div>
-            <div className="px-4 py-3">
-              <p className="text-[11px] font-medium text-slate-500">Avg CLV</p>
-              <p
-                className={`mt-1 font-mono text-lg font-bold tabular-nums ${
-                  summary.avgClv === null
-                    ? 'text-slate-400'
-                    : pnlTone(summary.avgClv)
-                }`}
-              >
-                {signedPercent(summary.avgClv)}
-              </p>
-              <p className="text-[10px] text-slate-400">
-                Placed price vs closing
-              </p>
-            </div>
+          <div className="px-4 py-3">
+            <DataStatus
+              source="Settled archive"
+              note={
+                <span className="text-slate-500">
+                  Flat one-unit shadow stakes · never placed with a bookmaker
+                </span>
+              }
+            />
           </div>
 
-          <div className="overflow-x-auto border-t border-slate-200">
-            <table className="w-full min-w-[720px] text-left text-xs">
-              <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
-                <tr>
-                  <SortableTh
-                    label="Variant"
-                    columnKey="label"
-                    sort={variantSort}
-                    onSort={handleVariantSort}
-                    className="px-4 py-2 font-semibold"
-                  />
-                  <SortableTh
-                    label="Tickets"
-                    columnKey="tickets"
-                    sort={variantSort}
-                    onSort={handleVariantSort}
-                    align="right"
-                    className="px-3 py-2 font-semibold"
-                  />
-                  <SortableTh
-                    label="W-L-V"
-                    columnKey="record"
-                    sort={variantSort}
-                    onSort={handleVariantSort}
-                    align="right"
-                    className="px-3 py-2 font-semibold"
-                  />
-                  <SortableTh
-                    label="Hit"
-                    columnKey="hitRate"
-                    sort={variantSort}
-                    onSort={handleVariantSort}
-                    align="right"
-                    className="px-3 py-2 font-semibold"
-                  />
-                  <SortableTh
-                    label="Break-even"
-                    columnKey="breakEven"
-                    sort={variantSort}
-                    onSort={handleVariantSort}
-                    align="right"
-                    className="px-3 py-2 font-semibold"
-                  />
-                  <SortableTh
-                    label="ROI"
-                    columnKey="roi"
-                    sort={variantSort}
-                    onSort={handleVariantSort}
-                    align="right"
-                    className="px-3 py-2 font-semibold"
-                  />
-                  <SortableTh
-                    label="Avg CLV"
-                    columnKey="avgClv"
-                    sort={variantSort}
-                    onSort={handleVariantSort}
-                    align="right"
-                    className="px-3 py-2 font-semibold"
-                  />
-                  <SortableTh
-                    label="Avg odds"
-                    columnKey="avgOdds"
-                    sort={variantSort}
-                    onSort={handleVariantSort}
-                    align="right"
-                    className="px-4 py-2 font-semibold"
-                  />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {sortedVariants.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-xs text-slate-500">
-                      No variant currently meets {SHORTLIST_RULE}.
-                      {shortlistOnly && (
-                        <button
-                          type="button"
-                          onClick={() => setShortlistOnly(false)}
-                          className="ml-1 font-semibold text-emerald-700 underline cursor-pointer"
-                        >
-                          Show all variants
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                )}
-                {sortedVariants.map((row) => (
-                  <tr key={row.key}>
-                    <td className="px-4 py-2 font-medium text-slate-800">
-                      {row.label}
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono text-slate-600 tabular-nums">
-                      {row.tickets}
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono text-slate-600 tabular-nums">
-                      {recordLabel(row)}
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono font-semibold text-slate-800 tabular-nums">
-                      {percent(row.hitRate)}
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono text-slate-500 tabular-nums">
-                      {percent(row.breakEvenHitRate)}
-                    </td>
-                    <td
-                      className={`px-3 py-2 text-right font-mono font-semibold tabular-nums ${pnlTone(
-                        row.roi ?? 0
-                      )}`}
+          <div className="px-3 pb-3">
+            <MetricGrid>
+              <MetricCard
+                label="Record"
+                value={recordLabel(summary.won, summary.lost, summary.voided)}
+                detail={`${fmtCount(summary.tickets)} tickets · ${fmtCount(summary.live + summary.pending)} open`}
+              />
+              <MetricCard
+                label="Hit rate"
+                value={fmtPercent(summary.hitRate)}
+                detail={`${fmtCount(summary.decided)} decided tickets`}
+              />
+              <MetricCard
+                label="Break-even"
+                value={fmtPercent(summary.breakEvenHitRate)}
+                detail={`Needed at ${fmtOdds(summary.avgOdds)} avg odds`}
+              />
+              <MetricCard
+                label="ROI"
+                value={fmtSignedPercent(summary.roi)}
+                tone={summary.roi === null ? 'text-slate-400' : pnlTone(summary.roi)}
+                detail="Flat stake · void excluded"
+                infoKey="roi"
+              />
+              <MetricCard
+                label="Avg CLV"
+                value={fmtSignedPercent(summary.avgClv)}
+                tone={summary.avgClv === null ? 'text-slate-400' : pnlTone(summary.avgClv)}
+                detail="Placed price vs closing"
+                infoKey="clv"
+              />
+            </MetricGrid>
+          </div>
+
+          <div className="space-y-2 border-t border-slate-200 px-3 py-3">
+            <SortStatus sort={variantSort} label="variant table" />
+            <DataTable
+              columns={columns}
+              rows={sortedVariants}
+              rowKey={(row) => row.key}
+              caption="Shadow ledger performance by variant"
+              minWidth="min-w-[720px]"
+              compact
+              details={(row) => (
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+                  <div>
+                    <dt className="text-slate-400">Tickets</dt>
+                    <dd className="font-mono text-slate-700">{fmtCount(row.tickets)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-400">Record (W-L-V)</dt>
+                    <dd className="font-mono text-slate-700">
+                      {recordLabel(row.won, row.lost, row.voided)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-400">Hit rate</dt>
+                    <dd className="font-mono text-slate-700">{fmtPercent(row.hitRate)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-400">Break-even</dt>
+                    <dd className="font-mono text-slate-700">
+                      {fmtPercent(row.breakEvenHitRate)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-400">Avg odds</dt>
+                    <dd className="font-mono text-slate-700">
+                      {fmtOdds(row.avgOdds > 0 ? row.avgOdds : null)}
+                    </dd>
+                  </div>
+                </dl>
+              )}
+              empty={
+                <div className="px-4 py-8 text-center text-xs text-slate-500">
+                  No variant currently meets {SHORTLIST_RULE}.
+                  {shortlistOnly && (
+                    <button
+                      type="button"
+                      onClick={() => setShortlistOnly(false)}
+                      className="ml-1 font-semibold text-emerald-700 underline cursor-pointer"
                     >
-                      {signedPercent(row.roi)}
-                    </td>
-                    <td
-                      className={`px-3 py-2 text-right font-mono tabular-nums ${
-                        row.avgClv === null
-                          ? 'text-slate-400'
-                          : pnlTone(row.avgClv)
-                      }`}
-                    >
-                      {signedPercent(row.avgClv)}
-                    </td>
-                    <td className="px-4 py-2 text-right font-mono text-slate-600 tabular-nums">
-                      {row.avgOdds > 0 ? row.avgOdds.toFixed(2) : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      Show all variants
+                    </button>
+                  )}
+                </div>
+              }
+            />
           </div>
 
           <div className="border-t border-amber-100 bg-amber-50/60 px-4 py-2 text-[11px] leading-relaxed text-amber-800">

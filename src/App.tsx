@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertCircle, RefreshCw, X } from 'lucide-react';
-import { TopBar, type ActiveTab } from './components/TopBar.tsx';
+import { AlertCircle, RefreshCw } from 'lucide-react';
+import { TopBar } from './components/TopBar.tsx';
+import type { ActiveTab } from './types/navigation.ts';
 import { SideMenu } from './components/SideMenu.tsx';
 import { DateNavigator } from './components/DateNavigator.tsx';
 import { FixtureBoard } from './components/FixtureBoard.tsx';
@@ -14,6 +15,8 @@ import { SourcesView } from './components/SourcesView.tsx';
 import { AuthDialog } from './components/AuthDialog.tsx';
 import { AdminPanel } from './components/AdminPanel.tsx';
 import { LandingPage } from './components/LandingPage.tsx';
+import { NotificationRegion, type NoticeItem } from './components/ui/NotificationRegion.tsx';
+import { ErrorState } from './components/ui/States.tsx';
 import { useAuth } from './context/AuthContext.tsx';
 import type {
   AccaLeg,
@@ -41,6 +44,17 @@ import {
   parseSlateFilterState,
 } from './utils/slateFilterState.ts';
 import type { SlateFilterState } from './utils/slateFilterState.ts';
+import {
+  detectFilterPreset,
+  loadPresetPreference,
+  presetFilters,
+  savePresetPreference,
+} from './utils/slateFilterPresets.ts';
+import type { SlateFilterPresetSelection } from './utils/slateFilterPresets.ts';
+import {
+  parseAppUrlState,
+  writeAppUrl,
+} from './utils/urlState.ts';
 import type { UserPreferences } from './types/user.ts';
 import {
   loadFixtureSnapshots,
@@ -119,8 +133,20 @@ export default function App() {
   } = useAuth();
   const todayDate = getClientLocalIsoDate();
   const isGuest = !authLoading && !user;
-  const [selectedDate, setSelectedDate] = useState<string>(todayDate);
-  const [activeTab, setActiveTab] = useState<ActiveTab>('slate');
+  // Tab, matchday and filter preset are deep-linkable (see utils/urlState.ts).
+  const [initialUrl] = useState(() =>
+    parseAppUrlState(
+      typeof window === 'undefined' ? '' : window.location.search,
+      todayDate
+    )
+  );
+  const [selectedDate, setSelectedDate] = useState<string>(
+    initialUrl.date ?? todayDate
+  );
+  const [activeTab, setActiveTab] = useState<ActiveTab>(initialUrl.tab);
+  const [activeSection, setActiveSection] = useState<string | undefined>(
+    initialUrl.section
+  );
   const [menuOpen, setMenuOpen] = useState(false);
   const [strategy, setStrategy] = useState<AccaStrategy>('balanced');
   const [minOdds, setMinOdds] = useState<number>(2.8);
@@ -159,7 +185,14 @@ export default function App() {
   const [importBusy, setImportBusy] = useState(false);
   const [verificationBusy, setVerificationBusy] = useState(false);
   const [verificationError, setVerificationError] = useState<string | null>(null);
-  const [filters, setFilters] = useState<SlateFilterState>(loadSlateFilterState);
+  const [filterPreset, setFilterPreset] = useState<SlateFilterPresetSelection>(
+    () => initialUrl.preset ?? loadPresetPreference()
+  );
+  const [filters, setFilters] = useState<SlateFilterState>(() =>
+    initialUrl.preset && initialUrl.preset !== 'custom'
+      ? presetFilters(initialUrl.preset)
+      : loadSlateFilterState()
+  );
   const [prefsReady, setPrefsReady] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
 
@@ -170,6 +203,96 @@ export default function App() {
 
   const [fixtureSnapshots, setFixtureSnapshots] = useState<FixtureSnapshots>(() =>
     loadFixtureSnapshots()
+  );
+
+  // Navigation writes history entries; date/preset changes only replace the
+  // current one so typing or chip-clicking does not flood the back stack.
+  const scrollPositionsRef = useRef<Partial<Record<ActiveTab, number>>>({});
+  const navigate = useCallback(
+    (tab: ActiveTab) => {
+      if (tab === activeTab) return;
+      scrollPositionsRef.current[activeTab] = window.scrollY;
+      writeAppUrl({ tab, date: selectedDate, preset: filterPreset });
+      setActiveSection(undefined);
+      setActiveTab(tab);
+      const target = scrollPositionsRef.current[tab] ?? 0;
+      window.requestAnimationFrame(() => window.scrollTo({ top: target }));
+    },
+    [activeTab, selectedDate, filterPreset]
+  );
+
+  useEffect(() => {
+    writeAppUrl(
+      { tab: activeTab, date: selectedDate, preset: filterPreset, section: activeSection },
+      { replace: true }
+    );
+  }, [activeTab, selectedDate, filterPreset, activeSection]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const state = parseAppUrlState(window.location.search, todayDate);
+      setActiveTab(state.tab);
+      if (state.date) setSelectedDate(state.date);
+      if (state.preset) {
+        setFilterPreset(state.preset);
+        if (state.preset !== 'custom') setFilters(presetFilters(state.preset));
+      }
+      setActiveSection(state.section);
+      if (state.section) {
+        window.requestAnimationFrame(() => {
+          document.getElementById(state.section ?? '')?.scrollIntoView({
+            block: 'start',
+          });
+        });
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [todayDate]);
+
+  // Section links are deep-linkable without letting the hash fight the query
+  // state. The shared SectionNav marks its anchors with `data-section-link`.
+  useEffect(() => {
+    if (initialUrl.section) {
+      window.requestAnimationFrame(() => {
+        document.getElementById(initialUrl.section ?? '')?.scrollIntoView({
+          block: 'start',
+        });
+      });
+    }
+
+    const handleSectionClick = (event: MouseEvent) => {
+      const anchor = (event.target as HTMLElement).closest<HTMLAnchorElement>(
+        'a[data-section-link][href^="#"]'
+      );
+      if (!anchor) return;
+      const id = anchor.getAttribute('href')?.slice(1);
+      if (!id || !document.getElementById(id)) return;
+      event.preventDefault();
+      setActiveSection(id);
+      document.getElementById(id)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    };
+    document.addEventListener('click', handleSectionClick);
+    return () => document.removeEventListener('click', handleSectionClick);
+  }, [initialUrl.section]);
+
+  const applyFilterPreset = useCallback((id: SlateFilterPresetSelection) => {
+    setFilterPreset(id);
+    savePresetPreference(id);
+    if (id !== 'custom') setFilters(presetFilters(id));
+  }, []);
+
+  const handleFiltersChange = useCallback(
+    (next: SlateFilterState) => {
+      setFilters(next);
+      const inferred = detectFilterPreset(next);
+      setFilterPreset((current) => (current === inferred ? current : inferred));
+      savePresetPreference(inferred);
+    },
+    []
   );
 
   // Saved slips must keep their matchday even after the retention window.
@@ -732,7 +855,7 @@ export default function App() {
   const handleLoadTicket = (ticket: SavedTicket) => {
     setSelectedLegs(ticket.legs);
     setStake(ticket.stake);
-    setActiveTab('slate');
+    navigate('slate');
   };
 
   const handleDeleteTicket = async (ticketId: string) => {
@@ -892,6 +1015,117 @@ export default function App() {
   // Derived from current state, never from the last server payload, so the
   // Curated Acca heading always matches the strategy actually applied to the legs.
   const strategyCopy = describeStrategy(strategy, minOdds);
+
+  // Notifications are prioritised into one region: the most important one is
+  // expanded, the rest sit behind a single disclosure instead of a stack.
+  const authNotice: NoticeItem | null = notice
+    ? {
+        id: 'auth',
+        tone: noticeTone === 'error' ? 'warning' : 'success',
+        title: notice,
+        actions: (
+          <>
+            {noticeTone === 'error' && user && (
+              <button
+                type="button"
+                onClick={() => void refreshAuth()}
+                className="font-semibold underline hover:opacity-75 cursor-pointer"
+              >
+                Retry
+              </button>
+            )}
+            {noticeTone === 'error' && !user && (
+              <button
+                type="button"
+                onClick={openAuth}
+                className="font-semibold underline hover:opacity-75 cursor-pointer"
+              >
+                Sign in
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={dismissNotice}
+              aria-label="Dismiss notification"
+              className="font-semibold hover:opacity-75 cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </>
+        ),
+      }
+    : null;
+
+  const verificationNotice: NoticeItem | null =
+    user && !user.emailVerified
+      ? {
+          id: 'verification',
+          tone: 'warning',
+          title: 'Verify your email address.',
+          body: (
+            <>
+              Check your inbox for the verification link, or send it again.
+              {verificationError && (
+                <span className="mt-1 block font-semibold text-red-700" role="alert">
+                  {verificationError}
+                </span>
+              )}
+            </>
+          ),
+          actions: (
+            <button
+              type="button"
+              onClick={() => void handleResendVerification()}
+              disabled={verificationBusy}
+              className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 font-semibold hover:bg-amber-100 disabled:opacity-60 cursor-pointer"
+            >
+              {verificationBusy ? 'Sending…' : 'Resend verification email'}
+            </button>
+          ),
+        }
+      : null;
+
+  const importNotice: NoticeItem | null = importPrompt
+    ? {
+        id: 'import',
+        tone: 'info',
+        title: `Bring your ${importPrompt.length} saved slip${
+          importPrompt.length === 1 ? '' : 's'
+        } with you?`,
+        body: 'Import them into your account so they sync across devices. Your local copy stays until the import succeeds.',
+        actions: (
+          <>
+            <button
+              type="button"
+              disabled={importBusy}
+              onClick={() => setImportPrompt(null)}
+              className="rounded-lg px-3 py-1.5 font-semibold hover:bg-indigo-100 disabled:opacity-60 cursor-pointer"
+            >
+              Not now
+            </button>
+            <button
+              type="button"
+              disabled={importBusy}
+              onClick={() => void handleImportLocal()}
+              className="rounded-lg bg-indigo-700 px-3 py-1.5 font-semibold text-white hover:bg-indigo-800 disabled:opacity-60 cursor-pointer"
+            >
+              {importBusy ? 'Importing…' : 'Import slips'}
+            </button>
+          </>
+        ),
+      }
+    : null;
+
+  const noticePriority: Record<NoticeItem['tone'], number> = {
+    error: 0,
+    warning: 1,
+    info: 2,
+    success: 3,
+  };
+  const notices = [authNotice, verificationNotice, importNotice]
+    .filter((item): item is NoticeItem => item !== null)
+    .sort((a, b) => noticePriority[a.tone] - noticePriority[b.tone]);
+
   // Outer page gutters are centralized in src/index.css (`--page-gutter*`,
   // `--page-menu-width*` and `--page-menu-gap*`). Tune them there to resize
   // the whole layout.
@@ -901,16 +1135,12 @@ export default function App() {
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
       <TopBar
         activeTab={activeTab}
-        onSelectTab={setActiveTab}
+        onSelectTab={navigate}
         onRefresh={() => fetchSlateForDate(selectedDate, strategy, minOdds, maxLegs, true)}
         isLoading={isLoading}
         user={user}
         profile={profile}
         onSignIn={openAuth}
-        onSignOut={() => void signOut()}
-        onResendVerification={() => void handleResendVerification()}
-        isAdmin={profile?.role === 'admin'}
-        onAdmin={() => setAdminOpen((open) => !open)}
         isGuest={isGuest}
         onToggleMenu={() => setMenuOpen((open) => !open)}
         isMenuOpen={menuOpen}
@@ -919,7 +1149,7 @@ export default function App() {
       {!isGuest && (
         <SideMenu
           activeTab={activeTab}
-          onSelectTab={setActiveTab}
+          onSelectTab={navigate}
           savedCount={savedTickets.length}
           user={user}
           profile={profile}
@@ -932,117 +1162,7 @@ export default function App() {
         />
       )}
 
-      {notice && (
-        <div
-          role={noticeTone === 'error' ? 'alert' : 'status'}
-          className={
-            noticeTone === 'error'
-              ? 'bg-amber-50 border-b border-amber-200'
-              : 'bg-emerald-50 border-b border-emerald-200'
-          }
-        >
-          <div
-            className={`${contentInset} py-2.5 flex items-center justify-between gap-3 text-xs ${
-              noticeTone === 'error' ? 'text-amber-900' : 'text-emerald-900'
-            }`}
-          >
-            <span>{notice}</span>
-            <div className="flex items-center gap-3 shrink-0">
-              {noticeTone === 'error' && user && (
-                <button
-                  type="button"
-                  onClick={() => void refreshAuth()}
-                  className="font-semibold text-amber-900 underline hover:text-amber-700 cursor-pointer"
-                >
-                  Retry
-                </button>
-              )}
-              {noticeTone === 'error' && !user && (
-                <button
-                  type="button"
-                  onClick={openAuth}
-                  className="font-semibold text-amber-900 underline hover:text-amber-700 cursor-pointer"
-                >
-                  Sign in
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={dismissNotice}
-                aria-label="Dismiss"
-                className={
-                  noticeTone === 'error'
-                    ? 'text-amber-800 hover:text-amber-950 cursor-pointer'
-                    : 'text-emerald-700 hover:text-emerald-900 cursor-pointer'
-                }
-              >
-                <X className="w-4 h-4" aria-hidden="true" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {user && !user.emailVerified && (
-        <div className="bg-amber-50 border-b border-amber-200" role="status">
-          <div className={`${contentInset} py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-amber-900`}>
-            <div>
-              <span className="font-semibold">Verify your email address.</span>{' '}
-              <span className="text-amber-800">
-                Check your inbox for the verification link, or send it again.
-              </span>
-              {verificationError && (
-                <span className="block mt-1 text-red-700" role="alert">
-                  {verificationError}
-                </span>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => void handleResendVerification()}
-              disabled={verificationBusy}
-              className="shrink-0 rounded-lg border border-amber-300 bg-white px-3 py-1.5 font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-60 cursor-pointer"
-            >
-              {verificationBusy ? 'Sending…' : 'Resend verification email'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {importPrompt && (
-        <div className="bg-indigo-50 border-b border-indigo-200">
-          <div className={`${contentInset} py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
-            <div className="text-xs text-indigo-900">
-              <span className="font-semibold">
-                Bring your {importPrompt.length} saved slip
-                {importPrompt.length === 1 ? '' : 's'} with you?
-              </span>{' '}
-              <span className="text-indigo-700">
-                Import them into your account so they sync across devices. Your
-                local copy stays until the import succeeds.
-              </span>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                disabled={importBusy}
-                onClick={() => setImportPrompt(null)}
-                className="px-3 py-1.5 text-xs font-semibold text-indigo-800 hover:bg-indigo-100 rounded-lg cursor-pointer disabled:opacity-60"
-              >
-                Not now
-              </button>
-              <button
-                type="button"
-                disabled={importBusy}
-                onClick={() => void handleImportLocal()}
-                className="px-3 py-1.5 text-xs font-semibold text-white bg-indigo-700 hover:bg-indigo-800 rounded-lg cursor-pointer disabled:opacity-60"
-              >
-                {importBusy ? 'Importing…' : 'Import slips'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <NotificationRegion items={notices} inset={contentInset} />
 
       {/* Universal Matchday Date Bar across all views (signed-in only) */}
       <div
@@ -1090,14 +1210,14 @@ export default function App() {
             strategyName={strategyCopy.title}
             minOdds={minOdds}
             maxLegs={maxLegs}
-            onGoToSlate={() => setActiveTab('slate')}
+            onGoToSlate={() => navigate('slate')}
           />
         ) : !isGuest && activeTab === 'roi' ? (
           <PositiveRoiView
             strategy={strategy}
             selectedDate={selectedDate}
             displayDate={slate?.displayDate || selectedDate}
-            onGoToSlate={() => setActiveTab('slate')}
+            onGoToSlate={() => navigate('slate')}
           />
         ) : isGuest ? (
           <LandingPage
@@ -1147,37 +1267,30 @@ export default function App() {
             </div>
           </div>
         ) : errorMessage && !slate ? (
-          <div className="max-w-xl mx-auto bg-white border border-slate-200 rounded-xl p-8 text-center space-y-4">
-            <AlertCircle
-              className="w-8 h-8 text-red-600 mx-auto"
-              aria-hidden="true"
-            />
-            <div className="space-y-1">
-              <h1 className="text-lg font-bold text-slate-900">
-                Could not load fixtures for {selectedDate}
-              </h1>
-              <p className="text-sm text-slate-600">{errorMessage}</p>
-            </div>
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => {
-                  if (e.target.value) handleChangeDate(e.target.value);
-                }}
-                aria-label="Pick another date"
-                className="h-9 px-3 text-xs font-mono text-slate-800 bg-white border border-slate-200 rounded-lg"
-              />
-              <button
-                type="button"
-                onClick={() => fetchSlateForDate(selectedDate, strategy, minOdds, maxLegs, true)}
-                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
-              >
-                <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>Retry Loading Slate</span>
-              </button>
-            </div>
-          </div>
+          <ErrorState
+            className="max-w-xl mx-auto"
+            title={`Could not load fixtures for ${selectedDate}`}
+            description={
+              <>
+                {errorMessage}
+                <span className="mt-3 flex justify-center">
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => {
+                      if (e.target.value) handleChangeDate(e.target.value);
+                    }}
+                    aria-label="Pick another date"
+                    className="h-9 px-3 text-xs font-mono text-slate-800 bg-white border border-slate-200 rounded-lg"
+                  />
+                </span>
+              </>
+            }
+            onRetry={() =>
+              fetchSlateForDate(selectedDate, strategy, minOdds, maxLegs, true)
+            }
+            retryLabel="Retry Loading Slate"
+          />
         ) : slate ? (
           <>
             {errorMessage && (
@@ -1219,7 +1332,11 @@ export default function App() {
                     analysisErrors={analysisErrors}
                     onRequestDeepAnalysis={handleRequestDeepAnalysis}
                     filters={filters}
-                    onFiltersChange={setFilters}
+                    onFiltersChange={handleFiltersChange}
+                    activePreset={filterPreset}
+                    onPresetChange={(id) =>
+                      applyFilterPreset(id === 'custom' ? 'default' : id)
+                    }
                   />
                 </div>
                 <div className="lg:col-span-5 min-w-0">
@@ -1260,7 +1377,7 @@ export default function App() {
                 fixtures={slate.fixtures}
                 minOdds={minOdds}
                 stake={stake}
-                onGoToSlate={() => setActiveTab('slate')}
+                onGoToSlate={() => navigate('slate')}
                 onSaveTicket={handleSaveTicket}
                 onAutoComplete={handleAutoCompleteToTarget}
               />
@@ -1274,7 +1391,8 @@ export default function App() {
                 todayDate={todayDate}
                 onLoadTicket={handleLoadTicket}
                 onDeleteTicket={handleDeleteTicket}
-                onGoToSlate={() => setActiveTab('slate')}
+                onGoToSlate={() => navigate('slate')}
+                onGoToActivity={() => navigate('activity')}
                 onRefreshResults={handleRefreshSavedResults}
                 onLoadMatchDetails={handleLoadMatchDetails}
               />
@@ -1286,7 +1404,7 @@ export default function App() {
                 fixtures={slate.fixtures}
                 fixtureSnapshots={fixtureSnapshots}
                 signedIn={Boolean(user)}
-                onGoToSlate={() => setActiveTab('slate')}
+                onGoToSlate={() => navigate('slate')}
               />
             )}
 
@@ -1295,7 +1413,7 @@ export default function App() {
                 sources={allSources}
                 displayDate={slate.displayDate}
                 cachedAt={slate.cachedAt}
-                onGoToSlate={() => setActiveTab('slate')}
+                onGoToSlate={() => navigate('slate')}
               />
             )}
           </>

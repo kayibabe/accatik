@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronRight, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import type {
   AccaLeg,
   Fixture,
@@ -14,17 +14,16 @@ import {
   resolveSettlementPool,
   type FixtureSnapshots,
 } from '../utils/fixtureSnapshots.ts';
-import {
-  formatTicketDayLabel,
-  formatTicketMonthLabel,
-  groupTicketsByDate,
-  ticketDateIso,
-} from '../utils/savedTicketGroups.ts';
+import { fmtCount } from '../utils/format.ts';
+import { groupTicketsByDate, ticketDateIso } from '../utils/savedTicketGroups.ts';
 import { buildSlipActivityData } from '../utils/slipActivity.ts';
 import { SavedMatchDetailDialog } from './SavedMatchDetailDialog.tsx';
-import { SavedTicketCard } from './SavedTicketCard.tsx';
 import { ShadowLedgerPanel } from './ShadowLedgerPanel.tsx';
-import { SlipPerformancePanel } from './SlipPerformancePanel.tsx';
+import { CompactSlipKpis } from './tickets/CompactSlipKpis.tsx';
+import { SlipDateGroups } from './tickets/SlipDateGroups.tsx';
+import { DataStatus } from './ui/DataStatus.tsx';
+import { PageHeader } from './ui/PageHeader.tsx';
+import { EmptyState, ErrorState, InlineLoading } from './ui/States.tsx';
 
 interface SavedSlipsViewProps {
   savedTickets: SavedTicket[];
@@ -35,6 +34,11 @@ interface SavedSlipsViewProps {
   onLoadTicket: (ticket: SavedTicket) => void;
   onDeleteTicket: (ticketId: string) => void;
   onGoToSlate: () => void;
+  /**
+   * Opens the authoritative analytics screen. Optional so existing callers
+   * keep working; the slate is used as a safe fallback.
+   */
+  onGoToActivity?: () => void;
   onRefreshResults: (
     fixtureIds: string[],
     forceRefresh?: boolean
@@ -79,6 +83,7 @@ export function SavedSlipsView({
   onLoadTicket,
   onDeleteTicket,
   onGoToSlate,
+  onGoToActivity,
   onRefreshResults,
   onLoadMatchDetails,
 }: SavedSlipsViewProps) {
@@ -98,19 +103,16 @@ export function SavedSlipsView({
   const [matchDetailError, setMatchDetailError] = useState<string | null>(null);
   const matchDetailRequestRef = useRef(0);
 
+  const goToActivity = onGoToActivity ?? onGoToSlate;
+
   // Personal activity projection, shared with the My Activity view so both
-  // screens report identical settlement and performance numbers.
+  // screens report identical settlement and performance numbers. The detailed
+  // panels are rendered only on that authoritative screen.
   const activity = useMemo(
     () => buildSlipActivityData(savedTickets, fixtures, fixtureSnapshots),
     [savedTickets, fixtures, fixtureSnapshots]
   );
-  const {
-    settlements,
-    analytics,
-    daily: dailyPerformance,
-    oddsBands: oddsBandPerformance,
-    marketTypes: marketTypePerformance,
-  } = activity;
+  const { settlements, analytics } = activity;
 
   const groups = useMemo(() => groupTicketsByDate(savedTickets), [savedTickets]);
 
@@ -295,68 +297,64 @@ export function SavedSlipsView({
 
   return (
     <section aria-label="Saved Accumulator Slips" className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div>
-          <p className="text-xs font-medium text-slate-500">
-            Local Ticket Archive
-          </p>
-          <h1 className="mt-1 text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
-            Saved Accumulator Slips
-          </h1>
-        </div>
-        <button
-          type="button"
-          onClick={onGoToSlate}
-          className="self-start sm:self-auto px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
-        >
-          Back to Today&apos;s Slate
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Local Ticket Archive"
+        title="Saved Accumulator Slips"
+        description="Your personal archive of saved slips. Settlements come from captured price snapshots and the live slate; full performance analytics live in My Activity."
+        scope="personal"
+        onBack={onGoToSlate}
+      />
+
+      <DataStatus
+        source="Local slip archive"
+        mode="Archived price snapshots"
+        note={
+          <span className="font-mono tabular-nums">
+            Matchday {todayDate} ·{' '}
+            {fmtCount(Object.keys(fixtureSnapshots).length)} snapshot days
+          </span>
+        }
+      />
 
       <ShadowLedgerPanel />
 
       {savedTickets.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-xl p-12 text-center space-y-3">
-          <p className="text-base font-semibold text-slate-900">
-            No saved accumulator slips yet
-          </p>
-          <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-            Build or customize a pre-match accumulator on today&apos;s fixture
-            board and click &ldquo;Save Slip&rdquo; to store variations for
-            comparison.
-          </p>
-          <button
-            type="button"
-            onClick={onGoToSlate}
-            className="mt-2 px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
-          >
-            Build First Slip
-          </button>
-        </div>
+        <EmptyState
+          title="No saved accumulator slips yet"
+          description="Saving a pre-match accumulator stores its legs, odds, stake and captured price snapshot here. Settlements and personal performance are tracked automatically as results arrive."
+          action={
+            <button
+              type="button"
+              onClick={onGoToSlate}
+              className="px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
+            >
+              Build First Slip
+            </button>
+          }
+        />
       ) : (
         <>
-          <SlipPerformancePanel
+          <CompactSlipKpis
             analytics={analytics}
-            daily={dailyPerformance}
-            oddsBands={oddsBandPerformance}
-            marketTypes={marketTypePerformance}
+            onViewActivity={goToActivity}
           />
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs text-slate-500">
               {pendingFixtureIds.length > 0
-                ? `${pendingFixtureIds.length} fixture${
+                ? `${fmtCount(pendingFixtureIds.length)} fixture${
                     pendingFixtureIds.length === 1 ? '' : 's'
                   } not yet final`
                 : analytics.live > 0
-                  ? `${analytics.live} slip${
+                  ? `${fmtCount(analytics.live)} slip${
                       analytics.live === 1 ? '' : 's'
                     } in play — all finished matches are settled`
                   : analytics.pending > 0
                     ? 'All finished matches are settled; open slips are waiting on kickoff.'
                     : 'Every match on these slips is settled.'}
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {isRefreshing && <InlineLoading label="Refreshing results…" />}
               {pendingFixtureIds.length > 0 && (
                 <button
                   type="button"
@@ -382,138 +380,25 @@ export function SavedSlipsView({
           </div>
 
           {refreshError && (
-            <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
-              <span>Could not refresh results: {refreshError}</span>
-              <button
-                type="button"
-                onClick={handleManualRefresh}
-                className="font-semibold underline whitespace-nowrap cursor-pointer"
-              >
-                Retry
-              </button>
-            </div>
+            <ErrorState
+              title="Could not refresh results"
+              description={refreshError}
+              onRetry={handleManualRefresh}
+            />
           )}
 
-          <div className="space-y-8">
-            {groups.map((yearGroup) => (
-              <section
-                key={yearGroup.year}
-                aria-label={`${yearGroup.year} slips`}
-                className="space-y-3"
-              >
-                <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">
-                  {yearGroup.year}
-                </h2>
-
-                <div className="space-y-4">
-                  {yearGroup.months.map((monthGroup) => (
-                    <div key={monthGroup.month} className="space-y-2">
-                      <h3 className="pl-1 text-xs font-semibold text-slate-500">
-                        {formatTicketMonthLabel(monthGroup.month)}
-                      </h3>
-
-                      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-200">
-                        {monthGroup.days.map((day) => {
-                          const expanded = isDayExpanded(day.dateIso);
-                          const panelId = `saved-slips-${day.dateIso}`;
-                          const daySettlements = day.tickets.map(
-                            (ticket) =>
-                              settlements.get(ticket.id)?.settlement.status ??
-                              'Pending'
-                          );
-                          const dayWon = daySettlements.filter(
-                            (status) => status === 'Win'
-                          ).length;
-                          const dayLost = daySettlements.filter(
-                            (status) => status === 'Lost'
-                          ).length;
-                          const dayOpen = daySettlements.filter(isOpen).length;
-
-                          return (
-                            <div key={day.dateIso}>
-                              <button
-                                type="button"
-                                onClick={() => toggleDay(day.dateIso)}
-                                aria-expanded={expanded}
-                                aria-controls={panelId}
-                                className="flex w-full items-center justify-between gap-3 px-4 sm:px-5 py-3 text-left hover:bg-slate-50 transition-colors cursor-pointer"
-                              >
-                                <span className="flex min-w-0 items-center gap-2">
-                                  <ChevronRight
-                                    className={`w-4 h-4 shrink-0 text-slate-400 transition-transform ${
-                                      expanded ? 'rotate-90' : ''
-                                    }`}
-                                    aria-hidden="true"
-                                  />
-                                  <span
-                                    className={`truncate text-sm font-semibold ${
-                                      day.dateIso === todayDate
-                                        ? 'text-emerald-800'
-                                        : 'text-slate-800'
-                                    }`}
-                                  >
-                                    {formatTicketDayLabel(day.dateIso, todayDate)}
-                                  </span>
-                                </span>
-                                <span className="flex shrink-0 items-center gap-3 text-[11px]">
-                                  <span className="font-mono text-slate-500 tabular-nums">
-                                    {day.tickets.length}{' '}
-                                    {day.tickets.length === 1 ? 'slip' : 'slips'}
-                                  </span>
-                                  <span className="flex items-center gap-2 font-semibold">
-                                    {dayWon > 0 && (
-                                      <span className="text-emerald-700">
-                                        {dayWon} won
-                                      </span>
-                                    )}
-                                    {dayLost > 0 && (
-                                      <span className="text-red-600">
-                                        {dayLost} lost
-                                      </span>
-                                    )}
-                                    {dayOpen > 0 && (
-                                      <span className="text-slate-500">
-                                        {dayOpen} pending
-                                      </span>
-                                    )}
-                                  </span>
-                                </span>
-                              </button>
-
-                              {expanded && (
-                                <div
-                                  id={panelId}
-                                  className="divide-y divide-slate-200 border-t border-slate-200 bg-slate-50/50"
-                                >
-                                  {day.tickets.map((ticket) => {
-                                    const entry = settlements.get(ticket.id);
-                                    if (!entry) return null;
-                                    return (
-                                      <SavedTicketCard
-                                        key={ticket.id}
-                                        ticket={ticket}
-                                        pool={entry.pool}
-                                        settlement={entry.settlement}
-                                        copied={copiedId === ticket.id}
-                                        onCopy={handleCopy}
-                                        onLoad={onLoadTicket}
-                                        onDelete={onDeleteTicket}
-                                        onSelectMatch={handleSelectMatch}
-                                      />
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ))}
-          </div>
+          <SlipDateGroups
+            groups={groups}
+            todayDate={todayDate}
+            settlements={settlements}
+            expandedDays={expandedDays}
+            copiedId={copiedId}
+            onToggleDay={toggleDay}
+            onCopy={handleCopy}
+            onLoad={onLoadTicket}
+            onDelete={onDeleteTicket}
+            onSelectMatch={handleSelectMatch}
+          />
         </>
       )}
 

@@ -6,6 +6,7 @@ import type {
   RecommendedPickRef,
   SettlementStatus,
 } from '../types/fixtures.ts';
+import { fmtMwk } from './format.ts';
 
 export function calculateTotalOdds(legs: AccaLeg[]): number {
   if (legs.length === 0) return 0;
@@ -32,10 +33,7 @@ export function calculatePotentialReturn(stake: number, totalOdds: number): numb
 
 export function formatMwk(amount: number): string {
   const safe = Number.isFinite(amount) ? amount : 0;
-  return `MK ${safe.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+  return fmtMwk(safe);
 }
 
 export function evaluateMarketSettlement(

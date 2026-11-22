@@ -11,8 +11,8 @@ import {
   X,
   ChartColumn,
 } from 'lucide-react';
+import { NAV_GROUPS, type ActiveTab } from '../types/navigation.ts';
 import type { AppUser, UserProfile } from '../types/user.ts';
-import type { ActiveTab } from './TopBar.tsx';
 
 interface SideMenuProps {
   activeTab: ActiveTab;
@@ -28,15 +28,15 @@ interface SideMenuProps {
   onClose: () => void;
 }
 
-const navItems: { id: ActiveTab; label: string; icon: typeof CalendarDays }[] = [
-  { id: 'slate', label: 'Matchday Slate', icon: CalendarDays },
-  { id: 'acca', label: 'Curated Acca', icon: ClipboardList },
-  { id: 'saved', label: 'Saved Slips', icon: Bookmark },
-  { id: 'activity', label: 'My Activity', icon: Activity },
-  { id: 'analytics', label: 'Analytics', icon: ChartColumn },
-  { id: 'roi', label: 'Positive ROI (Research)', icon: TrendingUp },
-  { id: 'sources', label: 'Sources', icon: BookOpen },
-];
+const TAB_ICONS: Record<ActiveTab, typeof CalendarDays> = {
+  slate: CalendarDays,
+  acca: ClipboardList,
+  saved: Bookmark,
+  activity: Activity,
+  analytics: ChartColumn,
+  roi: TrendingUp,
+  sources: BookOpen,
+};
 
 export function SideMenu({
   activeTab,
@@ -67,49 +67,64 @@ export function SideMenu({
 
   const navContent = (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-4">
-      <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-        Workspace
-      </p>
-      <nav aria-label="Workspace navigation" className="space-y-1">
-        {navItems.map((item) => {
-          const isActive = activeTab === item.id;
-          const Icon = item.icon;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => handleSelect(item.id)}
-              aria-current={isActive ? 'page' : undefined}
-              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${
-                isActive
-                  ? 'bg-emerald-50 font-semibold text-emerald-800'
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-              }`}
-            >
-              <Icon
-                className={`h-4 w-4 shrink-0 ${
-                  isActive ? 'text-emerald-700' : 'text-slate-400'
-                }`}
-                aria-hidden="true"
-              />
-              <span className="min-w-0 truncate">{item.label}</span>
-              {item.id === 'saved' && savedCount > 0 && (
-                <span
-                  className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums ${
+      {NAV_GROUPS.map((group) => (
+        <div key={group.id} className="pb-3">
+          <p
+            title={group.description}
+            className="px-3 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400"
+          >
+            {group.label}
+          </p>
+          <nav aria-label={`${group.label} navigation`} className="space-y-1">
+            {group.items.map((item) => {
+              const isActive = activeTab === item.id;
+              const Icon = TAB_ICONS[item.id];
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleSelect(item.id)}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${
                     isActive
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-slate-100 text-slate-600'
+                      ? 'bg-emerald-50 font-semibold text-emerald-800'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                   }`}
                 >
-                  {savedCount}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </nav>
+                  <Icon
+                    className={`h-4 w-4 shrink-0 ${
+                      isActive ? 'text-emerald-700' : 'text-slate-400'
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <span className="min-w-0 truncate">{item.label}</span>
+                  {item.research && (
+                    <span
+                      title="Read-only research — never a live betting recommendation"
+                      className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-800"
+                    >
+                      Lab
+                    </span>
+                  )}
+                  {item.id === 'saved' && savedCount > 0 && (
+                    <span
+                      className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums ${
+                        isActive
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-slate-100 text-slate-600'
+                      }`}
+                    >
+                      {savedCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+      ))}
 
-      <div className="mt-auto pt-5">
+      <div className="mt-auto pt-3">
         <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
           Account
         </p>

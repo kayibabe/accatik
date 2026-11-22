@@ -1,13 +1,26 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Info, Layers3, RefreshCw } from 'lucide-react';
-import type {
-  AccaStrategy,
-} from '../types/fixtures.ts';
+import type { AccaStrategy } from '../types/fixtures.ts';
 import type {
   TicketReplayResponse,
   TicketReplayRow,
 } from '../types/analytics.ts';
 import { apiFetch } from '../utils/api.ts';
+import {
+  fmtCount,
+  fmtFixed,
+  fmtOdds,
+  fmtPercent,
+  fmtShortDate,
+  fmtSignedPercent,
+  fmtUnits,
+} from '../utils/format.ts';
+import { pnlTone, settlementTone } from '../utils/uiTone.ts';
+import { DataTable, type DataTableColumn } from './ui/DataTable.tsx';
+import { DataStatus } from './ui/DataStatus.tsx';
+import { InfoHint, MetricCard } from './ui/DataCard.tsx';
+import { EmptyState, InlineLoading } from './ui/States.tsx';
+import { recordLabel } from './performance/format.ts';
 
 interface TicketReplayPanelProps {
   strategy: AccaStrategy;
@@ -25,65 +38,6 @@ const TABS: Array<{ id: ReplayTab; label: string; hint: string }> = [
   { id: 'odds', label: 'Min odds', hint: 'Current strategy and leg cap held fixed' },
   { id: 'legs', label: 'Max legs', hint: 'Current strategy and target held fixed' },
 ];
-
-const percent = (value: number | null): string =>
-  value === null ? '—' : `${value.toFixed(1)}%`;
-
-const signedPercent = (value: number | null): string => {
-  if (value === null) return '—';
-  if (value > 0) return `+${value.toFixed(1)}%`;
-  if (value < 0) return `${value.toFixed(1)}%`;
-  return '0.0%';
-};
-
-const signedUnits = (value: number): string =>
-  `${value > 0 ? '+' : value < 0 ? '-' : ''}${Math.abs(value).toFixed(2)}u`;
-
-const pnlTone = (value: number): string =>
-  value > 0 ? 'text-emerald-700' : value < 0 ? 'text-red-600' : 'text-slate-700';
-
-const statusTone = (status: string): string =>
-  status === 'Win'
-    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-    : status === 'Lost'
-      ? 'border-red-200 bg-red-50 text-red-700'
-      : 'border-slate-200 bg-slate-50 text-slate-500';
-
-function shortDate(dateIso: string): string {
-  const [year, month, day] = dateIso.split('-').map(Number);
-  if (!year || !month || !day) return dateIso;
-  return new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'UTC',
-    day: 'numeric',
-    month: 'short',
-  }).format(new Date(Date.UTC(year, month - 1, day)));
-}
-
-function ReplayMetric({
-  label,
-  value,
-  detail,
-  tone = 'text-slate-900',
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  tone?: string;
-}) {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
-        {label}
-      </p>
-      <p className={`mt-0.5 font-mono text-base font-bold tabular-nums ${tone}`}>
-        {value}
-      </p>
-      <p className="truncate text-[10px] text-slate-400" title={detail}>
-        {detail}
-      </p>
-    </div>
-  );
-}
 
 function rowsForTab(data: TicketReplayResponse, tab: ReplayTab): TicketReplayRow[] {
   switch (tab) {
@@ -208,6 +162,127 @@ export function TicketReplayPanel({
 
   if (!data || !highlightSummary) return null;
 
+  const columns: DataTableColumn<TicketReplayRow>[] = [
+    {
+      key: 'configuration',
+      header: 'Configuration',
+      cell: (row) => {
+        const isSelected = selected?.id === row.id;
+        return (
+          <>
+            <button
+              type="button"
+              onClick={() => setSelectedId(row.id)}
+              aria-pressed={isSelected}
+              title={row.description}
+              className={`text-left font-medium cursor-pointer hover:text-emerald-700 ${
+                isSelected
+                  ? 'rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700'
+                  : 'text-slate-800'
+              }`}
+            >
+              {row.label}
+            </button>
+            <span className="ml-2 text-[10px] text-slate-400">
+              {fmtOdds(row.targetOdds)}+ · {row.maxLegs} legs
+            </span>
+          </>
+        );
+      },
+      priority: 'primary',
+    },
+    {
+      key: 'tickets',
+      header: 'Tickets',
+      cell: (row) => fmtCount(row.summary.tickets),
+      align: 'right',
+      priority: 'primary',
+    },
+    {
+      key: 'record',
+      header: 'W-L-V',
+      cell: (row) =>
+        recordLabel(row.summary.wins, row.summary.losses, row.summary.voids, '-'),
+      align: 'right',
+      priority: 'secondary',
+    },
+    {
+      key: 'hitRate',
+      header: 'Hit rate',
+      cell: (row) => fmtPercent(row.summary.hitRate),
+      align: 'right',
+      priority: 'primary',
+    },
+    {
+      key: 'targetHitRate',
+      header: 'Target met',
+      cell: (row) => fmtPercent(row.summary.targetHitRate),
+      align: 'right',
+      priority: 'primary',
+    },
+    {
+      key: 'avgOdds',
+      header: 'Avg odds',
+      cell: (row) => fmtOdds(row.summary.avgOdds),
+      align: 'right',
+      priority: 'tertiary',
+    },
+    {
+      key: 'avgLegs',
+      header: 'Avg legs',
+      cell: (row) => fmtFixed(row.summary.avgLegs, 1),
+      align: 'right',
+      priority: 'tertiary',
+    },
+    {
+      key: 'breakEven',
+      header: 'Break-even',
+      cell: (row) => fmtPercent(row.summary.breakEvenHitRate),
+      align: 'right',
+      priority: 'tertiary',
+    },
+    {
+      key: 'netPnl',
+      header: 'Net P&L',
+      cell: (row) => (
+        <span className={`font-semibold ${pnlTone(row.summary.netPnl)}`}>
+          {fmtUnits(row.summary.netPnl)}
+        </span>
+      ),
+      align: 'right',
+      priority: 'primary',
+    },
+    {
+      key: 'roi',
+      header: 'ROI',
+      cell: (row) => (
+        <span
+          className={`font-semibold ${
+            row.summary.roi === null ? 'text-slate-400' : pnlTone(row.summary.roi)
+          }`}
+        >
+          {fmtSignedPercent(row.summary.roi)}
+        </span>
+      ),
+      align: 'right',
+      priority: 'primary',
+    },
+    {
+      key: 'maxDrawdown',
+      header: 'Max DD',
+      cell: (row) => fmtFixed(row.summary.maxDrawdown, 2, { suffix: 'u' }),
+      align: 'right',
+      priority: 'tertiary',
+    },
+    {
+      key: 'longestLossStreak',
+      header: 'L streak',
+      cell: (row) => fmtCount(row.summary.longestLossStreak),
+      align: 'right',
+      priority: 'tertiary',
+    },
+  ];
+
   return (
     <section aria-label="Accumulator ticket replay" className="space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -221,61 +296,85 @@ export function TicketReplayPanel({
             pre-match prices only
           </p>
         </div>
-        {loading && (
-          <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
-            <RefreshCw className="h-3 w-3 animate-spin" aria-hidden="true" />
-            Updating…
-          </span>
-        )}
+        {loading && <InlineLoading label="Updating…" />}
       </div>
 
       <div className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs leading-relaxed text-slate-600">
         <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
         <p>
           {data.firstDateIso && data.lastDateIso
-            ? `${shortDate(data.firstDateIso)} – ${shortDate(data.lastDateIso)} · `
+            ? `${fmtShortDate(data.firstDateIso)} – ${fmtShortDate(data.lastDateIso)} · `
             : ''}
-          {data.matchdays} matchday{data.matchdays === 1 ? '' : 's'} with{' '}
-          {data.pricedFixtures} clean pre-match priced fixtures.{' '}
-          {data.excludedFixtures} finished fixtures were excluded because their
-          prices were captured after kickoff or were incomplete. Each ticket is
+          {fmtCount(data.matchdays)} matchday{data.matchdays === 1 ? '' : 's'} with{' '}
+          {fmtCount(data.pricedFixtures)} clean pre-match priced fixtures.{' '}
+          {fmtCount(data.excludedFixtures)} finished fixtures were excluded because
+          their prices were captured after kickoff or were incomplete. Each ticket is
           rebuilt with the same engine the slip uses and settled at a flat{' '}
           {data.stakePerTicket}-unit stake; void legs return their stake.
         </p>
       </div>
 
+      <DataStatus
+        source="Pre-match archive"
+        note={
+          <span className="text-slate-500">
+            Flat {data.stakePerTicket}-unit replay · research only · generated{' '}
+            {fmtShortDate(data.generatedAt)}
+          </span>
+        }
+      />
+
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <ReplayMetric
+        <MetricCard
           label="Tickets"
-          value={String(highlightSummary.tickets)}
+          value={fmtCount(highlightSummary.tickets)}
           detail={highlight?.label ?? 'Current shape'}
         />
-        <ReplayMetric
+        <MetricCard
           label="Record"
-          value={`${highlightSummary.wins}W · ${highlightSummary.losses}L`}
+          value={recordLabel(
+            highlightSummary.wins,
+            highlightSummary.losses,
+            highlightSummary.voids
+          )}
           detail={`${highlightSummary.voids} void`}
         />
-        <ReplayMetric
+        <MetricCard
           label="Hit rate"
-          value={percent(highlightSummary.hitRate)}
-          detail={`Break-even ${percent(highlightSummary.breakEvenHitRate)}`}
+          value={fmtPercent(highlightSummary.hitRate)}
+          detail={
+            <>
+              Break-even {fmtPercent(highlightSummary.breakEvenHitRate)}
+              <InfoHint
+                label="Replay hit rate"
+                definition="Winning rebuilt tickets as a share of settled tickets. Voids are returned and are not counted as wins."
+                source="Flat-stake ticket replay"
+              />
+            </>
+          }
         />
-        <ReplayMetric
+        <MetricCard
           label="Target reached"
-          value={percent(highlightSummary.targetHitRate)}
-          detail={highlight ? `${highlight.targetOdds.toFixed(2)}+` : ''}
+          value={fmtPercent(highlightSummary.targetHitRate)}
+          detail={highlight ? `${fmtOdds(highlight.targetOdds)}+` : ''}
         />
-        <ReplayMetric
+        <MetricCard
           label="Net P&L"
-          value={signedUnits(highlightSummary.netPnl)}
-          detail={`Avg odds ${highlightSummary.avgOdds?.toFixed(2) ?? '—'}`}
+          value={fmtUnits(highlightSummary.netPnl)}
+          detail={`Avg odds ${fmtOdds(highlightSummary.avgOdds)}`}
           tone={pnlTone(highlightSummary.netPnl)}
+          infoKey="pnl"
         />
-        <ReplayMetric
+        <MetricCard
           label="ROI"
-          value={signedPercent(highlightSummary.roi)}
-          detail={`Max drawdown ${highlightSummary.maxDrawdown.toFixed(2)}u`}
-          tone={pnlTone(highlightSummary.roi ?? 0)}
+          value={fmtSignedPercent(highlightSummary.roi)}
+          detail={`Max drawdown ${fmtFixed(highlightSummary.maxDrawdown, 2, { suffix: 'u' })}`}
+          tone={
+            highlightSummary.roi === null
+              ? 'text-slate-400'
+              : pnlTone(highlightSummary.roi)
+          }
+          infoKey="roi"
         />
       </div>
 
@@ -310,91 +409,88 @@ export function TicketReplayPanel({
             ))}
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1080px] text-left text-xs">
-            <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-4 py-2 font-semibold">Configuration</th>
-                <th className="px-3 py-2 text-right font-semibold">Tickets</th>
-                <th className="px-3 py-2 text-right font-semibold">W-L-V</th>
-                <th className="px-3 py-2 text-right font-semibold">Hit rate</th>
-                <th className="px-3 py-2 text-right font-semibold">Target met</th>
-                <th className="px-3 py-2 text-right font-semibold">Avg odds</th>
-                <th className="px-3 py-2 text-right font-semibold">Avg legs</th>
-                <th className="px-3 py-2 text-right font-semibold">Break-even</th>
-                <th className="px-3 py-2 text-right font-semibold">Net P&amp;L</th>
-                <th className="px-3 py-2 text-right font-semibold">ROI</th>
-                <th className="px-3 py-2 text-right font-semibold">Max DD</th>
-                <th className="px-4 py-2 text-right font-semibold">L streak</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {rows.map((row) => {
-                const s = row.summary;
-                const isSelected = selected?.id === row.id;
-                return (
-                  <tr
-                    key={row.id}
-                    className={isSelected ? 'bg-emerald-50/60' : 'hover:bg-slate-50/60'}
+        <DataTable
+          columns={columns}
+          rows={rows}
+          rowKey={(row) => row.id}
+          caption="Ticket replay results by control combination"
+          minWidth="min-w-[1080px]"
+          compact
+          details={(row) => (
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] sm:grid-cols-3">
+              {[
+                ['Tickets', fmtCount(row.summary.tickets)],
+                ['W-L-V', recordLabel(row.summary.wins, row.summary.losses, row.summary.voids, '-')],
+                ['Hit rate', fmtPercent(row.summary.hitRate)],
+                ['Target met', fmtPercent(row.summary.targetHitRate)],
+                ['Avg odds', fmtOdds(row.summary.avgOdds)],
+                ['Avg legs', fmtFixed(row.summary.avgLegs, 1)],
+                ['Break-even', fmtPercent(row.summary.breakEvenHitRate)],
+                ['Net P&L', fmtUnits(row.summary.netPnl)],
+                ['ROI', fmtSignedPercent(row.summary.roi)],
+                ['Max DD', fmtFixed(row.summary.maxDrawdown, 2, { suffix: 'u' })],
+                ['L streak', fmtCount(row.summary.longestLossStreak)],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <dt className="text-slate-400">{label}</dt>
+                  <dd className="font-mono text-slate-700">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          renderCard={(row) => {
+            const isSelected = selected?.id === row.id;
+            return (
+              <button
+                type="button"
+                onClick={() => setSelectedId(row.id)}
+                aria-pressed={isSelected}
+                title={row.description}
+                className={`w-full rounded-lg border bg-white px-3 py-2 text-left ${
+                  isSelected ? 'border-emerald-300 bg-emerald-50/40' : 'border-slate-200'
+                }`}
+              >
+                <span className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-slate-800">{row.label}</span>
+                  <span
+                    className={`font-mono text-xs font-bold ${
+                      row.summary.roi === null
+                        ? 'text-slate-400'
+                        : pnlTone(row.summary.roi)
+                    }`}
                   >
-                    <td className="px-4 py-2">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedId(row.id)}
-                        aria-pressed={isSelected}
-                        title={row.description}
-                        className="text-left font-medium text-slate-800 hover:text-emerald-700 cursor-pointer"
-                      >
-                        {row.label}
-                      </button>
-                      <span className="ml-2 text-[10px] text-slate-400">
-                        {row.targetOdds.toFixed(2)}+ · {row.maxLegs} legs
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums">{s.tickets}</td>
-                    <td className="px-3 py-2 text-right font-mono text-slate-600 tabular-nums">
-                      {s.wins}-{s.losses}-{s.voids}
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono font-semibold tabular-nums">
-                      {percent(s.hitRate)}
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono text-slate-600 tabular-nums">
-                      {percent(s.targetHitRate)}
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono text-slate-600 tabular-nums">
-                      {s.avgOdds?.toFixed(2) ?? '—'}
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono text-slate-600 tabular-nums">
-                      {s.avgLegs?.toFixed(1) ?? '—'}
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono text-slate-600 tabular-nums">
-                      {percent(s.breakEvenHitRate)}
-                    </td>
-                    <td className={`px-3 py-2 text-right font-mono font-semibold tabular-nums ${pnlTone(s.netPnl)}`}>
-                      {signedUnits(s.netPnl)}
-                    </td>
-                    <td className={`px-3 py-2 text-right font-mono font-semibold tabular-nums ${pnlTone(s.roi ?? 0)}`}>
-                      {signedPercent(s.roi)}
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono text-slate-600 tabular-nums">
-                      {s.maxDrawdown.toFixed(2)}u
-                    </td>
-                    <td className="px-4 py-2 text-right font-mono text-slate-600 tabular-nums">
-                      {s.longestLossStreak}
-                    </td>
-                  </tr>
-                );
-              })}
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={12} className="px-4 py-6 text-center text-xs text-slate-400">
-                    No settleable tickets for these controls yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                    {fmtSignedPercent(row.summary.roi)}
+                  </span>
+                </span>
+                <span className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-[10px] text-slate-500">
+                  <span>{fmtOdds(row.targetOdds)}+ · {row.maxLegs} legs</span>
+                  <span>{fmtCount(row.summary.tickets)} tickets</span>
+                  <span>
+                    {recordLabel(
+                      row.summary.wins,
+                      row.summary.losses,
+                      row.summary.voids,
+                      '-'
+                    )}
+                  </span>
+                  <span>Hit {fmtPercent(row.summary.hitRate)}</span>
+                  <span className={pnlTone(row.summary.netPnl)}>
+                    {fmtUnits(row.summary.netPnl)}
+                  </span>
+                  <span>
+                    DD {fmtFixed(row.summary.maxDrawdown, 2, { suffix: 'u' })}
+                  </span>
+                </span>
+              </button>
+            );
+          }}
+          empty={
+            <EmptyState
+              title="No settleable tickets for these controls yet"
+              description="Try another control tab after more matchdays have been archived."
+            />
+          }
+        />
         {selected && (
           <div className="border-t border-slate-100 px-4 py-3">
             <p className="text-[11px] font-semibold text-slate-600">
@@ -409,10 +505,10 @@ export function TicketReplayPanel({
                 {selected.daily.map((day) => (
                   <span
                     key={day.dateIso}
-                    title={`${day.dateIso}: ${day.status} at ${day.odds.toFixed(2)} with ${day.legs} legs${day.targetMet ? ' (target met)' : ''}`}
-                    className={`rounded border px-1.5 py-0.5 font-mono text-[10px] tabular-nums ${statusTone(day.status)}`}
+                    title={`${day.dateIso}: ${day.status} at ${fmtOdds(day.odds)} with ${day.legs} legs${day.targetMet ? ' (target met)' : ''}`}
+                    className={`rounded border px-1.5 py-0.5 font-mono text-[10px] tabular-nums ${settlementTone(day.status)}`}
                   >
-                    {shortDate(day.dateIso)} · {day.status} · {day.odds.toFixed(2)}
+                    {fmtShortDate(day.dateIso)} · {day.status} · {fmtOdds(day.odds)}
                   </span>
                 ))}
               </div>

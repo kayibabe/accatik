@@ -9,13 +9,27 @@ import type {
 } from '../types/analytics.ts';
 import { apiFetch } from '../utils/api.ts';
 import {
+  fmtCount,
+  fmtFixed,
+  fmtOdds,
+  fmtPercent,
+  fmtShortDate,
+  fmtSignedPercent,
+} from '../utils/format.ts';
+import {
   SORT_DESC,
   makeSortHandler,
   sortRows,
   type SortAccessors,
   type SortState,
 } from '../utils/tableSort.ts';
-import { SortableTh } from './SortableTh.tsx';
+import { angleTone, pnlTone } from '../utils/uiTone.ts';
+import { DataTable, type DataTableColumn } from './ui/DataTable.tsx';
+import { DataStatus } from './ui/DataStatus.tsx';
+import { MetricCard } from './ui/DataCard.tsx';
+import { EmptyState, InlineLoading } from './ui/States.tsx';
+import { recordLabel } from './performance/format.ts';
+import { SortHeaderButton, SortStatus } from './performance/SortHeaderButton.tsx';
 
 interface CombinationRoiViewProps {
   strategy: AccaStrategy;
@@ -46,22 +60,13 @@ const ACCESSORS: SortAccessors<CombinationRoiRow> = {
   band: (row) => BAND_ORDER[row.band],
   market: (row) => row.marketLabel,
   staked: (row) => row.staked,
-  record: (row) => `${row.wins}-${row.losses}-${row.voids}`,
+  record: (row) => recordLabel(row.wins, row.losses, row.voids, '-'),
   winRate: (row) => row.winRate,
   avgOdds: (row) => row.avgOdds,
   roi: (row) => row.roi,
   dates: (row) => row.positiveDates,
   ci: (row) => row.roiCiLow,
 };
-
-const signedPercent = (value: number | null): string =>
-  value === null ? '—' : `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;
-
-const percent = (value: number | null): string =>
-  value === null ? '—' : `${value.toFixed(1)}%`;
-
-const roiTone = (value: number | null): string =>
-  value === null ? 'text-slate-400' : value > 0 ? 'text-emerald-700' : value < 0 ? 'text-red-600' : 'text-slate-700';
 
 function SignalCell({ row, minSample }: { row: CombinationRoiRow; minSample: number }) {
   if (row.staked === 0) {
@@ -116,100 +121,228 @@ function RoiTable({
   const [sort, setSort] = useState<SortState>({ key: 'roi', direction: SORT_DESC });
   const onSort = makeSortHandler(setSort, SORT_DESC);
   const sorted = useMemo(() => sortRows(rows, sort, ACCESSORS), [rows, sort]);
+  const sortable = (
+    label: string,
+    key: string,
+    align: 'left' | 'right' = 'right',
+    defaultDirection: 'asc' | 'desc' = 'asc',
+    columnTitle?: string
+  ) => (
+    <SortHeaderButton
+      label={label}
+      columnKey={key}
+      sort={sort}
+      onSort={onSort}
+      align={align}
+      defaultDirection={defaultDirection}
+      title={columnTitle}
+    />
+  );
+
+  const columns: DataTableColumn<CombinationRoiRow>[] = [];
+  if (showSection) {
+    columns.push({
+      key: 'section',
+      header: sortable('Section', 'section', 'left'),
+      cell: (row) => (
+        <span className="whitespace-nowrap font-medium">
+          {row.section ? SECTION_LABELS[row.section] : '—'}
+        </span>
+      ),
+      priority: 'tertiary',
+    });
+  }
+  if (showBand) {
+    columns.push({
+      key: 'band',
+      header: sortable('Band', 'band', 'left'),
+      cell: (row) => (
+        <span
+          className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${angleTone(row.band)}`}
+        >
+          {row.band}
+        </span>
+      ),
+      priority: 'tertiary',
+    });
+  }
+  columns.push(
+    {
+      key: 'market',
+      header: sortable('Market', 'market', 'left'),
+      cell: (row) => (
+        <span className="font-semibold text-slate-800 whitespace-nowrap">
+          {row.marketLabel}
+          {row.marketKey.startsWith('DNB-') && (
+            <span
+              className="ml-1.5 text-[10px] font-medium text-amber-600"
+              title="Feed prices for DNB are miscalibrated"
+            >
+              feed ⚠
+            </span>
+          )}
+        </span>
+      ),
+      priority: 'primary',
+    },
+    {
+      key: 'staked',
+      header: sortable('Staked', 'staked', 'right', SORT_DESC),
+      cell: (row) => fmtCount(row.staked),
+      align: 'right',
+      priority: 'secondary',
+    },
+    {
+      key: 'record',
+      header: sortable('W-L-V', 'record'),
+      cell: (row) => recordLabel(row.wins, row.losses, row.voids, '-'),
+      align: 'right',
+      priority: 'tertiary',
+    },
+    {
+      key: 'winRate',
+      header: sortable('Win%', 'winRate', 'right', SORT_DESC),
+      cell: (row) => fmtPercent(row.winRate),
+      align: 'right',
+      priority: 'secondary',
+    },
+    {
+      key: 'avgOdds',
+      header: sortable('Avg odds', 'avgOdds', 'right', SORT_DESC),
+      cell: (row) => fmtOdds(row.avgOdds),
+      align: 'right',
+      priority: 'tertiary',
+    },
+    {
+      key: 'roi',
+      header: sortable('ROI', 'roi', 'right', SORT_DESC),
+      cell: (row) => (
+        <span
+          className={`font-semibold ${
+            row.roi === null ? 'text-slate-400' : pnlTone(row.roi)
+          }`}
+        >
+          {fmtSignedPercent(row.roi)}
+        </span>
+      ),
+      align: 'right',
+      priority: 'primary',
+    },
+    {
+      key: 'dates',
+      header: sortable(
+        'Positive dates',
+        'dates',
+        'right',
+        SORT_DESC,
+        'Matchdays with a positive net result / matchdays with a staked pick'
+      ),
+      cell: (row) =>
+        row.totalDates === 0
+          ? '—'
+          : `${fmtCount(row.positiveDates)}/${fmtCount(row.totalDates)}`,
+      align: 'right',
+      priority: 'tertiary',
+    },
+    {
+      key: 'ci',
+      header: sortable(
+        '95% CI',
+        'ci',
+        'right',
+        SORT_DESC,
+        'Matchday-cluster bootstrap interval for ROI'
+      ),
+      cell: (row) =>
+        row.roiCiLow === null || row.roiCiHigh === null
+          ? '—'
+          : `${row.roiCiLow} .. ${row.roiCiHigh}`,
+      align: 'right',
+      priority: 'tertiary',
+    },
+    {
+      key: 'read',
+      header: 'Read',
+      cell: (row) => <SignalCell row={row} minSample={minSample} />,
+      priority: 'primary',
+    }
+  );
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-      <div className="border-b border-slate-200 px-4 py-3">
+    <div className="space-y-2">
+      <div className="px-1">
         <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">
           {title}
         </h3>
         <p className="mt-0.5 text-[11px] text-slate-400">{subtitle}</p>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[1080px] text-left text-xs">
-          <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
-            <tr>
-              {showSection && (
-                <SortableTh label="Section" columnKey="section" sort={sort} onSort={onSort} className="px-3 py-2 font-semibold" />
-              )}
-              {showBand && (
-                <SortableTh label="Band" columnKey="band" sort={sort} onSort={onSort} className="px-3 py-2 font-semibold" />
-              )}
-              <SortableTh label="Market" columnKey="market" sort={sort} onSort={onSort} className="px-4 py-2 font-semibold" />
-              <SortableTh label="Staked" columnKey="staked" sort={sort} onSort={onSort} defaultDirection={SORT_DESC} align="right" className="px-3 py-2 font-semibold" />
-              <SortableTh label="W-L-V" columnKey="record" sort={sort} onSort={onSort} align="right" className="px-3 py-2 font-semibold" />
-              <SortableTh label="Win%" columnKey="winRate" sort={sort} onSort={onSort} defaultDirection={SORT_DESC} align="right" className="px-3 py-2 font-semibold" />
-              <SortableTh label="Avg odds" columnKey="avgOdds" sort={sort} onSort={onSort} defaultDirection={SORT_DESC} align="right" className="px-3 py-2 font-semibold" />
-              <SortableTh label="ROI" columnKey="roi" sort={sort} onSort={onSort} defaultDirection={SORT_DESC} align="right" className="px-3 py-2 font-semibold" />
-              <SortableTh label="Positive dates" columnKey="dates" sort={sort} onSort={onSort} defaultDirection={SORT_DESC} align="right" className="px-3 py-2 font-semibold" title="Matchdays with a positive net result / matchdays with a staked pick" />
-              <SortableTh label="95% CI" columnKey="ci" sort={sort} onSort={onSort} defaultDirection={SORT_DESC} align="right" className="px-3 py-2 font-semibold" title="Matchday-cluster bootstrap interval for ROI" />
-              <th className="px-4 py-2 font-semibold">Read</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {sorted.length === 0 && (
-              <tr>
-                <td colSpan={showSection && showBand ? 11 : showSection || showBand ? 10 : 9} className="px-4 py-8 text-center text-xs text-slate-400">
-                  No combinations match the current filters.
-                </td>
-              </tr>
+      <SortStatus sort={sort} label="ROI table" />
+      <DataTable
+        columns={columns}
+        rows={sorted}
+        rowKey={(row) => row.key}
+        caption={title}
+        minWidth="min-w-[1080px]"
+        compact
+        details={(row) => (
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] sm:grid-cols-3">
+            {showSection && (
+              <div>
+                <dt className="text-slate-400">Section</dt>
+                <dd className="text-slate-700">
+                  {row.section ? SECTION_LABELS[row.section] : '—'}
+                </dd>
+              </div>
             )}
-            {sorted.map((row) => (
-              <tr
-                key={row.key}
-                className={
-                  row.staked === 0
-                    ? 'text-slate-400'
-                    : row.roi !== null && row.roi > 0
-                      ? 'bg-emerald-50/30 hover:bg-emerald-50/60'
-                      : row.roiCiHigh !== null && row.roiCiHigh < 0
-                        ? 'bg-red-50/20 hover:bg-red-50/40'
-                        : 'hover:bg-slate-50/60'
-                }
-              >
-                {showSection && (
-                  <td className="px-3 py-2 font-medium whitespace-nowrap">
-                    {row.section ? SECTION_LABELS[row.section] : '—'}
-                  </td>
-                )}
-                {showBand && (
-                  <td className="px-3 py-2 text-slate-600">{row.band}</td>
-                )}
-                <td className="px-4 py-2 font-semibold text-slate-800 whitespace-nowrap">
-                  {row.marketLabel}
-                  {row.marketKey.startsWith('DNB-') && (
-                    <span className="ml-1.5 text-[10px] font-medium text-amber-600" title="Feed prices for DNB are miscalibrated">
-                      feed ⚠
-                    </span>
-                  )}
-                </td>
-                <td className="px-3 py-2 text-right font-mono tabular-nums">{row.staked}</td>
-                <td className="px-3 py-2 text-right font-mono text-slate-500 tabular-nums">
-                  {row.wins}-{row.losses}-{row.voids}
-                </td>
-                <td className="px-3 py-2 text-right font-mono text-slate-600 tabular-nums">
-                  {percent(row.winRate)}
-                </td>
-                <td className="px-3 py-2 text-right font-mono text-slate-600 tabular-nums">
-                  {row.avgOdds === null ? '—' : row.avgOdds.toFixed(2)}
-                </td>
-                <td className={`px-3 py-2 text-right font-mono font-semibold tabular-nums ${roiTone(row.roi)}`}>
-                  {signedPercent(row.roi)}
-                </td>
-                <td className="px-3 py-2 text-right font-mono text-slate-600 tabular-nums">
-                  {row.totalDates === 0 ? '—' : `${row.positiveDates}/${row.totalDates}`}
-                </td>
-                <td className="px-3 py-2 text-right font-mono text-[11px] text-slate-500 tabular-nums">
-                  {row.roiCiLow === null || row.roiCiHigh === null
-                    ? '—'
-                    : `${row.roiCiLow} .. ${row.roiCiHigh}`}
-                </td>
-                <td className="px-4 py-2"><SignalCell row={row} minSample={minSample} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            {showBand && (
+              <div>
+                <dt className="text-slate-400">Band</dt>
+                <dd className="text-slate-700">{row.band}</dd>
+              </div>
+            )}
+            <div>
+              <dt className="text-slate-400">Staked</dt>
+              <dd className="font-mono text-slate-700">{fmtCount(row.staked)}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-400">W-L-V</dt>
+              <dd className="font-mono text-slate-700">
+                {recordLabel(row.wins, row.losses, row.voids, '-')}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-slate-400">Win rate</dt>
+              <dd className="font-mono text-slate-700">{fmtPercent(row.winRate)}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-400">Avg odds</dt>
+              <dd className="font-mono text-slate-700">{fmtOdds(row.avgOdds)}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-400">Positive dates</dt>
+              <dd className="font-mono text-slate-700">
+                {row.totalDates === 0
+                  ? '—'
+                  : `${fmtCount(row.positiveDates)}/${fmtCount(row.totalDates)}`}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-slate-400">95% CI</dt>
+              <dd className="font-mono text-slate-700">
+                {row.roiCiLow === null || row.roiCiHigh === null
+                  ? '—'
+                  : `${row.roiCiLow} .. ${row.roiCiHigh}`}
+              </dd>
+            </div>
+          </dl>
+        )}
+        empty={
+          <EmptyState
+            title="No combinations match the current filters"
+            description="Reset the filters to see the full study again."
+          />
+        }
+      />
     </div>
   );
 }
@@ -322,7 +455,7 @@ export function CombinationRoiView({
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div>
           <p className="text-xs font-medium text-slate-500">
-            Inception to date · flat {data?.stakePerPick ?? 1}u · {strategy} strategy
+            Inception to date · flat {fmtFixed(data?.stakePerPick ?? 1, 0)}u · {strategy} strategy
           </p>
           <h2 className="mt-1 flex items-center gap-2 text-xl font-bold tracking-tight text-slate-900">
             <FlaskConical className="h-5 w-5 text-emerald-700" aria-hidden="true" />
@@ -335,9 +468,7 @@ export function CombinationRoiView({
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-[11px] text-slate-400">
-            {loading ? 'Updating…' : data ? `Updated ${new Date(data.generatedAt).toLocaleString()}` : 'Not loaded'}
-          </span>
+          {loading && <InlineLoading label="Updating…" />}
           <button
             type="button"
             onClick={() => {
@@ -361,29 +492,43 @@ export function CombinationRoiView({
 
       {data && (
         <>
+          <DataStatus
+            source="Settled archive"
+            note={
+              <span className="text-slate-500">
+                Flat {fmtFixed(data.stakePerPick, 0)}u · pre-match prices · generated{' '}
+                {fmtShortDate(data.generatedAt)}
+              </span>
+            }
+          />
+
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-              <p className="text-[11px] font-medium text-slate-500">Positive · usable sample</p>
-              <p className="mt-1 text-xl font-bold font-mono tabular-nums text-emerald-700">{positiveUsable.length}</p>
-              <p className="text-[10px] text-slate-400">at least {data.minSample} staked picks</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-              <p className="text-[11px] font-medium text-slate-500">Measured combinations</p>
-              <p className="mt-1 text-xl font-bold font-mono tabular-nums text-slate-900">{studied.length}</p>
-              <p className="text-[10px] text-slate-400">of {data.rows.filter((row) => row.scope === 'section-band').length} possible cells</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-              <p className="text-[11px] font-medium text-slate-500">Small-sample positives</p>
-              <p className="mt-1 text-xl font-bold font-mono tabular-nums text-amber-600">{smallSamplePositive.length}</p>
-              <p className="text-[10px] text-slate-400">treat as noise, not edge</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-              <p className="text-[11px] font-medium text-slate-500">Markets never selected</p>
-              <p className="mt-1 text-xl font-bold font-mono tabular-nums text-slate-900">{noPickMarkets.length}</p>
-              <p className="text-[10px] text-slate-400">
-                {noPickMarkets.length > 0 ? noPickMarkets.map((item) => item.label).join(', ') : 'all covered'}
-              </p>
-            </div>
+            <MetricCard
+              label="Positive · usable sample"
+              value={fmtCount(positiveUsable.length)}
+              detail={`at least ${fmtCount(data.minSample)} staked picks`}
+              tone="text-emerald-700"
+            />
+            <MetricCard
+              label="Measured combinations"
+              value={fmtCount(studied.length)}
+              detail={`of ${fmtCount(data.rows.filter((row) => row.scope === 'section-band').length)} possible cells`}
+            />
+            <MetricCard
+              label="Small-sample positives"
+              value={fmtCount(smallSamplePositive.length)}
+              detail="treat as noise, not edge"
+              tone="text-amber-600"
+            />
+            <MetricCard
+              label="Markets never selected"
+              value={fmtCount(noPickMarkets.length)}
+              detail={
+                noPickMarkets.length > 0
+                  ? noPickMarkets.map((item) => item.label).join(', ')
+                  : 'all covered'
+              }
+            />
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
@@ -398,12 +543,12 @@ export function CombinationRoiView({
                     className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer ${
                       band === item
                         ? 'border-slate-900 bg-slate-900 text-white'
-                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                        : angleTone(item)
                     }`}
                   >
                     {item}
-                    <span className={`font-mono tabular-nums ${band === item ? 'text-white/70' : 'text-slate-400'}`}>
-                      {bandCounts.get(item) ?? 0}
+                    <span className={`font-mono tabular-nums ${band === item ? 'text-white/70' : 'text-slate-500'}`}>
+                      {fmtCount(bandCounts.get(item) ?? 0)}
                     </span>
                   </button>
                 ))}
@@ -450,9 +595,9 @@ export function CombinationRoiView({
               )}
             </div>
             <p className="mt-2 text-[11px] text-slate-400">
-              {data.sampleDates} settled matchdays · {data.sampleFixtures} priced fixtures ·{' '}
-              {data.snapshotFixtures} fixtures with frozen pick snapshots ·
-              {' '}price capture: {data.priceQuality.prematch} pre-match / {data.priceQuality.live} live / {data.priceQuality.unknown} unknown
+              {fmtCount(data.sampleDates)} settled matchdays · {fmtCount(data.sampleFixtures)} priced fixtures ·{' '}
+              {fmtCount(data.snapshotFixtures)} fixtures with frozen pick snapshots ·
+              {' '}price capture: {fmtCount(data.priceQuality.prematch)} pre-match / {fmtCount(data.priceQuality.live)} live / {fmtCount(data.priceQuality.unknown)} unknown
             </p>
           </div>
 

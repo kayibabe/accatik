@@ -1,14 +1,9 @@
-import { LogOut, Menu, RefreshCw, ShieldCheck, UserRound } from 'lucide-react';
+import { RefreshCw, UserRound } from 'lucide-react';
+import type { ActiveTab } from '../types/navigation.ts';
 import type { AppUser, UserProfile } from '../types/user.ts';
 
-export type ActiveTab =
-  | 'slate'
-  | 'acca'
-  | 'saved'
-  | 'activity'
-  | 'analytics'
-  | 'roi'
-  | 'sources';
+/** Kept as a re-export so existing imports keep working. */
+export type { ActiveTab } from '../types/navigation.ts';
 
 interface TopBarProps {
   activeTab: ActiveTab;
@@ -18,10 +13,6 @@ interface TopBarProps {
   user?: AppUser | null;
   profile?: UserProfile | null;
   onSignIn?: () => void;
-  onSignOut?: () => void;
-  onResendVerification?: () => void;
-  isAdmin?: boolean;
-  onAdmin?: () => void;
   /** Guests see landing-page anchors instead of the signed-in workbench tabs. */
   isGuest?: boolean;
   onToggleMenu?: () => void;
@@ -29,17 +20,12 @@ interface TopBarProps {
 }
 
 export function TopBar({
-  activeTab,
   onSelectTab,
   onRefresh,
   isLoading,
   user,
   profile,
   onSignIn,
-  onSignOut,
-  onResendVerification,
-  isAdmin,
-  onAdmin,
   isGuest,
   onToggleMenu,
   isMenuOpen = false,
@@ -66,7 +52,11 @@ export function TopBar({
             aria-expanded={isMenuOpen}
             className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 sm:hidden"
           >
-            <Menu className="h-5 w-5" aria-hidden="true" />
+            <span className="flex flex-col gap-1" aria-hidden="true">
+              <span className="block h-0.5 w-5 bg-current" />
+              <span className="block h-0.5 w-5 bg-current" />
+              <span className="block h-0.5 w-5 bg-current" />
+            </span>
           </button>
         )}
 
@@ -83,7 +73,6 @@ export function TopBar({
           MatchSlip
         </button>
 
-        {/* Guests keep landing-page anchors in the header. Signed-in pages live in the side menu. */}
         {guest ? (
           <nav
             aria-label="Primary navigation"
@@ -103,68 +92,36 @@ export function TopBar({
           <div className="hidden flex-1 sm:block" />
         )}
 
-        {/* Account + primary action */}
+        {/* Identity is contextual; all account actions live in the side menu. */}
         <div className="ml-auto flex items-center gap-2 shrink-0">
-          {!guest && isAdmin && (
-            <button
-              type="button"
-              onClick={onAdmin}
-              title="Admin · manage user roles"
-              aria-label="Admin · manage user roles"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 cursor-pointer"
-            >
-              <ShieldCheck className="w-3.5 h-3.5" aria-hidden="true" />
-              <span className="hidden sm:inline">Admin</span>
-            </button>
-          )}
-          {!guest && user ? (
-            <div className="hidden sm:flex items-center gap-2">
-              {!user.emailVerified && onResendVerification && (
-                <button
-                  type="button"
-                  onClick={onResendVerification}
-                  title="Send a new verification email"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100 cursor-pointer"
-                >
-                  Resend verification
-                </button>
-              )}
-              <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs">
-                <UserRound className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
-                <span className="max-w-[140px] truncate text-slate-700">
-                  {user.name}
-                </span>
-                <span
-                  className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
-                    profile
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-slate-100 text-slate-500'
-                  }`}
-                  title={
-                    profile
-                      ? undefined
-                      : 'Your role could not be loaded. It will appear once the account service responds.'
-                  }
-                >
-                  {profile ? profile.role : 'role unavailable'}
-                </span>
-                {!user.emailVerified && (
-                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-800">
-                    unverified
-                  </span>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={onSignOut}
-                title="Sign out"
-                aria-label="Sign out"
-                className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-50 cursor-pointer"
+          {!guest && user && (
+            <div className="hidden sm:flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs">
+              <UserRound className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
+              <span className="max-w-[140px] truncate text-slate-700" title={user.name}>
+                {user.name}
+              </span>
+              <span
+                className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
+                  profile
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-slate-100 text-slate-500'
+                }`}
+                title={
+                  profile
+                    ? undefined
+                    : 'Your role could not be loaded. It will appear once the account service responds.'
+                }
               >
-                <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
-              </button>
+                {profile ? profile.role : 'role unavailable'}
+              </span>
+              {!user.emailVerified && (
+                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-800">
+                  unverified
+                </span>
+              )}
             </div>
-          ) : (
+          )}
+          {(guest || !user) && (
             <button
               type="button"
               onClick={onSignIn}

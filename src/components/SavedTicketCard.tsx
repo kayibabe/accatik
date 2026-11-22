@@ -3,16 +3,21 @@ import type {
   AccaLeg,
   Fixture,
   SavedTicket,
-  SettlementStatus,
 } from '../types/fixtures.ts';
 import {
   calculatePotentialReturn,
   evaluateMarketSettlement,
-  formatMwk,
   getFixtureMatchResultSummary,
 } from '../utils/accaMath.ts';
 import type { TicketSettlementSummary } from '../utils/accaMath.ts';
+import {
+  fmtCount,
+  fmtMwk,
+  fmtOdds,
+  fmtPercent,
+} from '../utils/format.ts';
 import { groupLegsByFixture } from '../utils/savedTicketGroups.ts';
+import { settlementTone } from '../utils/uiTone.ts';
 import { SettlementLabel } from './SettlementLabel.tsx';
 
 interface SavedTicketCardProps {
@@ -27,14 +32,6 @@ interface SavedTicketCardProps {
   /** Opens the archived day-of-pick detail for every pick on one match. */
   onSelectMatch: (ticket: SavedTicket, legs: AccaLeg[]) => void;
 }
-
-const accentByStatus: Record<SettlementStatus, string> = {
-  Win: 'border-l-emerald-500',
-  Lost: 'border-l-red-500',
-  Void: 'border-l-amber-500',
-  Live: 'border-l-sky-500',
-  Pending: 'border-l-slate-300',
-};
 
 function savedTimeLabel(createdAt: string): string {
   const parsed = new Date(createdAt);
@@ -79,21 +76,33 @@ export function SavedTicketCard({
 
   return (
     <article
-      className={`p-5 space-y-4 border-l-4 ${accentByStatus[settlement.status]}`}
+      className="p-5 space-y-4 border border-slate-200 rounded-xl"
       aria-label={`${ticket.name} — ${settlement.status}`}
     >
+      {/* Ticket identity and actions are grouped; status is the only colour accent here. */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <p className="text-xs text-slate-500 font-mono tabular-nums">
-            {ticket.legs.length} Legs · Saved {savedTimeLabel(ticket.createdAt)} CAT
+            {fmtCount(ticket.legs.length)} Legs · Saved{' '}
+            {savedTimeLabel(ticket.createdAt)} CAT
           </p>
           <div className="mt-0.5 flex flex-wrap items-center gap-3">
-            <h3 className="text-base font-bold text-slate-900">{ticket.name}</h3>
-            <SettlementLabel status={settlement.status} />
+            <h3 className="text-base font-bold text-slate-900" title={ticket.name}>
+              {ticket.name}
+            </h3>
+            <span
+              className={`inline-flex items-center rounded-full border px-2 py-0.5 ${settlementTone(settlement.status)}`}
+            >
+              <SettlementLabel status={settlement.status} />
+            </span>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div
+          role="group"
+          aria-label={`Actions for ${ticket.name}`}
+          className="flex flex-wrap items-center gap-2"
+        >
           <button
             type="button"
             onClick={() => onLoad(ticket)}
@@ -133,22 +142,26 @@ export function SavedTicketCard({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs font-mono tabular-nums">
+      {/* Figures and result counts stay in one neutral band. */}
+      <div
+        aria-label="Ticket figures"
+        className="grid grid-cols-2 gap-x-6 gap-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-mono tabular-nums sm:grid-cols-4"
+      >
         <div>
-          <span className="text-slate-500">Total Odds: </span>
+          <span className="text-slate-500">Total odds: </span>
           <span className="font-bold text-slate-900">
-            {ticket.totalOdds.toFixed(2)}
+            {fmtOdds(ticket.totalOdds)}
           </span>
         </div>
         <div>
           <span className="text-slate-500">Stake: </span>
           <span className="font-semibold text-slate-900">
-            {formatMwk(ticket.stake)}
+            {fmtMwk(ticket.stake)}
           </span>
         </div>
         <div>
           <span className="text-slate-500">
-            {isSettled ? 'Settled Return: ' : 'Est. Return: '}
+            {isSettled ? 'Settled return: ' : 'Est. return: '}
           </span>
           <span
             className={`font-bold ${
@@ -160,8 +173,8 @@ export function SavedTicketCard({
             }`}
           >
             {isSettled
-              ? formatMwk(settlement.settledReturn)
-              : formatMwk(potentialReturn)}
+              ? fmtMwk(settlement.settledReturn)
+              : fmtMwk(potentialReturn)}
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -170,107 +183,117 @@ export function SavedTicketCard({
               key={entry.key}
               className={`text-[11px] font-semibold ${entry.className}`}
             >
-              {entry.count} {entry.label}
+              {fmtCount(entry.count)} {entry.label}
             </span>
           ))}
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-2 pt-1">
-        <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
-          Match legs
-        </p>
-        <p className="text-[10px] text-slate-400">
-          Multiple picks on one match are grouped · click for detail
-        </p>
-      </div>
+      {/* Selections and their results are grouped by match, one card per match. */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2 pt-1">
+          <h4 className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+            Match legs &amp; results
+          </h4>
+          <p className="text-[10px] text-slate-400">
+            Multiple picks on one match are grouped · click for detail
+          </p>
+        </div>
 
-      <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-        {groupLegsByFixture(ticket.legs).map((group) => {
-          const firstLeg = group.legs[0];
-          const matched = fixtureMap.get(group.fixtureId);
-          const resultText =
-            matched &&
-            (matched.status !== 'Scheduled' || matched.awaitingResult)
-              ? getFixtureMatchResultSummary(matched)
-              : null;
-          const hasMultiplePicks = group.legs.length > 1;
+        <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+          {groupLegsByFixture(ticket.legs).map((group) => {
+            const firstLeg = group.legs[0];
+            const matched = fixtureMap.get(group.fixtureId);
+            const resultText =
+              matched &&
+              (matched.status !== 'Scheduled' || matched.awaitingResult)
+                ? getFixtureMatchResultSummary(matched)
+                : null;
+            const hasMultiplePicks = group.legs.length > 1;
+            const fixtureLabel = `${firstLeg.homeTeam} vs ${firstLeg.awayTeam}`;
 
-          return (
-            <li key={group.fixtureId} className="min-w-0">
-              <button
-                type="button"
-                onClick={() => onSelectMatch(ticket, group.legs)}
-                aria-haspopup="dialog"
-                title={`Open ${firstLeg.homeTeam} vs ${firstLeg.awayTeam} details`}
-                className="group h-full w-full space-y-1 rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-2.5 text-left text-xs transition-colors hover:border-emerald-300 hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-emerald-700 cursor-pointer"
-              >
-                <span className="flex items-center justify-between gap-2">
-                  <span className="block font-mono text-[11px] text-slate-400 tabular-nums">
-                    {firstLeg.matchDate || ticket.date} · {firstLeg.kickoffTime}
-                  </span>
-                  {hasMultiplePicks && (
-                    <span className="shrink-0 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800">
-                      {group.legs.length} picks
+            return (
+              <li key={group.fixtureId} className="min-w-0">
+                <button
+                  type="button"
+                  onClick={() => onSelectMatch(ticket, group.legs)}
+                  aria-haspopup="dialog"
+                  title={`Open ${fixtureLabel} details`}
+                  className="group h-full w-full space-y-1 rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-2.5 text-left text-xs transition-colors hover:border-slate-300 hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-emerald-700 cursor-pointer"
+                >
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="block font-mono text-[11px] text-slate-400 tabular-nums">
+                      {firstLeg.matchDate || ticket.date} · {firstLeg.kickoffTime}
                     </span>
-                  )}
-                </span>
-                <span className="block truncate font-semibold text-slate-900">
-                  {firstLeg.homeTeam} vs {firstLeg.awayTeam}
-                </span>
-                <span className="block space-y-1">
-                  {group.legs.map((leg) => {
-                    const legStatus = matched
-                      ? evaluateMarketSettlement(matched, {
-                          id: leg.marketId,
-                          label: leg.marketLabel,
-                          marketType: leg.marketType,
-                        })
-                      : 'Pending';
+                    {hasMultiplePicks && (
+                      <span className="shrink-0 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                        {fmtCount(group.legs.length)} picks
+                      </span>
+                    )}
+                  </span>
+                  <span
+                    className="block truncate font-semibold text-slate-900"
+                    title={fixtureLabel}
+                  >
+                    {fixtureLabel}
+                  </span>
+                  <span className="block space-y-1">
+                    {group.legs.map((leg) => {
+                      const legStatus = matched
+                        ? evaluateMarketSettlement(matched, {
+                            id: leg.marketId,
+                            label: leg.marketLabel,
+                            marketType: leg.marketType,
+                          })
+                        : 'Pending';
 
-                    return (
-                      <span
-                        key={leg.marketId}
-                        className="flex items-center justify-between gap-2"
-                      >
-                        <span className="truncate font-medium text-emerald-800">
-                          {leg.marketLabel}
-                        </span>
-                        <span className="flex shrink-0 items-center gap-2">
-                          <SettlementLabel status={legStatus} />
-                          <span className="text-right leading-tight">
-                            <span className="block font-mono font-bold text-slate-900 tabular-nums">
-                              {leg.odds.toFixed(2)}
-                            </span>
-                            {typeof leg.fairProbability === 'number' && (
-                              <span
-                                className="block font-mono text-[10px] text-slate-400 tabular-nums"
-                                title="Margin-adjusted win probability"
-                              >
-                                {leg.fairProbability.toFixed(1)}%
+                      return (
+                        <span
+                          key={leg.marketId}
+                          className="flex items-center justify-between gap-2"
+                        >
+                          <span
+                            className="truncate font-medium text-slate-800"
+                            title={leg.marketLabel}
+                          >
+                            {leg.marketLabel}
+                          </span>
+                          <span className="flex shrink-0 items-center gap-2">
+                            <SettlementLabel status={legStatus} />
+                            <span className="text-right leading-tight">
+                              <span className="block font-mono font-bold text-slate-900 tabular-nums">
+                                {fmtOdds(leg.odds)}
                               </span>
-                            )}
+                              {typeof leg.fairProbability === 'number' && (
+                                <span
+                                  className="block font-mono text-[10px] text-slate-400 tabular-nums"
+                                  title="Margin-adjusted win probability"
+                                >
+                                  {fmtPercent(leg.fairProbability)}
+                                </span>
+                              )}
+                            </span>
                           </span>
                         </span>
-                      </span>
-                    );
-                  })}
-                </span>
-                {resultText && (
-                  <span className="block font-mono text-[11px] text-slate-600 tabular-nums">
-                    Result: {resultText}
+                      );
+                    })}
                   </span>
-                )}
-                <span className="block text-[10px] font-medium text-emerald-700 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-                  {hasMultiplePicks
-                    ? `View all ${group.legs.length} selections →`
-                    : 'View match detail →'}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+                  {resultText && (
+                    <span className="block font-mono text-[11px] text-slate-600 tabular-nums">
+                      Result: {resultText}
+                    </span>
+                  )}
+                  <span className="block text-[10px] font-medium text-slate-500 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+                    {hasMultiplePicks
+                      ? `View all ${fmtCount(group.legs.length)} selections →`
+                      : 'View match detail →'}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </article>
   );
 }

@@ -4,18 +4,20 @@ import type { AccaLeg, Fixture } from '../types/fixtures.ts';
 import {
   calculatePotentialReturn,
   calculateTotalOdds,
-  evaluateMarketSettlement,
   evaluateTicketSettlement,
-  formatMwk,
   formatTicketForCopy,
-  getFixtureMatchResultSummary,
 } from '../utils/accaMath.ts';
+import { fmtCount, fmtMwk, fmtOdds, fmtPercent } from '../utils/format.ts';
 import { isPreMatchFixture } from '../utils/priceQuality.ts';
 import { guardTicket } from '../utils/ticketGuard.ts';
 import type { SortDirection, SortState } from '../utils/tableSort.ts';
-import { SORT_ASC, sortRows, toggleSort } from '../utils/tableSort.ts';
+import { SORT_ASC, toggleSort } from '../utils/tableSort.ts';
 import { SettlementLabel } from './SettlementLabel.tsx';
-import { SortableTh } from './SortableTh.tsx';
+import { RationalePanel } from './tickets/RationalePanel.tsx';
+import { TicketReviewLegTable } from './tickets/TicketReviewLegTable.tsx';
+import { InfoHint } from './ui/DataCard.tsx';
+import { PageHeader } from './ui/PageHeader.tsx';
+import { EmptyState, LoadingState } from './ui/States.tsx';
 
 interface CuratedAccaViewProps {
   strategyName: string;
@@ -32,6 +34,11 @@ interface CuratedAccaViewProps {
   onAutoComplete: () => void;
 }
 
+/**
+ * Read-only review of the currently selected ticket. It never builds a second
+ * accumulator: the only ways to change the ticket are the slate and the
+ * existing auto-complete action.
+ */
 export function CuratedAccaView({
   strategyName,
   strategySummary,
@@ -56,7 +63,7 @@ export function CuratedAccaView({
 
   const totalOdds = calculateTotalOdds(legs);
   const potentialReturn = calculatePotentialReturn(stake, totalOdds);
-  const fixtureMap = new Map(fixtures.map((f) => [f.id, f]));
+  const fixtureMap = new Map(fixtures.map((fixture) => [fixture.id, fixture]));
   const ticketSettlement = evaluateTicketSettlement(legs, fixtures, stake);
   const startedLeg =
     legs.find((leg) => {
@@ -86,17 +93,6 @@ export function CuratedAccaView({
     setTimeout(() => setSaved(false), 2000);
   };
 
-  const settlementFor = (leg: AccaLeg) => {
-    const matched = fixtureMap.get(leg.fixtureId);
-    return matched
-      ? evaluateMarketSettlement(matched, {
-          id: leg.marketId,
-          label: leg.marketLabel,
-          marketType: leg.marketType,
-        })
-      : 'Pending';
-  };
-
   const handleSort = (
     key: string,
     defaultDirection: SortDirection = SORT_ASC
@@ -104,50 +100,140 @@ export function CuratedAccaView({
     setLegSort((prev) => toggleSort(prev, key, defaultDirection));
   };
 
-  // Carry the original leg number through so sorting never renumbers the ticket.
-  const sortedRows = sortRows(
-    legs.map((leg, index) => ({ leg, index })),
-    legSort,
-    {
-      index: (row) => row.index,
-      fixture: (row) => `${row.leg.homeTeam} ${row.leg.awayTeam}`,
-      date: (row) => fixtureMap.get(row.leg.fixtureId)?.kickoffTimestamp ?? null,
-      result: (row) => {
-        const matched = fixtureMap.get(row.leg.fixtureId);
-        return matched ? getFixtureMatchResultSummary(matched) : 'Scheduled';
-      },
-      selection: (row) => row.leg.marketLabel,
-      odds: (row) => row.leg.odds,
-      status: (row) => settlementFor(row.leg),
-      rationale: (row) => row.leg.rationale,
-    }
-  );
-
   return (
-    <section aria-label="Curated Winning Accumulator" className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div className="space-y-1 max-w-2xl">
-          <p className="text-xs font-medium text-slate-500">
-            {displayDate} · Minimum {minOdds.toFixed(2)} Odds Qualification
-          </p>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 [text-wrap:balance]">
-            {strategyName}
-          </h1>
-          <p className="text-sm text-slate-600 leading-relaxed">
-            {strategySummary}
+    <section aria-label="Ticket Review" className="space-y-6">
+      <PageHeader
+        eyebrow={`Read-only ticket review · ${displayDate}`}
+        title="Ticket Review"
+        description={`A read-only review of the selected ${strategyName} ticket — odds, settlement and rationale only, not a second builder. Change the selection on the fixture board. ${strategySummary}`}
+        scope="personal"
+        meta={`${fmtCount(legs.length)} ${legs.length === 1 ? 'leg' : 'legs'} · minimum ${fmtOdds(minOdds)} odds qualification`}
+      />
+
+      {isFetchingDate && (
+        <LoadingState
+          label={`Loading matches and building accumulator ticket for ${selectedDate}…`}
+          count={2}
+        />
+      )}
+
+      {startedLeg && (
+        <div
+          role="status"
+          className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800"
+        >
+          Save disabled — {startedLeg.homeTeam} vs {startedLeg.awayTeam} has
+          already kicked off. Remove the started selection to save a pre-match
+          slip.
+        </div>
+      )}
+
+      {/* Quantitative Summary Strip */}
+      <div className="bg-white border border-slate-200 rounded-xl grid grid-cols-2 lg:grid-cols-5 divide-y lg:divide-y-0 lg:divide-x divide-slate-200">
+        <div className="p-5">
+          <p className="text-xs text-slate-500">Total Acca Odds</p>
+          <p className="mt-1 text-2xl font-bold font-mono text-slate-900 tabular-nums">
+            {fmtOdds(totalOdds)}
           </p>
         </div>
+        <div className="p-5">
+          <p className="text-xs text-slate-500">Ticket Legs</p>
+          <p className="mt-1 text-2xl font-bold font-mono text-slate-900 tabular-nums">
+            {fmtCount(legs.length)} Matches
+          </p>
+        </div>
+        <div className="p-5">
+          <p className="text-xs text-slate-500">Ticket Status</p>
+          <div className="mt-2">
+            <SettlementLabel status={ticketSettlement.status} />
+          </div>
+          <p className="mt-1 text-[11px] font-mono text-slate-500 tabular-nums">
+            {fmtCount(ticketSettlement.winCount)}W ·{' '}
+            {fmtCount(ticketSettlement.lostCount)}L ·{' '}
+            {fmtCount(ticketSettlement.voidCount)}V
+          </p>
+        </div>
+        <div
+          className="p-5"
+          title={
+            guard.economics.basis === 'fair'
+              ? 'Chance every leg lands, with the bookmaker margin removed from each price.'
+              : 'Chance every leg lands at the quoted prices (includes bookmaker margin).'
+          }
+        >
+          <p className="flex items-center text-xs text-slate-500">
+            {guard.economics.basis === 'fair'
+              ? 'Combined Win Chance'
+              : 'Combined Implied Prob'}
+            <InfoHint infoKey="fairProbability" />
+          </p>
+          <p className="mt-1 text-2xl font-bold font-mono text-slate-900 tabular-nums">
+            {fmtPercent(guard.economics.fairChance)}
+          </p>
+        </div>
+        <div className="p-5 col-span-2 lg:col-span-1">
+          <p className="text-xs text-slate-500">
+            Est. Return ({fmtMwk(stake)} Stake)
+          </p>
+          <p className="mt-1 text-2xl font-bold font-mono text-emerald-700 tabular-nums">
+            {fmtMwk(potentialReturn)}
+          </p>
+        </div>
+      </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+      <RationalePanel
+        guard={guard}
+        legs={legs}
+        strategyName={strategyName}
+        minOdds={minOdds}
+      />
+
+      {/* Leg-by-Leg Ledger */}
+      {legs.length === 0 ? (
+        <EmptyState
+          title="No selections currently on the ticket"
+          description="Generate a qualifying accumulator or build one on the fixture board. This review updates whenever the selected ticket changes."
+          action={
+            <button
+              type="button"
+              onClick={onAutoComplete}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
+            >
+              <Wand2 className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Generate {fmtOdds(minOdds)}+ Acca</span>
+            </button>
+          }
+        />
+      ) : (
+        <TicketReviewLegTable
+          legs={legs}
+          fixtures={fixtures}
+          displayDate={displayDate}
+          legSort={legSort}
+          onSort={handleSort}
+          onRestoreOrder={() => setLegSort({ key: null, direction: SORT_ASC })}
+        />
+      )}
+
+      {/* Single primary action; copy/save stay available but demoted. */}
+      <footer className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-[11px] text-slate-500">
+          Review only — edits happen on the fixture board.
+        </p>
+        <div
+          role="group"
+          aria-label="Ticket review actions"
+          className="flex flex-wrap items-center gap-2"
+        >
           <button
             type="button"
             onClick={handleCopy}
             disabled={legs.length === 0 || isFetchingDate}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
           >
             {copied ? (
               <>
-                <Check className="w-3.5 h-3.5" aria-hidden="true" />
+                <Check className="w-3.5 h-3.5 text-emerald-700" aria-hidden="true" />
                 <span>Copied Ticket</span>
               </>
             ) : (
@@ -167,7 +253,7 @@ export function CuratedAccaView({
                 ? 'This slip contains a match that has already started.'
                 : 'Save this slip to the local archive'
             }
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-slate-800 bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
           >
             <Bookmark className="w-3.5 h-3.5" aria-hidden="true" />
             <span>{saved ? 'Saved to Slips' : 'Save Slip'}</span>
@@ -176,241 +262,13 @@ export function CuratedAccaView({
           <button
             type="button"
             onClick={onGoToSlate}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-slate-700 hover:text-slate-900 transition-colors whitespace-nowrap cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
           >
             <span>Edit on Fixture Board</span>
             <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
         </div>
-      </div>
-
-      {isFetchingDate && (
-        <div className="px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-600">
-          Loading matches and building accumulator ticket for {selectedDate}...
-        </div>
-      )}
-
-      {startedLeg && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
-          Save disabled — {startedLeg.homeTeam} vs {startedLeg.awayTeam} has
-          already kicked off. Remove the started selection to save a pre-match
-          slip.
-        </div>
-      )}
-
-      {legs.length > 0 && !guard.recommended && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs leading-relaxed text-amber-800">
-          <span className="font-semibold">Not a recommended ticket.</span>{' '}
-          {guard.reason}{' '}
-          {guard.economics.basis === 'fair' && (
-            <>Expected return {guard.economics.expectedRoi.toFixed(1)}% at these prices.</>
-          )}
-        </div>
-      )}
-
-      {/* Quantitative Summary Strip */}
-      <div className="bg-white border border-slate-200 rounded-xl grid grid-cols-2 lg:grid-cols-5 divide-y lg:divide-y-0 lg:divide-x divide-slate-200">
-        <div className="p-5">
-          <p className="text-xs text-slate-500">Total Acca Odds</p>
-          <p className="mt-1 text-2xl font-bold font-mono text-slate-900 tabular-nums">
-            {totalOdds.toFixed(2)}
-          </p>
-        </div>
-        <div className="p-5">
-          <p className="text-xs text-slate-500">Ticket Legs</p>
-          <p className="mt-1 text-2xl font-bold font-mono text-slate-900 tabular-nums">
-            {legs.length} Matches
-          </p>
-        </div>
-        <div className="p-5">
-          <p className="text-xs text-slate-500">Ticket Status</p>
-          <div className="mt-2">
-            <SettlementLabel status={ticketSettlement.status} />
-          </div>
-          <p className="mt-1 text-[11px] font-mono text-slate-500 tabular-nums">
-            {ticketSettlement.winCount}W · {ticketSettlement.lostCount}L ·{' '}
-            {ticketSettlement.voidCount}V
-          </p>
-        </div>
-        <div className="p-5" title={
-          guard.economics.basis === 'fair'
-            ? 'Chance every leg lands, with the bookmaker margin removed from each price.'
-            : 'Chance every leg lands at the quoted prices (includes bookmaker margin).'
-        }>
-          <p className="text-xs text-slate-500">
-            {guard.economics.basis === 'fair'
-              ? 'Combined Win Chance'
-              : 'Combined Implied Prob'}
-          </p>
-          <p className="mt-1 text-2xl font-bold font-mono text-slate-900 tabular-nums">
-            {guard.economics.fairChance.toFixed(1)}%
-          </p>
-        </div>
-        <div className="p-5 col-span-2 lg:col-span-1">
-          <p className="text-xs text-slate-500">
-            Est. Return ({formatMwk(stake)} Stake)
-          </p>
-          <p className="mt-1 text-2xl font-bold font-mono text-emerald-700 tabular-nums">
-            {formatMwk(potentialReturn)}
-          </p>
-        </div>
-      </div>
-
-      {/* Leg-by-Leg Ledger Table */}
-      {legs.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-xl p-10 text-center space-y-3">
-          <p className="text-sm font-semibold text-slate-900">
-            No selections currently on the ticket
-          </p>
-          <button
-            type="button"
-            onClick={onAutoComplete}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
-          >
-            <Wand2 className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>Generate {minOdds.toFixed(2)}+ Acca</span>
-          </button>
-        </div>
-      ) : (
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          <div className="flex items-center justify-between gap-2 px-4 py-2 bg-slate-50 border-b border-slate-200">
-            <p className="text-[11px] text-slate-500">
-              Click a column header to sort
-            </p>
-            {legSort.key && (
-              <button
-                type="button"
-                onClick={() =>
-                  setLegSort({ key: null, direction: SORT_ASC })
-                }
-                className="text-[11px] font-medium text-emerald-700 hover:text-emerald-800 cursor-pointer whitespace-nowrap"
-              >
-                Restore ticket order
-              </button>
-            )}
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
-                  <SortableTh
-                    label="#"
-                    columnKey="index"
-                    sort={legSort}
-                    onSort={handleSort}
-                    className="py-3 px-4 w-12"
-                  />
-                  <SortableTh
-                    label="Fixture & Competition"
-                    columnKey="fixture"
-                    sort={legSort}
-                    onSort={handleSort}
-                    className="py-3 px-4"
-                  />
-                  <SortableTh
-                    label="Date & Kickoff"
-                    columnKey="date"
-                    sort={legSort}
-                    onSort={handleSort}
-                    className="py-3 px-4"
-                  />
-                  <SortableTh
-                    label="Match Result"
-                    columnKey="result"
-                    sort={legSort}
-                    onSort={handleSort}
-                    className="py-3 px-4"
-                  />
-                  <SortableTh
-                    label="Selection"
-                    columnKey="selection"
-                    sort={legSort}
-                    onSort={handleSort}
-                    className="py-3 px-4"
-                  />
-                  <SortableTh
-                    label="Odds / Prob"
-                    columnKey="odds"
-                    sort={legSort}
-                    onSort={handleSort}
-                    defaultDirection="desc"
-                    align="right"
-                    className="py-3 px-4"
-                  />
-                  <SortableTh
-                    label="Status"
-                    columnKey="status"
-                    sort={legSort}
-                    onSort={handleSort}
-                    className="py-3 px-4"
-                  />
-                  <SortableTh
-                    label="Tactical Justification"
-                    columnKey="rationale"
-                    sort={legSort}
-                    onSort={handleSort}
-                    className="py-3 px-4"
-                  />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200 text-sm">
-                {sortedRows.map(({ leg, index }) => {
-                  const matched = fixtureMap.get(leg.fixtureId);
-                  const status = settlementFor(leg);
-                  const matchDate = leg.matchDate || matched?.matchDate || displayDate;
-                  const resultText = matched
-                    ? getFixtureMatchResultSummary(matched)
-                    : 'Scheduled';
-
-                  return (
-                    <tr key={leg.fixtureId} className="hover:bg-slate-50/70">
-                      <td className="py-3.5 px-4 font-mono text-xs text-slate-400 tabular-nums">
-                        {String(index + 1).padStart(2, '0')}
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <p className="font-semibold text-slate-900">
-                          {leg.homeTeam} vs {leg.awayTeam}
-                        </p>
-                        <p className="text-xs text-slate-500">{leg.competition}</p>
-                      </td>
-                      <td className="py-3.5 px-4 font-mono text-xs text-slate-600 tabular-nums whitespace-nowrap">
-                        <p className="font-semibold text-slate-800">{matchDate}</p>
-                        <p>{leg.kickoffTime}</p>
-                      </td>
-                      <td className="py-3.5 px-4 font-mono text-xs text-slate-700 tabular-nums whitespace-nowrap">
-                        {resultText}
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <p className="font-semibold text-emerald-800">
-                          {leg.marketLabel}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {leg.marketType}
-                          {leg.bookmaker ? ` · ${leg.bookmaker}` : ''}
-                        </p>
-                      </td>
-                      <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-900 tabular-nums whitespace-nowrap">
-                        {leg.odds.toFixed(2)}
-                        <span className="block text-[11px] font-medium text-slate-400">
-                          {leg.fairProbability
-                            ? `${leg.fairProbability.toFixed(1)}%`
-                            : '—'}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <SettlementLabel status={status} />
-                      </td>
-                      <td className="py-3.5 px-4 text-xs text-slate-600 max-w-sm">
-                        {leg.rationale}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      </footer>
     </section>
   );
 }
