@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   BarChart3,
   ChevronRight,
@@ -8,6 +8,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import type {
+  AnalyticsRefreshResult,
   FeaturedAnalyticsRow,
   FeaturedPickSource,
   PickAnalyticsDay,
@@ -30,6 +31,7 @@ import {
 } from '../utils/tableSort.ts';
 import { SortableTh } from './SortableTh.tsx';
 import { TicketReplayPanel } from './TicketReplayPanel.tsx';
+import { CombinationRoiView } from './CombinationRoiView.tsx';
 
 interface AnalyticsViewProps {
   strategy: AccaStrategy;
@@ -558,6 +560,10 @@ export function AnalyticsView({
   const [error, setError] = useState<string | null>(null);
   const [staleResponse, setStaleResponse] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [forceRefresh, setForceRefresh] = useState(false);
+  const [refreshingTables, setRefreshingTables] = useState(false);
+  const [lastChecked, setLastChecked] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   const [showEmptySelections, setShowEmptySelections] = useState(false);
   const [showEmptyFeaturedSelections, setShowEmptyFeaturedSelections] =
     useState(false);
@@ -590,6 +596,62 @@ export function AnalyticsView({
       [key]: !current[key],
     }));
 
+  /**
+   * Merge freshly published results into the archive, then reload every table.
+   * The endpoint is time-gated server-side, so polling while this tab is open
+   * cannot turn into a stream of upstream feed calls.
+   */
+  const refreshTables = useCallback(async (force = false) => {
+    setRefreshingTables(true);
+    setRefreshError(null);
+    try {
+      const result = await apiFetch<AnalyticsRefreshResult>(
+        '/api/analytics/refresh',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        }
+      );
+      setLastChecked(new Date().toISOString());
+      if (result?.errors?.length) setRefreshError(result.errors.join(' · '));
+      if (result?.changedDates?.length || force) {
+        setForceRefresh(force);
+        setRefreshKey((key) => key + 1);
+      } else {
+        // Nothing new landed. Drop a previous force flag so later reloads can
+        // use the cache again; the tables keep the data they already have.
+        setForceRefresh(false);
+      }
+    } catch (err) {
+      setLastChecked(new Date().toISOString());
+      setRefreshError(
+        err instanceof Error ? err.message : 'Could not check for new results.'
+      );
+    } finally {
+      setRefreshingTables(false);
+    }
+  }, []);
+
+  // A finished match changes the archive without this tab visiting a slate, so
+  // check on load, while open, and as soon as the tab becomes visible again.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    void refreshTables(false);
+    const interval = window.setInterval(
+      () => void refreshTables(false),
+      5 * 60 * 1000
+    );
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void refreshTables(false);
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [refreshTables]);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -601,7 +663,7 @@ export function AnalyticsView({
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ strategy, force: refreshKey > 0 }),
+            body: JSON.stringify({ strategy, force: forceRefresh }),
           }
         );
         if (!cancelled) {
@@ -622,7 +684,7 @@ export function AnalyticsView({
     return () => {
       cancelled = true;
     };
-  }, [strategy, refreshKey]);
+  }, [strategy, refreshKey, forceRefresh]);
 
   const featuredSummary = useMemo(
     () => (data ? summarize(data.featured) : null),
@@ -754,14 +816,24 @@ export function AnalyticsView({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <span
+            className="text-[11px] text-slate-400"
+            title="Archived results are checked on load, every 5 minutes, and when this tab becomes visible again."
+          >
+            {refreshingTables
+              ? 'Checking for new results…'
+              : lastChecked
+                ? `Checked ${new Date(lastChecked).toLocaleTimeString()}`
+                : 'Checking for new results…'}
+          </span>
           <button
             type="button"
-            onClick={() => setRefreshKey((key) => key + 1)}
-            disabled={loading}
+            onClick={() => void refreshTables(true)}
+            disabled={loading || refreshingTables}
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 cursor-pointer"
           >
             <RefreshCw
-              className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`}
+              className={`h-3.5 w-3.5 ${loading || refreshingTables ? 'animate-spin' : ''}`}
               aria-hidden="true"
             />
             Refresh
@@ -781,11 +853,17 @@ export function AnalyticsView({
           <span>{error}</span>
           <button
             type="button"
-            onClick={() => setRefreshKey((key) => key + 1)}
+            onClick={() => void refreshTables(true)}
             className="font-semibold underline cursor-pointer"
           >
             Retry
           </button>
+        </div>
+      )}
+
+      {refreshError && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+          Result check: {refreshError}
         </div>
       )}
 
@@ -881,6 +959,13 @@ export function AnalyticsView({
               tone={pnlTone(marketSummary?.roi ?? 0)}
             />
           </div>
+
+          <CombinationRoiView
+            strategy={strategy}
+            refreshKey={refreshKey}
+            force={forceRefresh}
+            onReload={() => void refreshTables(true)}
+          />
 
           <TicketReplayPanel
             strategy={strategy}

@@ -105,6 +105,20 @@
             "timeout": 300,
             "enabled": true,
             "logging": true
+        },
+        {
+            "$id": "accatik-analytics-daily",
+            "name": "AccaTik Daily Analytics Refresh",
+            "runtime": "node-22",
+            "path": ".",
+            "entrypoint": "appwrite-analytics-daily.ts",
+            "commands": "npm install",
+            "execute": ["any"],
+            "events": [],
+            "schedule": "0 4 * * *",
+            "timeout": 600,
+            "enabled": true,
+            "logging": true
         }
     ]
 }

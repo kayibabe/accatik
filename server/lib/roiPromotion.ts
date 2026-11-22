@@ -54,7 +54,8 @@ export function wilson(wins: number, n: number): [number, number] {
  */
 export function clusterRoiCi(
   rows: Array<{ dateIso: string; odds: number; won: boolean }>,
-  iterations = 2000
+  iterations = 2000,
+  random: () => number = Math.random
 ): [number, number] {
   const days = new Map<string, Array<{ odds: number; won: boolean }>>();
   for (const row of rows) {
@@ -70,7 +71,7 @@ export function clusterRoiCi(
     let n = 0;
     let returned = 0;
     for (let k = 0; k < keys.length; k += 1) {
-      const day = days.get(keys[Math.floor(Math.random() * keys.length)])!;
+      const day = days.get(keys[Math.floor(random() * keys.length)])!;
       for (const row of day) {
         n += 1;
         returned += row.won ? row.odds : 0;

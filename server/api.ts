@@ -13,6 +13,8 @@ import type {
   SettlementStatus,
 } from '../src/types/fixtures.ts';
 import type {
+  AnalyticsRefreshResult,
+  CombinationRoiResponse,
   PickAnalyticsResponse,
   TicketReplayResponse,
   QualifiedPicksResponse,
@@ -39,6 +41,8 @@ import {
 } from '../src/utils/roiAcca.ts';
 import { computePickAnalytics } from './lib/pickAnalytics.ts';
 import { computeTicketAnalytics } from './lib/ticketAnalytics.ts';
+import { computeCombinationRoi } from './lib/combinationRoi.ts';
+import { refreshAnalyticsArchives } from './lib/analyticsRefresh.ts';
 import { computePickRecords } from './lib/pickRecord.ts';
 import { buildQualifiedPicksResponse } from './lib/qualifiedPicks.ts';
 import {
@@ -75,7 +79,11 @@ import {
   resolveApiFootballBaseUrl,
   resolveApiFootballKey,
 } from './lib/apiFootball.ts';
-import { createSingleFlight, createTtlCache } from './lib/cache.ts';
+import {
+  clearAnalyticsCaches,
+  createSingleFlight,
+  createTtlCache,
+} from './lib/cache.ts';
 import {
   isSlateSettled,
   mergeArchivedPrices,
@@ -259,6 +267,8 @@ async function persistSlate(
           Date.parse(updatedAt)
         ),
       });
+      // New captures change the inputs behind every inception-to-date table.
+      clearAnalyticsCaches();
     } catch (error) {
       // A read-only archive must not take the app down, except for an explicit
       // recapture whose whole promise is that the new prices are durable.
@@ -316,6 +326,9 @@ async function refreshArchivedResults(
     updatedAt: new Date().toISOString(),
     fixtures,
   });
+  // A newly settled match must be visible in every analytics table on the next
+  // request, not after each table's ten-minute TTL expires.
+  clearAnalyticsCaches();
   indexFixtures(fixtures);
   slateCache.set(dateIso, {
     fixtures,
@@ -1474,6 +1487,56 @@ export async function getPickAnalytics(
   } catch (error) {
     console.error('Error computing pick analytics:', error);
     return fail(500, errorMessage(error, 'Failed to build pick analytics.'));
+  }
+}
+
+/**
+ * Section x confidence band x market ROI study, rebuilt from the same archived
+ * slates the other analytics tables use. Read-only and strategy-aware.
+ */
+export async function getCombinationRoi(
+  body: unknown
+): Promise<ApiResult<CombinationRoiResponse | ErrorBody>> {
+  const source =
+    body && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : {};
+  const strategy = isAccaStrategy(source.strategy) ? source.strategy : 'balanced';
+  const force = source.force === true;
+  try {
+    return ok(await computeCombinationRoi(strategy, force));
+  } catch (error) {
+    console.error('Error computing combination ROI:', error);
+    return fail(500, errorMessage(error, 'Failed to build the combination ROI study.'));
+  }
+}
+
+/**
+ * Merges freshly published results into recent archived slates. The analytics
+ * page calls this on load and while it is open, so a finished match reaches all
+ * tables without waiting for the nightly job or a manual refresh.
+ */
+export async function refreshAnalytics(
+  body: unknown = {}
+): Promise<ApiResult<AnalyticsRefreshResult | ErrorBody>> {
+  const source =
+    body && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : {};
+  try {
+    return ok(
+      await refreshAnalyticsArchives({
+        lookbackDays: Number.isFinite(Number(source.lookbackDays))
+          ? Number(source.lookbackDays)
+          : undefined,
+        maxDates: Number.isFinite(Number(source.maxDates))
+          ? Number(source.maxDates)
+          : undefined,
+      })
+    );
+  } catch (error) {
+    console.error('Error refreshing analytics results:', error);
+    return fail(502, errorMessage(error, 'Failed to refresh archived results.'));
   }
 }
 

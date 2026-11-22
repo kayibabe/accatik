@@ -24,7 +24,7 @@ import {
 } from '../../src/utils/marketSelection.ts';
 import { marketProbability } from '../../src/utils/probability.ts';
 import { mapWithConcurrency } from './appwriteData.ts';
-import { createTtlCache } from './cache.ts';
+import { createTtlCache, registerAnalyticsCache } from './cache.ts';
 import { listArchivedSlateDates, readArchivedSlate } from './slateArchive.ts';
 
 /**
@@ -252,6 +252,7 @@ function buildDaily(
 }
 
 const cache = createTtlCache<PickAnalyticsResponse>(CACHE_TTL_MS, 8);
+registerAnalyticsCache(() => cache.clear());
 
 export async function computePickAnalytics(
   strategy: AccaStrategy,

@@ -12,7 +12,7 @@ import { buildRecommendedAcca } from '../../src/utils/accaEngine.ts';
 import { inferPriceQuality } from '../../src/utils/priceQuality.ts';
 import { buildTicketVariants } from '../../src/utils/ticketControls.ts';
 import { mapWithConcurrency } from './appwriteData.ts';
-import { createTtlCache } from './cache.ts';
+import { createTtlCache, registerAnalyticsCache } from './cache.ts';
 import { listArchivedSlateDates, readArchivedSlate } from './slateArchive.ts';
 
 /**
@@ -164,6 +164,7 @@ export function summarizeTicketReplay(
 }
 
 const cache = createTtlCache<TicketReplayResponse>(CACHE_TTL_MS, 8);
+registerAnalyticsCache(() => cache.clear());
 
 export async function computeTicketAnalytics(
   strategy: AccaStrategy,

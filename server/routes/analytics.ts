@@ -2,10 +2,12 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import {
   buildRoiAccaTicket,
+  getCombinationRoi,
   getPickAnalytics,
   getQualifiedPicks,
   getRoiRegistry,
   getTicketAnalytics,
+  refreshAnalytics,
   runRoiPromotion,
 } from '../api.ts';
 
@@ -19,6 +21,16 @@ analyticsRouter.post('/picks', async (req: Request, res: Response) => {
 
 analyticsRouter.post('/tickets', async (req: Request, res: Response) => {
   const result = await getTicketAnalytics(req.body);
+  res.status(result.status).json(result.body);
+});
+
+analyticsRouter.post('/combination-roi', async (req: Request, res: Response) => {
+  const result = await getCombinationRoi(req.body);
+  res.status(result.status).json(result.body);
+});
+
+analyticsRouter.post('/refresh', async (req: Request, res: Response) => {
+  const result = await refreshAnalytics(req.body ?? {});
   res.status(result.status).json(result.body);
 });
 

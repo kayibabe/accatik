@@ -101,6 +101,88 @@ export interface FeaturedPickSample {
 }
 
 /* ------------------------------------------------------------------ */
+/* Section x confidence band x market ROI study                        */
+/* ------------------------------------------------------------------ */
+
+/** Confidence bands published by the featured-pick engine. */
+export type RoiBand = 'High' | 'Solid' | 'Moderate' | 'Speculative';
+
+/** `All` is the aggregate across every band, not a fourth model band. */
+export type CombinationRoiBand = RoiBand | 'All';
+
+/**
+ * Which family a combination row belongs to:
+ *  - `section-band`: section x band x market (the main study)
+ *  - `section`: section x market with every band pooled (the "All" chip)
+ *  - `market`: every requested market staked directly from the price ladder
+ */
+export type CombinationRoiScope = 'section-band' | 'section' | 'market';
+
+/** One flat-stake combination in the inception-to-date ROI study. */
+export interface CombinationRoiRow {
+  key: string;
+  scope: CombinationRoiScope;
+  /** Null only for direct-market rows. */
+  section: FeaturedPickSource | null;
+  band: CombinationRoiBand;
+  marketKey: string;
+  marketLabel: string;
+  /** Win + Lost + Void. */
+  settled: number;
+  /** Win + Lost. Voids are returned and never risked. */
+  staked: number;
+  wins: number;
+  losses: number;
+  voids: number;
+  winRate: number | null;
+  avgOdds: number | null;
+  netPnl: number;
+  roi: number | null;
+  /** Matchdays with a positive net result / matchdays with a staked pick. */
+  positiveDates: number;
+  totalDates: number;
+  roiCiLow: number | null;
+  roiCiHigh: number | null;
+  firstDateIso: string | null;
+  lastDateIso: string | null;
+  /** Below the study's minimum settled count: descriptive, not evidence. */
+  smallSample: boolean;
+}
+
+export interface CombinationRoiMarket {
+  key: string;
+  label: string;
+}
+
+export interface CombinationRoiResponse {
+  strategy: AccaStrategy;
+  generatedAt: string;
+  firstDateIso: string | null;
+  lastDateIso: string | null;
+  sampleDates: number;
+  sampleFixtures: number;
+  stakePerPick: number;
+  minSample: number;
+  bands: RoiBand[];
+  markets: CombinationRoiMarket[];
+  /** All three scopes; the view filters by `scope` and `band`. */
+  rows: CombinationRoiRow[];
+  priceQuality: PickAnalyticsResponse['priceQuality'];
+  /** How many settled fixtures still carry a frozen featured-pick snapshot. */
+  snapshotFixtures: number;
+  caveats: string[];
+}
+
+export interface AnalyticsRefreshResult {
+  checkedDates: string[];
+  refreshedDates: string[];
+  changedDates: string[];
+  errors: string[];
+  /** Set when the upstream feed is not configured. */
+  skipped?: string;
+}
+
+/* ------------------------------------------------------------------ */
 /* Positive-ROI promotion registry                                     */
 /* ------------------------------------------------------------------ */
 

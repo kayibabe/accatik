@@ -54,6 +54,22 @@ export function createTtlCache<V>(defaultTtlMs: number, maxEntries = 200): TtlCa
 }
 
 /**
+ * Analytics caches register their `clear` here so one archive write can make
+ * every analytics table stale at once. Without this, a freshly settled match
+ * could appear in the featured-picks table while the ROI study and the ticket
+ * replay still served their ten-minute snapshots.
+ */
+const analyticsCacheClearers = new Set<() => void>();
+
+export function registerAnalyticsCache(clear: () => void): void {
+  analyticsCacheClearers.add(clear);
+}
+
+export function clearAnalyticsCaches(): void {
+  for (const clear of analyticsCacheClearers) clear();
+}
+
+/**
  * Coalesces concurrent identical work (e.g. two browser tabs loading the same
  * date) into one upstream call. This is what keeps a 30-request slate build
  * from being paid for twice.

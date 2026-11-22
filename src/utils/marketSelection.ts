@@ -114,6 +114,42 @@ const KNOWN_SELECTIONS = new Map(
   MARKET_SELECTION_CATALOG.map((selection) => [selection.key, selection])
 );
 
+/**
+ * The fixed market shortlist studied by the combination ROI report.
+ *
+ * Order is the betting-shop order used in the report, not the canonical
+ * catalog order: 1X2 sides, the goal ladder, BTTS, then the cover markets.
+ * Keeping it here means the API, the table and any future export agree on
+ * exactly which 18 selections are measured.
+ */
+export const COMBINATION_ROI_MARKET_KEYS: readonly string[] = [
+  '1X2-H',
+  '1X2-A',
+  'GOALS-O1.5',
+  'GOALS-O2.5',
+  'GOALS-O3.5',
+  'GOALS-O4.5',
+  'GOALS-U1.5',
+  'GOALS-U2.5',
+  'GOALS-U3.5',
+  'GOALS-U4.5',
+  'BTTS-YES',
+  'BTTS-NO',
+  'DC-1X',
+  '1X2-D',
+  'DC-12',
+  'DC-X2',
+  'DNB-1',
+  'DNB-2',
+];
+
+/** Resolves the study shortlist to the shared labels and identities. */
+export function combinationRoiMarkets(): MarketSelection[] {
+  return COMBINATION_ROI_MARKET_KEYS.map(
+    (key) => KNOWN_SELECTIONS.get(key) ?? { key, label: key, marketType: '1X2' }
+  );
+}
+
 function withShortLabel(
   key: string,
   label: string,
