@@ -130,6 +130,7 @@ export default function App() {
   const [slate, setSlate] = useState<DailySlateResponse | null>(null);
   const [selectedLegs, setSelectedLegs] = useState<AccaLeg[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isRecapturing, setIsRecapturing] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Guests only ever receive the sanitized match list; the full priced slate
@@ -355,11 +356,13 @@ export default function App() {
       targetStrategy: AccaStrategy,
       targetMinOdds: number,
       targetMaxLegs: number,
-      forceRefresh = false
+      forceRefresh = false,
+      recapturePrices = false
     ) => {
       // A rapid date change cancels the previous request instead of merely
       // ignoring its response after it has consumed server work.
       slateAbortRef.current?.abort();
+      setIsRecapturing(recapturePrices);
 
       // The response is keyed by date only; applySlateResponse rebuilds the
       // legs for whatever strategy and odds are active at render time.
@@ -368,6 +371,7 @@ export default function App() {
         ++requestIdRef.current;
         setErrorMessage(null);
         setIsLoading(false);
+        setIsRecapturing(false);
         applySlateResponse(
           cached,
           targetStrategy,
@@ -393,6 +397,7 @@ export default function App() {
             minOdds: targetMinOdds,
             maxLegs: targetMaxLegs,
             forceRefresh,
+            recapturePrices,
           }),
           signal: controller.signal,
         });
@@ -409,7 +414,10 @@ export default function App() {
           );
         }
       } finally {
-        if (requestId === requestIdRef.current) setIsLoading(false);
+        if (requestId === requestIdRef.current) {
+          setIsLoading(false);
+          setIsRecapturing(false);
+        }
       }
     },
     [applySlateResponse]
@@ -480,6 +488,13 @@ export default function App() {
   const handleChangeDate = (nextDate: string) => {
     setSelectedDate(nextDate);
     fetchSlateForDate(nextDate, strategy, minOdds, maxLegs, false);
+  };
+
+  // Explicitly unfreezes the selected matchday: fresh odds, a new capture
+  // stamp, and picks rebuilt from that book. Ordinary refreshes never do this.
+  const handleRecapturePrices = () => {
+    if (isRecapturing) return;
+    fetchSlateForDate(selectedDate, strategy, minOdds, maxLegs, true, true);
   };
 
   const handleChangeStrategy = (nextStrategy: AccaStrategy) => {
@@ -1194,6 +1209,8 @@ export default function App() {
                     slateSource={slate.slateSource}
                     capturedAt={slate.capturedAt}
                     isFetchingDate={isLoading}
+                    isRecapturing={isRecapturing}
+                    onRecapturePrices={handleRecapturePrices}
                     selectedLegs={selectedLegs}
                     strategy={strategy}
                     onToggleMarket={handleToggleMarket}

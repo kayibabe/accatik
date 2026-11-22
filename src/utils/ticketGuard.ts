@@ -49,9 +49,9 @@ export interface TicketGuardOptions {
   /** Keep locked selections even when they push past the cap. */
   preserveLocked?: boolean;
   /**
-   * Research/shadow tickets only. Allows up to `maxLegs` (default 8), skips the
-   * short-price cap, and never grants the "recommended" label. Used by the ROI
-   * accumulator, where a 5.00+ target is impossible under the 2-3 leg gate.
+   * Research/shadow tickets only. Skips the short-price cap and never grants
+   * the "recommended" label. The 2–3 leg framework cap still applies, so a
+   * 5.00+ target is left short rather than padded with extra legs.
    */
   researchMode?: boolean;
 }
@@ -157,7 +157,7 @@ export function guardTicket(
     : legs;
 
   const research = options.researchMode === true;
-  const cap = research ? 8 : MAX_RECOMMENDED_LEGS;
+  const cap = MAX_RECOMMENDED_LEGS;
   const ceiling = Math.max(
     1,
     Math.min(options.maxLegs ?? cap, cap, legs.length)
@@ -183,7 +183,7 @@ export function guardTicket(
   const reasons: string[] = [];
   if (research) {
     reasons.push(
-      'Research ticket: the 2-3 leg structural cap is intentionally bypassed; this is not a recommendation.'
+      'Research ticket: short-price legs are allowed, but the 2–3 leg framework cap still applies and this is not a recommendation.'
     );
   }
   if (trimmedCount > 0) {

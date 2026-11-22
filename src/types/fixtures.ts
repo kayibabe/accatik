@@ -1,3 +1,14 @@
+import type {
+  FixtureModelSummary,
+  MarketFrameworkAssessment,
+} from '../framework/assessment.ts';
+import type {
+  ConfidenceClass,
+  FrameworkStatus,
+  ReasonCode,
+  SuitabilityFlag,
+} from '../framework/config.ts';
+
 export type MarketType =
   | '1X2'
   | 'Double Chance'
@@ -36,6 +47,52 @@ export interface MarketOption {
   rationale: string;
   /** Bookmaker that actually published this price (may differ from the fixture's primary book). */
   bookmaker?: string;
+  /**
+   * Framework decision for this selection. Present only while a fixture is
+   * assessed; the archive strips it so stored slates stay lean.
+   */
+  framework?: MarketFrameworkAssessment;
+}
+
+/** Fixture-level roll-up of the framework decision, without the per-market rows. */
+export interface FixtureFrameworkSummary {
+  version: string;
+  modelVersion: string;
+  status: FrameworkStatus;
+  confidence: ConfidenceClass;
+  dataOk: boolean;
+  flags: SuitabilityFlag[];
+  reasonCodes: ReasonCode[];
+  model: FixtureModelSummary | null;
+  summary: string;
+  counts: {
+    qualified: number;
+    review: number;
+    screenOnly: number;
+    rejected: number;
+    insufficient: number;
+  };
+}
+
+/** Aggregate of every fixture assessment on one matchday. */
+export interface FrameworkSlateSummary {
+  version: string;
+  modelVersion: string;
+  fixturesAssessed: number;
+  fixturesWithModel: number;
+  qualifiedMarkets: number;
+  reviewMarkets: number;
+  screenOnlyMarkets: number;
+  rejectedMarkets: number;
+  insufficientMarkets: number;
+  note: string;
+  /** Slate controller output, present once caps have been applied. */
+  caps?: {
+    stakedMarkets: number;
+    cutByCaps: number;
+    priorWeeklyStakeUnits: number;
+    remainingWeeklyExposureUnits: number;
+  };
 }
 
 /** API-Football's own 1X2 model, in percent. Independent of the bookmaker book. */
@@ -100,6 +157,8 @@ export interface Fixture {
    * instead of paying for another `/predictions` upstream call.
    */
   modelDataAt?: string;
+  /** Framework decision for this fixture. Stripped before archival. */
+  framework?: FixtureFrameworkSummary;
 }
 
 /**
@@ -159,6 +218,8 @@ export interface AccaLeg {
   rationale: string;
   bookmaker?: string;
   locked?: boolean;
+  /** Framework decision copied from the market this leg was built from. */
+  framework?: MarketFrameworkAssessment;
 }
 
 export interface GroundingSource {
@@ -213,6 +274,8 @@ export interface DailySlateResponse {
   recommendedLegIds: RecommendedPickRef[];
   /** Present when the server applied the structural EV gate. */
   ticketGuard?: TicketGuardSummary;
+  /** Framework decision layer summary for this matchday. */
+  framework?: FrameworkSlateSummary;
   sources: GroundingSource[];
   cachedAt: string;
   /** `archive` means the slate came from disk without any API-Football call. */

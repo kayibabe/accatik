@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import type { Fixture } from '../../src/types/fixtures.ts';
+import type { Fixture, MarketOption } from '../../src/types/fixtures.ts';
 import type { RoiRegistryEntry } from '../../src/types/analytics.ts';
 import { buildQualifiedPickRows } from './qualifiedPicks.ts';
 import { makeFixture, makeMarket } from '../../src/utils/testFactories.ts';
@@ -37,6 +37,35 @@ function fixture(): Fixture {
 }
 
 const now = Date.UTC(2026, 10, 20, 10);
+
+function framework(
+  status: NonNullable<MarketOption['framework']>['status'],
+  reasonCodes: NonNullable<MarketOption['framework']>['reasonCodes'] = []
+): NonNullable<MarketOption['framework']> {
+  return {
+    marketId: 'q-1x2-h',
+    selectionKey: '1X2-H',
+    status,
+    reasonCodes,
+    pModel: 0.5,
+    pFair: 0.45,
+    edge: 0.05,
+    relativeEdge: 0.11,
+    ev: 0.05,
+    evStress: 0.01,
+    pStress: 0.48,
+    fairOdds: 2,
+    confidence: 'Medium',
+    confidenceDowngrades: [],
+    flags: [],
+    marketContext: null,
+    oddsAgeSeconds: 0,
+    marketComplete: true,
+    benchmarkBook: 'Book A',
+    executionBook: 'Book A',
+    value: null,
+  };
+}
 
 test('joins all three cards and promotes only whitelisted pairs', () => {
   const rows = buildQualifiedPickRows(
@@ -116,4 +145,45 @@ test('uses stored model advice only, never a derived note', () => {
   noAdvice.analystNoteMarketId = undefined;
   const rows = buildQualifiedPickRows([noAdvice], [], 'balanced', now);
   assert.equal(rows.some((row) => row.source === 'note'), false);
+});
+
+test('a framework-rejected card is never eligible for the acca', () => {
+  const subject = fixture();
+  subject.markets[0] = {
+    ...subject.markets[0],
+    framework: framework('REJECTED', ['EDGE_BELOW_MIN']),
+  };
+
+  const rows = buildQualifiedPickRows(
+    [subject],
+    [entry('angle', '1X2-H')],
+    'balanced',
+    now
+  );
+  const angle = rows.find((row) => row.source === 'angle');
+
+  assert.equal(angle?.eligibleForAcca, false);
+  assert.equal(angle?.frameworkStatus, 'REJECTED');
+  assert.deepEqual(angle?.frameworkReasonCodes, ['EDGE_BELOW_MIN']);
+  assert.match(angle?.reason ?? '', /Framework REJECTED/);
+});
+
+test('a framework-qualified promoted card stays eligible and carries its edge', () => {
+  const subject = fixture();
+  subject.markets[0] = {
+    ...subject.markets[0],
+    framework: framework('QUALIFIED'),
+  };
+
+  const rows = buildQualifiedPickRows(
+    [subject],
+    [entry('angle', '1X2-H')],
+    'balanced',
+    now
+  );
+  const angle = rows.find((row) => row.source === 'angle');
+
+  assert.equal(angle?.eligibleForAcca, true);
+  assert.equal(angle?.frameworkStatus, 'QUALIFIED');
+  assert.equal(angle?.frameworkEdge, 0.05);
 });

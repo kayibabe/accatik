@@ -26,7 +26,19 @@ export function legFromMarket(fixture: Fixture, market: MarketOption): AccaLeg {
     rationale: market.rationale,
     bookmaker: market.bookmaker,
     locked: false,
+    framework: market.framework,
   };
+}
+
+/** The framework caps accumulators at three legs (§14.1). */
+export const MAX_ACCA_LEGS = 3;
+
+function hasFrameworkDecision(fixture: Fixture): boolean {
+  return Boolean(
+    fixture.framework ||
+      fixture.markets.some((market) => market.framework) ||
+      fixture.allMarkets?.some((market) => market.framework)
+  );
 }
 
 function bestMarketFor(
@@ -34,9 +46,31 @@ function bestMarketFor(
   strategy: AccaStrategy
 ): { market: MarketOption; score: number } | null {
   // One market per fixture, chosen by the same resolver the board renders.
-  const market = resolvePick(fixture, strategy);
-  if (!market) return null;
-  return { market, score: scoreMarket(fixture, market, strategy) };
+  const resolved = resolvePick(fixture, strategy);
+
+  // Fixtures without a framework decision keep the legacy resolver path, so
+  // archived replays and tests remain unchanged.
+  if (!hasFrameworkDecision(fixture)) {
+    if (!resolved) return null;
+    return { market: resolved, score: scoreMarket(fixture, resolved, strategy) };
+  }
+
+  const priced = fixture.allMarkets ?? fixture.markets;
+  const qualified = priced.filter(
+    (market) => market.framework?.status === 'QUALIFIED'
+  );
+  if (qualified.length === 0) return null;
+
+  if (resolved?.framework?.status === 'QUALIFIED') {
+    return { market: resolved, score: scoreMarket(fixture, resolved, strategy) };
+  }
+
+  let best: { market: MarketOption; score: number } | null = null;
+  for (const market of qualified) {
+    const score = scoreMarket(fixture, market, strategy);
+    if (!best || score > best.score) best = { market, score };
+  }
+  return best;
 }
 
 /**
@@ -80,9 +114,13 @@ export function completeAccaToTargetOdds(
   existingLegs: AccaLeg[],
   targetOdds: number,
   strategy: AccaStrategy,
-  maxLegs = 8
+  maxLegs = MAX_ACCA_LEGS
 ): AccaLeg[] {
   const legs: AccaLeg[] = [...existingLegs];
+  const legCap = Math.min(
+    Math.max(1, Math.round(maxLegs)),
+    MAX_ACCA_LEGS
+  );
   const usedFixtureIds = new Set(legs.map((leg) => leg.fixtureId));
 
   let currentProduct = legs.reduce((acc, leg) => acc * leg.odds, 1);
@@ -120,7 +158,7 @@ export function completeAccaToTargetOdds(
     );
 
   for (const candidate of candidates) {
-    if (legs.length >= maxLegs) break;
+    if (legs.length >= legCap) break;
     if (legs.length > 0 && currentProduct >= targetOdds) break;
 
     legs.push(legFromMarket(candidate.fixture, candidate.market));
@@ -139,7 +177,7 @@ export function buildRecommendedAcca(
   fixtures: Fixture[],
   targetOdds: number,
   strategy: AccaStrategy,
-  maxLegs = 7
+  maxLegs = MAX_ACCA_LEGS
 ): AccaLeg[] {
   return completeAccaToTargetOdds(fixtures, [], targetOdds, strategy, maxLegs);
 }

@@ -14,16 +14,16 @@ function legs(count: number, odds: number, fairProbability: number) {
   );
 }
 
-test('research mode bypasses both leg caps but never recommends', () => {
+test('research mode allows short prices but still applies the three-leg cap', () => {
   const shortLegs = legs(8, 1.12, 85);
   const normal = guardTicket(shortLegs);
   const research = guardTicket(shortLegs, { researchMode: true, maxLegs: 8 });
 
   assert.ok(normal.legs.length <= 3);
-  assert.equal(research.legs.length, 8);
+  assert.equal(research.legs.length, 3);
   assert.equal(research.recommended, false);
   assert.match(research.reason, /not a recommendation/);
-  assert.equal(research.economics.legCount, 8);
+  assert.equal(research.economics.legCount, 3);
 });
 
 test('ticket economics removes the margin and reports the compounded overround', () => {

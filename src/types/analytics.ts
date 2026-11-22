@@ -3,6 +3,11 @@ import type {
   MarketType,
   SettlementStatus,
 } from './fixtures.ts';
+import type {
+  ConfidenceClass,
+  FrameworkStatus,
+  ReasonCode,
+} from '../framework/config.ts';
 
 /**
  * Flat-stake performance for one tracked pick or group of picks.
@@ -192,6 +197,13 @@ export interface QualifiedPickRow {
   settled: number;
   eligibleForAcca: boolean;
   reason: string;
+  /** Framework decision for this card's selection, when one was assessed. */
+  frameworkStatus?: FrameworkStatus | null;
+  frameworkReasonCodes?: ReasonCode[];
+  frameworkConfidence?: ConfidenceClass | null;
+  /** Fraction, not percentage points. */
+  frameworkEdge?: number | null;
+  frameworkEvStress?: number | null;
 }
 
 export interface QualifiedPicksResponse {

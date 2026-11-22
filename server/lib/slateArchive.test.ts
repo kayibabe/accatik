@@ -6,6 +6,7 @@ import {
   isSlateSettled,
   mergeArchivedPrices,
   parseArchiveFixturePayloads,
+  recaptureFixturePrices,
 } from './slateArchive.ts';
 import { makeFixture, makeMarket } from '../../src/utils/testFactories.ts';
 
@@ -78,6 +79,45 @@ test('a kicked-off fixture keeps the prices it was archived with', () => {
   assert.equal(merged.status, 'Finished');
   assert.equal(merged.score?.home, 1);
   assert.equal(merged.priceQuality, 'prematch');
+});
+
+test('an explicit recapture replaces kicked-off prices and restamps them', () => {
+  const archived = priced('a', {
+    status: 'Finished',
+    score: { home: 1, away: 1 },
+    recommendedPickId: 'a-ou-25',
+    priceQuality: 'prematch',
+    pricedAt: '2026-11-21T08:18:00.000Z',
+    modelDataAt: '2026-11-21T08:00:00.000Z',
+    modelAdvice: 'Home',
+  });
+  const fresh = priced('a', {
+    status: 'Finished',
+    score: { home: 1, away: 1 },
+    markets: [makeMarket('a-1x2-a', 1.25, '1X2', 'Away Win')],
+    recommendedPickId: 'a-1x2-a',
+    priceQuality: 'live',
+    formHome: '—',
+  });
+
+  const [recaptured] = recaptureFixturePrices([fresh], [archived], NOW);
+
+  assert.deepEqual(
+    recaptured.markets.map((market) => market.id),
+    ['a-1x2-a']
+  );
+  assert.equal(recaptured.recommendedPickId, 'a-1x2-a');
+  assert.equal(recaptured.priceQuality, 'live');
+  assert.equal(recaptured.pricedAt, new Date(NOW).toISOString());
+  assert.equal(recaptured.modelDataAt, archived.modelDataAt);
+  assert.equal(recaptured.modelAdvice, archived.modelAdvice);
+  assert.equal(recaptured.formHome, archived.formHome);
+});
+
+test('recapture leaves an unpriced fixture unstamped', () => {
+  const fresh = priced('a', { markets: [], recommendedPickId: '' });
+  const [recaptured] = recaptureFixturePrices([fresh], [], NOW);
+  assert.equal(recaptured.pricedAt, undefined);
 });
 
 test('a scheduled fixture still takes the fresh book', () => {

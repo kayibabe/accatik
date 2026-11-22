@@ -38,6 +38,14 @@ const SOURCE_LABELS: Record<string, string> = {
   note: 'Analyst note',
 };
 
+const FRAMEWORK_TONE: Record<string, string> = {
+  QUALIFIED: 'bg-emerald-100 text-emerald-800',
+  CONDITIONAL_REVIEW: 'bg-amber-100 text-amber-800',
+  SCREEN_ONLY: 'bg-slate-100 text-slate-600',
+  REJECTED: 'bg-red-100 text-red-700',
+  INSUFFICIENT_DATA: 'bg-slate-100 text-slate-500',
+};
+
 /** Read-only research view of the promoted-ROI whitelist and its daily table. */
 export function PositiveRoiView({
   strategy,
@@ -97,7 +105,7 @@ export function PositiveRoiView({
             dateIso: selectedDate,
             strategy,
             targetOdds: 5,
-            maxLegs: 8,
+            maxLegs: 3,
           }),
         })
       );
@@ -136,6 +144,7 @@ export function PositiveRoiView({
       settled: (row) => row.settled,
       result: (row) => row.result ?? 'Pending',
       status: (row) => row.status,
+      framework: (row) => row.frameworkStatus ?? '',
     });
   }, [qualified, pickFilter, sort]);
 
@@ -169,7 +178,7 @@ export function PositiveRoiView({
             type="button"
             onClick={() => void generate()}
             disabled={building || loading || (qualified?.eligibleCount ?? 0) === 0}
-            title="Build a 5.00+ odds research accumulator from promoted markets only"
+            title="Build a 5.00+ odds research accumulator from framework-qualified promoted markets only"
             className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 rounded-lg transition-colors cursor-pointer"
           >
             <Wand2 className="w-3.5 h-3.5" aria-hidden="true" />
@@ -190,10 +199,11 @@ export function PositiveRoiView({
         <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
         <p>
           <span className="font-semibold">Research, not a recommendation.</span>{' '}
-          Promoted selections are short-priced and the accumulator leg cap is
-          intentionally raised to eight so a 5.00 target is reachable. Bookmaker
-          margins compound with every leg; no ticket here is presented as
-          positive-EV or recommended. Flat staking and exposure caps still apply.
+          Promoted selections must also clear every framework gate, and the
+          accumulator is capped at three legs. A 5.00 target may therefore be
+          left short rather than padded. Bookmaker margins compound with every
+          leg; no ticket here is presented as positive-EV or recommended. Flat
+          staking and exposure caps still apply.
         </p>
       </div>
 
@@ -335,13 +345,14 @@ export function PositiveRoiView({
                 <SortableTh label="Settled" columnKey="settled" sort={sort} onSort={onSort} defaultDirection={SORT_DESC} align="right" className="py-3 px-4" />
                 <SortableTh label="Result" columnKey="result" sort={sort} onSort={onSort} className="py-3 px-4" />
                 <SortableTh label="Status" columnKey="status" sort={sort} onSort={onSort} className="py-3 px-4" />
+                <SortableTh label="Framework" columnKey="framework" sort={sort} onSort={onSort} className="py-3 px-4" />
                 <th className="py-3 px-4 text-xs font-semibold text-slate-600">Reason</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="py-10 text-center text-sm text-slate-500">
+                  <td colSpan={11} className="py-10 text-center text-sm text-slate-500">
                     <p>
                       {pickFilter === 'qualified'
                         ? 'No cards on this slate qualified for the acca.'
@@ -408,6 +419,30 @@ export function PositiveRoiView({
                     >
                       {row.status}
                     </span>
+                  </td>
+                  <td className="py-3 px-4">
+                    {row.frameworkStatus ? (
+                      <>
+                        <span
+                          className={`px-2 py-0.5 text-[11px] font-semibold rounded ${
+                            FRAMEWORK_TONE[row.frameworkStatus] ??
+                            'bg-slate-100 text-slate-600'
+                          }`}
+                        >
+                          {row.frameworkStatus.replace(/_/g, ' ')}
+                        </span>
+                        <span className="block text-[10px] text-slate-500 mt-0.5">
+                          {row.frameworkConfidence ?? '—'}
+                          {typeof row.frameworkEdge === 'number'
+                            ? ` · ${(row.frameworkEdge * 100).toFixed(1)} pp edge`
+                            : ''}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-[11px] text-slate-400">
+                        Not assessed
+                      </span>
+                    )}
                   </td>
                   <td className="py-3 px-4 text-[11px] text-slate-600 max-w-xs">
                     {row.reason}

@@ -420,9 +420,9 @@ export function SavedMatchDetailDialog({
               )}
               {pricedAt && (
                 <p className="text-[10px] text-slate-400">
-                  Prices captured {pricedAt} CAT. Kicked-off prices are frozen
-                  permanently, so this is the exact board the slip was built
-                  from.
+                  Prices captured {pricedAt} CAT. Kicked-off prices stay frozen
+                  unless this date is explicitly recaptured. The odds the slip
+                  was built from remain recorded on the ticket.
                 </p>
               )}
             </section>

@@ -12,6 +12,7 @@ import {
   TrendingUp,
   X,
   NotebookPen,
+  RefreshCw,
 } from 'lucide-react';
 import type {
   AccaLeg,
@@ -83,6 +84,9 @@ interface FixtureBoardProps {
   slateSource?: 'live' | 'archive';
   /** When this matchday's prices were first captured. */
   capturedAt?: string;
+  isRecapturing?: boolean;
+  /** Explicitly replaces frozen prices with a fresh capture. */
+  onRecapturePrices?: () => void;
   isFetchingDate: boolean;
   selectedLegs: AccaLeg[];
   strategy: AccaStrategy;
@@ -176,6 +180,23 @@ const ANGLE_TONE: Record<AngleConfidence, string> = {
   Solid: 'text-sky-800 bg-sky-100/80 border-sky-200',
   Moderate: 'text-amber-800 bg-amber-100/80 border-amber-200',
   Speculative: 'text-slate-700 bg-slate-100 border-slate-200',
+};
+
+/** Framework status chip colours. */
+const FRAMEWORK_TONE: Record<string, string> = {
+  QUALIFIED: 'text-emerald-800 bg-emerald-100/80 border-emerald-200',
+  CONDITIONAL_REVIEW: 'text-amber-800 bg-amber-100/80 border-amber-200',
+  SCREEN_ONLY: 'text-slate-700 bg-slate-100 border-slate-200',
+  REJECTED: 'text-red-700 bg-red-100/80 border-red-200',
+  INSUFFICIENT_DATA: 'text-slate-600 bg-slate-100 border-slate-200',
+};
+
+const FRAMEWORK_DOT: Record<string, string> = {
+  QUALIFIED: 'bg-emerald-500',
+  CONDITIONAL_REVIEW: 'bg-amber-500',
+  SCREEN_ONLY: 'bg-slate-400',
+  REJECTED: 'bg-red-500',
+  INSUFFICIENT_DATA: 'bg-slate-300',
 };
 
 interface BriefToggleProps {
@@ -409,6 +430,8 @@ export function FixtureBoard({
   dataProvider,
   slateSource,
   capturedAt,
+  isRecapturing = false,
+  onRecapturePrices,
   isFetchingDate,
   selectedLegs,
   strategy,
@@ -440,6 +463,7 @@ export function FixtureBoard({
   const [pickRecords, setPickRecords] = useState<PickRecordsResponse | null>(
     null
   );
+  const [confirmRecapture, setConfirmRecapture] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -702,6 +726,14 @@ export function FixtureBoard({
   };
 
   const isToday = selectedDate === todayDate;
+  const hasFrozenPrices = fixtures.some(
+    (fixture) => fixture.status !== 'Scheduled' && fixture.markets.length > 0
+  );
+  const showRecapture = Boolean(
+    onRecapturePrices && (slateSource === 'archive' || hasFrozenPrices)
+  );
+
+  useEffect(() => setConfirmRecapture(false), [selectedDate]);
 
   return (
     <section aria-label="Football Fixtures by Date" className="space-y-5">
@@ -729,9 +761,55 @@ export function FixtureBoard({
           </h1>
         </div>
 
-        <span className="text-xs text-slate-600 font-mono tabular-nums whitespace-nowrap">
-          Showing {filteredFixtures.length} of {fixtures.length} matches
-        </span>
+        <div className="flex flex-col items-start sm:items-end gap-1.5">
+          <span className="text-xs text-slate-600 font-mono tabular-nums whitespace-nowrap">
+            Showing {filteredFixtures.length} of {fixtures.length} matches
+          </span>
+          {showRecapture && onRecapturePrices && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {confirmRecapture ? (
+                <>
+                  <span className="text-[11px] text-slate-600">
+                    Replace the frozen prices for {selectedDate}?
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setConfirmRecapture(false);
+                      onRecapturePrices();
+                    }}
+                    disabled={isRecapturing}
+                    className="px-2 py-1 text-[11px] font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-md disabled:opacity-60 cursor-pointer"
+                  >
+                    Confirm
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmRecapture(false)}
+                    disabled={isRecapturing}
+                    className="px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-100 rounded-md disabled:opacity-60 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmRecapture(true)}
+                  disabled={isRecapturing || isFetchingDate}
+                  title="Fetch fresh odds for this date and replace the frozen prices. The board and its pick will be rebuilt from the new prices."
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 disabled:opacity-60 cursor-pointer"
+                >
+                  <RefreshCw
+                    className={`w-3.5 h-3.5 ${isRecapturing ? 'animate-spin' : ''}`}
+                    aria-hidden="true"
+                  />
+                  {isRecapturing ? 'Recapturing…' : 'Recapture Prices'}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {pickRecords && pickRecords.sampleFixtures > 0 && (
@@ -1346,6 +1424,20 @@ export function FixtureBoard({
                       >
                         {angle.confidence}
                       </span>
+                      {fixture.framework && (
+                        <span
+                          className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
+                            FRAMEWORK_TONE[fixture.framework.status] ??
+                            FRAMEWORK_TONE.SCREEN_ONLY
+                          }`}
+                          title={`Framework ${fixture.framework.status}: ${
+                            fixture.framework.reasonCodes.join(', ') ||
+                            'no reason codes'
+                          } — ${fixture.framework.summary}`}
+                        >
+                          Framework: {fixture.framework.status.replace(/_/g, ' ')}
+                        </span>
+                      )}
                       <PickResultChip status={angleOutcome} label="Angle" />
                       {marketChipsActive &&
                         !displayMarkets.some(
@@ -1591,9 +1683,9 @@ export function FixtureBoard({
                       {fixture.pricedAt && (
                         <p className="pt-2 border-t border-slate-200 text-[10px] leading-relaxed text-slate-400">
                           Prices captured {formatArchiveTime(fixture.pricedAt)}.
-                          Once a match kicks off these odds are frozen permanently,
-                          so reopening this date later resolves the same pick from
-                          the same prices.
+                          Once a match kicks off these odds stay frozen, so
+                          reopening this date later resolves the same pick from
+                          the same prices unless you explicitly recapture them.
                         </p>
                       )}
                     </div>
@@ -1667,6 +1759,13 @@ export function FixtureBoard({
                                 ? `API-Football model: ${modelPct}%`
                                 : null,
                               market.bookmaker,
+                              market.framework
+                                ? `Framework: ${market.framework.status}${
+                                    market.framework.reasonCodes.length > 0
+                                      ? ` (${market.framework.reasonCodes.join(', ')})`
+                                      : ''
+                                  }`
+                                : null,
                             ]
                               .filter(Boolean)
                               .join(' — ')}
@@ -1693,6 +1792,16 @@ export function FixtureBoard({
                                 <span className="truncate">
                                   {marketTypeShortLabel(market.marketType)}
                                 </span>
+                                {market.framework && (
+                                  <span
+                                    className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${
+                                      FRAMEWORK_DOT[market.framework.status] ??
+                                      FRAMEWORK_DOT.SCREEN_ONLY
+                                    }`}
+                                    title={`Framework: ${market.framework.status}`}
+                                    aria-hidden="true"
+                                  />
+                                )}
                               </span>
                               {marketOutcome ? (
                                 <SettlementLabel

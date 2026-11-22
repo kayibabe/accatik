@@ -22,7 +22,9 @@ import { APPWRITE_DATABASE_ID } from './auth.ts';
  *   - `recommendedPickId` (the balanced pick the server derived from them)
  *
  * Freezing those inputs is what persists the pick: `resolvePick(fixture, …)`
- * replays the exact recommendation the user saw, for every strategy, forever.
+ * replays the exact recommendation the user saw, for every strategy, until the
+ * user explicitly recaptures the date. Recapture is the only path allowed to
+ * replace a kicked-off price block; ordinary refreshes must not.
  */
 
 const RESULT_GRACE_MS = 1000 * 60 * 60 * 36;
@@ -261,6 +263,43 @@ export function isFixtureFinal(fixture: Fixture, nowMs: number): boolean {
 
 export function isSlateSettled(fixtures: Fixture[], nowMs: number): boolean {
   return fixtures.length > 0 && fixtures.every((f) => isFixtureFinal(f, nowMs));
+}
+
+/**
+ * Explicit recapture: replaces the frozen price block with the freshly fetched
+ * one and restamps it, while carrying over the model snapshot that the cold
+ * build does not fetch. Unlike `mergeArchivedPrices`, kicked-off fixtures take
+ * the new book too. Callers must treat the returned prices as live/late and
+ * persist the slate with a new `capturedAt`.
+ */
+export function recaptureFixturePrices(
+  fresh: Fixture[],
+  archived: Fixture[],
+  nowMs: number
+): Fixture[] {
+  const savedById = new Map(archived.map((fixture) => [fixture.id, fixture]));
+  const pricedAt = new Date(nowMs).toISOString();
+
+  return fresh.map((fixture) => {
+    const saved = savedById.get(fixture.id);
+    const modelSnapshot = saved
+      ? {
+          modelDataAt: fixture.modelDataAt ?? saved.modelDataAt,
+          modelAdvice: fixture.modelAdvice ?? saved.modelAdvice,
+          modelProbabilities: fixture.modelProbabilities ?? saved.modelProbabilities,
+          analystNoteMarketId:
+            fixture.analystNoteMarketId ?? saved.analystNoteMarketId,
+          formHome: fixture.formHome === '—' ? saved.formHome : fixture.formHome,
+          formAway: fixture.formAway === '—' ? saved.formAway : fixture.formAway,
+        }
+      : {};
+
+    return {
+      ...fixture,
+      ...modelSnapshot,
+      ...(fixture.markets.length > 0 ? { pricedAt } : {}),
+    };
+  });
 }
 
 /**

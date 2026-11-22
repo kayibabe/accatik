@@ -21,10 +21,11 @@ import { guardTicket, ticketEconomics } from './ticketGuard.ts';
  * Research accumulator built exclusively from promoted ROI selections.
  *
  * No leg is added to chase the headline price: every candidate has already
- * passed the promotion gate. The 5.00+ target simply decides how many promoted
- * legs are needed; if eight short legs still fall short, the ticket stays short
- * and `targetReached` is false. The guard runs in research mode so the structural
- * 2-3 leg cap is documented as bypassed rather than silently ignored.
+ * passed the promotion gate and the framework's QUALIFIED status. The 5.00+
+ * target simply decides how many promoted legs are needed; if three short legs
+ * still fall short, the ticket stays short and `targetReached` is false. The
+ * guard runs in research mode so the short-price bypass is documented rather
+ * than silently applied.
  */
 
 export interface RoiAccaOptions {
@@ -122,6 +123,17 @@ export function buildRoiAcca(
   let product = 1;
 
   for (const candidate of candidates) {
+    const framework = candidate.market.framework;
+    if (framework && framework.status !== 'QUALIFIED') {
+      rejected.push({
+        fixtureId: candidate.fixture.id,
+        marketId: candidate.market.id,
+        reason: `Framework ${framework.status}: ${
+          framework.reasonCodes.join(', ') || 'not qualified'
+        }.`,
+      });
+      continue;
+    }
     if (product >= options.targetOdds) {
       rejected.push({
         fixtureId: candidate.fixture.id,
@@ -188,7 +200,7 @@ export function guardRoiAcca(legs: AccaLeg[]): {
   reason: string;
   riskWarning: string;
 } {
-  const guard = guardTicket(legs, { researchMode: true, maxLegs: 8 });
+  const guard = guardTicket(legs, { researchMode: true, maxLegs: 3 });
   const marginPts = Math.max(
     0,
     guard.economics.breakEvenChance - guard.economics.fairChance

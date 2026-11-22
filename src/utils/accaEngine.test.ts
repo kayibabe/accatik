@@ -4,7 +4,59 @@ import { buildRecommendedAcca, completeAccaToTargetOdds } from './accaEngine.ts'
 import { calculateTotalOdds } from './accaMath.ts';
 import { withFairProbabilities } from './probability.ts';
 import { makeFixture, makeLeg, makeMarket } from './testFactories.ts';
-import type { Fixture } from '../types/fixtures.ts';
+import type { Fixture, MarketOption } from '../types/fixtures.ts';
+
+function frameworkSummary(
+  status: NonNullable<Fixture['framework']>['status']
+): NonNullable<Fixture['framework']> {
+  return {
+    version: '1.2',
+    modelVersion: 'test-model',
+    status,
+    confidence: 'Medium',
+    dataOk: true,
+    flags: [],
+    reasonCodes: [],
+    model: null,
+    summary: 'test summary',
+    counts: {
+      qualified: status === 'QUALIFIED' ? 1 : 0,
+      review: 0,
+      screenOnly: 0,
+      rejected: status === 'REJECTED' ? 1 : 0,
+      insufficient: 0,
+    },
+  };
+}
+
+function marketFramework(
+  marketId: string,
+  status: NonNullable<MarketOption['framework']>['status']
+): NonNullable<MarketOption['framework']> {
+  return {
+    marketId,
+    selectionKey: '1X2-H',
+    status,
+    reasonCodes: status === 'REJECTED' ? ['EDGE_BELOW_MIN'] : [],
+    pModel: 0.5,
+    pFair: 0.45,
+    edge: 0.05,
+    relativeEdge: 0.11,
+    ev: 0.05,
+    evStress: 0.01,
+    pStress: 0.48,
+    fairOdds: 2,
+    confidence: 'Medium',
+    confidenceDowngrades: [],
+    flags: [],
+    marketContext: null,
+    oddsAgeSeconds: 0,
+    marketComplete: true,
+    benchmarkBook: 'Book A',
+    executionBook: 'Book A',
+    value: null,
+  };
+}
 
 function pricedFixture(id: string, odds: number, overrides: Partial<Fixture> = {}) {
   return makeFixture({
@@ -18,7 +70,7 @@ function pricedFixture(id: string, odds: number, overrides: Partial<Fixture> = {
 }
 
 test('builds a ticket that reaches the target without repeating a fixture', () => {
-  const fixtures = ['a', 'b', 'c', 'd', 'e'].map((id) => pricedFixture(id, 1.5));
+  const fixtures = ['a', 'b', 'c', 'd', 'e'].map((id) => pricedFixture(id, 1.75));
 
   const legs = buildRecommendedAcca(fixtures, 5, 'balanced', 8);
 
@@ -26,14 +78,14 @@ test('builds a ticket that reaches the target without repeating a fixture', () =
   assert.equal(new Set(legs.map((leg) => leg.fixtureId)).size, legs.length);
 });
 
-test('stops at maxLegs when the target is unreachable', () => {
+test('stops at the three-leg cap when the target is unreachable', () => {
   const fixtures = Array.from({ length: 10 }, (_, index) =>
     pricedFixture(`f${index}`, 1.2)
   );
 
   const legs = buildRecommendedAcca(fixtures, 100, 'balanced', 4);
 
-  assert.equal(legs.length, 4);
+  assert.equal(legs.length, 3);
   assert.ok(calculateTotalOdds(legs) < 100);
 });
 
@@ -90,6 +142,52 @@ test('the goals strategy prefers goal markets over match winners', () => {
   const legs = buildRecommendedAcca([fixture], 1.5, 'goals');
 
   assert.equal(legs[0].marketType, 'Goals');
+});
+
+test('only framework-qualified markets are eligible for the recommended acca', () => {
+  const fixture = makeFixture({
+    id: 'fw',
+    status: 'Scheduled',
+    statusShort: 'NS',
+    score: { home: null, away: null },
+    markets: [
+      {
+        ...makeMarket('fw-1x2-h', 1.6, '1X2', 'Home FC Win'),
+        framework: marketFramework('fw-1x2-h', 'REJECTED'),
+      },
+      {
+        ...makeMarket('fw-ou-25', 1.9, 'Goals', 'Over 2.5 Goals'),
+        framework: marketFramework('fw-ou-25', 'QUALIFIED'),
+      },
+    ],
+    framework: frameworkSummary('QUALIFIED'),
+  });
+
+  const legs = buildRecommendedAcca([fixture], 1.4, 'balanced');
+
+  assert.equal(legs.length, 1);
+  assert.equal(legs[0].marketId, 'fw-ou-25');
+  assert.equal(legs[0].framework?.status, 'QUALIFIED');
+});
+
+test('a fixture with no framework-qualified market contributes no leg', () => {
+  const fixture = makeFixture({
+    id: 'none',
+    status: 'Scheduled',
+    statusShort: 'NS',
+    score: { home: null, away: null },
+    markets: [
+      {
+        ...makeMarket('none-1x2-h', 1.6, '1X2', 'Home FC Win'),
+        framework: marketFramework('none-1x2-h', 'REJECTED'),
+      },
+    ],
+    framework: frameworkSummary('REJECTED'),
+  });
+
+  const legs = buildRecommendedAcca([fixture], 1.4, 'balanced');
+
+  assert.deepEqual(legs, []);
 });
 
 test('an unreachable target never swaps a chosen market for a longer price', () => {

@@ -69,6 +69,7 @@ export function buildQualifiedPickRows(
       const selection = resolveMarketSelection(card.market, fixture);
       const result = evaluateMarketSettlement(fixture, card.market);
       const entry = byPair.get(`${card.source}:${selection.key}`);
+      const framework = card.market.framework ?? null;
 
       let reason: string;
       let eligibleForAcca = false;
@@ -76,6 +77,10 @@ export function buildQualifiedPickRows(
         reason = 'Fixture has already kicked off or is not scheduled.';
       } else if (quality !== 'prematch') {
         reason = `Price quality is ${quality}, not prematch-confirmed.`;
+      } else if (framework && framework.status !== 'QUALIFIED') {
+        reason = `Framework ${framework.status}: ${
+          framework.reasonCodes.join(', ') || 'not qualified'
+        }.`;
       } else if (!entry) {
         reason = 'No registry row for this card and selection.';
       } else if (entry.status !== 'promoted') {
@@ -107,6 +112,11 @@ export function buildQualifiedPickRows(
         settled: entry?.settled ?? 0,
         eligibleForAcca,
         reason,
+        frameworkStatus: framework?.status ?? null,
+        frameworkReasonCodes: framework?.reasonCodes ?? [],
+        frameworkConfidence: framework?.confidence ?? null,
+        frameworkEdge: framework?.edge ?? null,
+        frameworkEvStress: framework?.evStress ?? null,
       });
     }
   }

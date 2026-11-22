@@ -175,7 +175,7 @@ test('ignores watched selections, started fixtures and non-prematch prices', () 
   );
 });
 
-test('research guard keeps long tickets but never recommends them', () => {
+test('research guard trims long tickets to three legs and never recommends them', () => {
   const legs = Array.from({ length: 6 }, (_, i) => homeFixture(`g${i}`)).map(
     (fixture) => ({
       fixtureId: fixture.id,
@@ -195,7 +195,7 @@ test('research guard keeps long tickets but never recommends them', () => {
   const graded = guardRoiAcca(legs);
 
   assert.equal(graded.recommended, false);
-  assert.equal(graded.economics.legCount, 6);
+  assert.equal(graded.economics.legCount, 3);
   assert.match(graded.riskWarning, /Research only/);
   assert.match(graded.reason, /not a recommendation/);
 });

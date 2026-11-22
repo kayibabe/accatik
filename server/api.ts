@@ -1,5 +1,6 @@
 import { performance } from 'node:perf_hooks';
 import type {
+  AccaLeg,
   DailySlateResponse,
   DeepAnalysisResponse,
   Fixture,
@@ -22,6 +23,7 @@ import type {
 } from '../src/types/analytics.ts';
 import type { LedgerSummary, LedgerTicket } from '../src/types/ledger.ts';
 import { buildRecommendedAcca } from '../src/utils/accaEngine.ts';
+import { evaluateAccumulator } from '../src/framework/accumulator.ts';
 import {
   MAX_RECOMMENDED_LEGS,
   guardTicket,
@@ -38,6 +40,13 @@ import { computePickAnalytics } from './lib/pickAnalytics.ts';
 import { computeTicketAnalytics } from './lib/ticketAnalytics.ts';
 import { computePickRecords } from './lib/pickRecord.ts';
 import { buildQualifiedPicksResponse } from './lib/qualifiedPicks.ts';
+import {
+  attachFrameworkAssessments,
+  stripFrameworkFromFixtures,
+  summarizeFrameworkSlate,
+} from './lib/frameworkAssessment.ts';
+import { getFrameworkHistory } from './lib/frameworkHistory.ts';
+import { applyFrameworkSlateControls } from './lib/frameworkSlate.ts';
 import {
   DEFAULT_ROI_PROMOTION_CONFIG,
 } from './lib/roiPromotion.ts';
@@ -70,6 +79,7 @@ import {
   isSlateSettled,
   mergeArchivedPrices,
   readArchivedSlate,
+  recaptureFixturePrices,
   writeArchivedSlate,
   type ArchivedSlate,
 } from './lib/slateArchive.ts';
@@ -117,7 +127,7 @@ export const DEFAULT_TARGET_ODDS = 2.8;
 export const DEFAULT_MAX_LEGS = 3;
 export const MIN_TARGET_ODDS = 1.5;
 export const MAX_TARGET_ODDS = 100;
-export const MAX_LEG_LIMIT = 8;
+export const MAX_LEG_LIMIT = 3;
 
 interface LoadedSlate {
   fixtures: Fixture[];
@@ -227,7 +237,11 @@ async function refreshLedgerForSlate(
 }
 
 /** Writes a freshly built slate exactly once, after any per-request enrichment. */
-async function persistSlate(dateIso: string, slate: LoadedSlate): Promise<void> {
+async function persistSlate(
+  dateIso: string,
+  slate: LoadedSlate,
+  strict = false
+): Promise<void> {
   if (!slate.needsArchive) return;
   await archiveFlight.run(dateIso, async () => {
     try {
@@ -235,10 +249,14 @@ async function persistSlate(dateIso: string, slate: LoadedSlate): Promise<void> 
         dateIso,
         capturedAt: slate.capturedAt,
         updatedAt: new Date().toISOString(),
-        fixtures: slate.fixtures,
+        // Framework decisions are derived per request; the archive stores only
+        // the frozen market inputs it can reproduce them from.
+        fixtures: stripFrameworkFromFixtures(slate.fixtures),
       });
     } catch (error) {
-      // A read-only archive must not take the app down.
+      // A read-only archive must not take the app down, except for an explicit
+      // recapture whose whole promise is that the new prices are durable.
+      if (strict) throw error;
       console.warn(`[slate] could not archive ${dateIso}`, error);
     }
   });
@@ -507,15 +525,22 @@ function indexFixtures(fixtures: Fixture[]): void {
  * - A settled matchday is served from disk and never costs another API call.
  * - A requested-but-unsettled matchday refreshes results, but prices already
  *   archived for a kicked-off fixture are preserved.
+ * - An explicit price recapture replaces even kicked-off prices and restamps
+ *   the slate; it is the only path that unfreezes a matchday.
  * - If the API fails, an archived slate is served instead of an error page.
  */
-async function getSlate(dateIso: string, force = false): Promise<LoadedSlate> {
-  if (!force) {
+async function getSlate(
+  dateIso: string,
+  force = false,
+  recapturePrices = false
+): Promise<LoadedSlate> {
+  if (!force && !recapturePrices) {
     const cached = slateCache.get(dateIso);
     if (cached) return cached;
   }
 
-  return slateFlight.run(`${dateIso}:${force ? 'force' : 'normal'}`, async () => {
+  const flightKey = `${dateIso}:${recapturePrices ? 'recapture' : force ? 'force' : 'normal'}`;
+  return slateFlight.run(flightKey, async () => {
     const archiveStart = performance.now();
     const archived = await readArchivedSlate(dateIso);
     const archiveReadMs = performance.now() - archiveStart;
@@ -523,8 +548,9 @@ async function getSlate(dateIso: string, force = false): Promise<LoadedSlate> {
 
     // Stale-while-revalidate: a saved matchday is served immediately. A stale
     // one also schedules a cheap results-only refresh for the next visit.
-    // `forceRefresh` is the only path that pays for a full rebuild.
-    if (archived && !force) {
+    // An explicit refresh or recapture is the only path that pays for a full
+    // rebuild.
+    if (archived && !force && !recapturePrices) {
       indexFixtures(archived.fixtures);
       const served: LoadedSlate = {
         fixtures: archived.fixtures,
@@ -545,10 +571,33 @@ async function getSlate(dateIso: string, force = false): Promise<LoadedSlate> {
       const buildStart = performance.now();
       const fresh = await buildSlate(dateIso);
       buildMs = performance.now() - buildStart;
-      fixtures = archived
-        ? mergeArchivedPrices(archived.fixtures, fresh)
-        : fresh;
+      fixtures = !archived
+        ? fresh
+        : recapturePrices
+          ? recaptureFixturePrices(fresh, archived.fixtures, nowMs)
+          : mergeArchivedPrices(archived.fixtures, fresh);
+
+      // A cold odds pull for an old date can come back empty. Never trade a
+      // priced archive for an unpriced one just because the user asked to
+      // recapture it.
+      if (
+        recapturePrices &&
+        archived?.fixtures.some((fixture) => fixture.markets.length > 0) &&
+        fixtures.every((fixture) => fixture.markets.length === 0)
+      ) {
+        throw new Error('the odds feed returned no prices for this date');
+      }
     } catch (error) {
+      // An explicit recapture must fail rather than silently serve the frozen
+      // board the user asked to replace.
+      if (recapturePrices) {
+        throw new Error(
+          `Could not recapture prices for ${dateIso}: ${errorMessage(
+            error,
+            'the odds feed is unavailable'
+          )}`
+        );
+      }
       if (!archived) throw error;
       console.warn(
         `[slate] API-Football failed for ${dateIso}; serving the archive instead.`,
@@ -565,14 +614,21 @@ async function getSlate(dateIso: string, force = false): Promise<LoadedSlate> {
       return fallback;
     }
 
-    const capturedAt = archived?.capturedAt ?? new Date().toISOString();
-    const pricedAt = new Date().toISOString();
+    const captureMs = Date.now();
+    // Recapture starts a new price era for the date, so the slate's capture
+    // stamp moves with it. Every other path preserves the original stamp.
+    const capturedAt = recapturePrices
+      ? new Date(captureMs).toISOString()
+      : archived?.capturedAt ?? new Date(captureMs).toISOString();
+    const pricedAt = new Date(captureMs).toISOString();
     for (const fixture of fixtures) {
-      // Scheduled prices keep moving; kicked-off prices are frozen with the
-      // timestamp that belongs to them.
+      // Scheduled prices keep moving; kicked-off prices stay frozen with the
+      // timestamp that belongs to them unless the user recaptures the date.
       if (
         fixture.markets.length > 0 &&
-        (!fixture.pricedAt || fixture.status === 'Scheduled')
+        (recapturePrices ||
+          !fixture.pricedAt ||
+          fixture.status === 'Scheduled')
       ) {
         fixture.pricedAt = pricedAt;
       }
@@ -824,6 +880,35 @@ export async function getPublicTodayFixtures(): Promise<
   }
 }
 
+/**
+ * Validates the built ticket against the framework's accumulator rules. Returns
+ * null when any leg lacks a framework decision, so legacy/archive tickets keep
+ * the structural guard's verdict.
+ */
+function frameworkAccumulatorCheck(
+  legs: AccaLeg[]
+): ReturnType<typeof evaluateAccumulator> | null {
+  if (legs.length === 0) return null;
+  const inputs = legs.map((leg) => {
+    const framework = leg.framework;
+    if (!framework || !framework.value) return null;
+    return {
+      fixtureId: leg.fixtureId,
+      leagueId: leg.competition,
+      homeTeamId: leg.homeTeam,
+      awayTeamId: leg.awayTeam,
+      status: framework.status,
+      odds: leg.odds,
+      value: {
+        pModel: framework.value.pModel,
+        pStress: framework.value.pStress,
+      },
+    };
+  });
+  if (inputs.some((input) => input === null)) return null;
+  return evaluateAccumulator(inputs as NonNullable<(typeof inputs)[number]>[]);
+}
+
 export async function getTodayFixtures(
   body: unknown
 ): Promise<ApiResult<DailySlateResponse | ErrorBody>> {
@@ -851,7 +936,10 @@ export async function getTodayFixtures(
       ? source.strategy
       : 'balanced';
 
-    const forceRefresh = Boolean(source.forceRefresh);
+    // Recapture is an explicit force: it must bypass the client/server slate
+    // caches and replace even prices frozen after kickoff.
+    const recapturePrices = Boolean(source.recapturePrices);
+    const forceRefresh = Boolean(source.forceRefresh) || recapturePrices;
     if (forceRefresh) {
       slateCache.delete(requestedDate);
       lastLedgerRefreshAt.delete(requestedDate);
@@ -862,10 +950,41 @@ export async function getTodayFixtures(
       resultCache.clear();
     }
 
-    const loaded = await getSlate(requestedDate, forceRefresh);
+    const loaded = await getSlate(requestedDate, forceRefresh, recapturePrices);
     if (loaded.timings) Object.assign(timings, loaded.timings);
     // Shallow copies: prediction enrichment writes to these, not to the cache.
-    const fixtures = loaded.fixtures.map((fixture) => ({ ...fixture }));
+    let fixtures = loaded.fixtures.map((fixture) => ({ ...fixture }));
+
+    // Framework decision layer: attach one assessment per scheduled fixture
+    // before any pick or accumulator is built. Unassessed fixtures keep the
+    // legacy resolver path.
+    const frameworkHistory = await getFrameworkHistory();
+    const decisionTime = Date.now();
+    fixtures = attachFrameworkAssessments(
+      fixtures,
+      frameworkHistory,
+      decisionTime
+    );
+    // Slate controller: rank, cap and record every decision before picks are
+    // built, so a capped selection can never reach the recommended ticket.
+    const controlled = await applyFrameworkSlateControls(
+      fixtures,
+      requestedDate,
+      decisionTime
+    );
+    fixtures = controlled.fixtures;
+    const frameworkCaps = {
+      stakedMarkets: fixtures.reduce(
+        (count, fixture) =>
+          count +
+          fixture.markets.filter((market) => market.framework?.staked).length,
+        0
+      ),
+      cutByCaps: controlled.caps.cutByCaps,
+      priorWeeklyStakeUnits: controlled.caps.priorWeeklyStakeUnits,
+      remainingWeeklyExposureUnits:
+        controlled.caps.remainingWeeklyExposureUnits,
+    };
 
     const rawLegs = buildRecommendedAcca(fixtures, minOdds, strategy, maxLegs);
     // Structural gate: the headline ticket is capped at three legs (two when
@@ -875,6 +994,12 @@ export async function getTodayFixtures(
       maxLegs: Math.min(maxLegs, MAX_RECOMMENDED_LEGS),
     });
     const legs = guard.legs;
+    const accaCheck = frameworkAccumulatorCheck(legs);
+    const frameworkRejected =
+      accaCheck !== null && accaCheck.status !== 'QUALIFIED';
+    const guardReason = frameworkRejected
+      ? `${guard.reason} Framework: ${accaCheck.reasonCodes.join(', ')}.`
+      : guard.reason;
 
     // Sealed matchdays skip the prediction feed entirely: the match is over.
     // A stale archive served by SWR reuses the model data captured with it.
@@ -900,17 +1025,29 @@ export async function getTodayFixtures(
     // predictions are attached. Both helpers swallow their own errors, and
     // scheduleBackground is a final guard against an unhandled rejection.
     const bookkeeping: Promise<void>[] = [];
+    let recapturePersist: Promise<void> | undefined;
     if (loaded.needsArchive || needsModelPersist) {
       const persistStart = performance.now();
-      bookkeeping.push(
-        persistSlate(requestedDate, {
+      const persist = persistSlate(
+        requestedDate,
+        {
           ...loaded,
           fixtures,
           needsArchive: true,
-        }).then(() => {
-          timings.persistMs = performance.now() - persistStart;
-        })
-      );
+        },
+        recapturePrices
+      ).then(() => {
+        timings.persistMs = performance.now() - persistStart;
+      });
+      bookkeeping.push(persist);
+      // A recapture is only confirmed once the new prices are durable: the
+      // next visit must not fall back to the board the user just replaced.
+      if (recapturePrices) {
+        recapturePersist = persist.catch((error) => {
+          slateCache.delete(requestedDate);
+          throw error;
+        });
+      }
     }
 
     // Closing prices, settlement and shadow recording share one ledger pass,
@@ -927,6 +1064,7 @@ export async function getTodayFixtures(
         logSlateTimings(requestedDate, loaded.source, timings, 'background');
       })
     );
+    if (recapturePersist) await recapturePersist;
 
     const recommendedLegIds: RecommendedPickRef[] = legs.map((leg) => ({
       fixtureId: leg.fixtureId,
@@ -947,12 +1085,13 @@ export async function getTodayFixtures(
       fixtures,
       recommendedLegIds,
       ticketGuard: {
-        recommended: guard.recommended,
-        reason: guard.reason,
+        recommended: guard.recommended && !frameworkRejected,
+        reason: guardReason,
         originalLegCount: guard.originalLegCount,
         trimmedCount: guard.trimmedCount,
         economics: guard.economics,
       },
+      framework: summarizeFrameworkSlate(fixtures, frameworkCaps),
       sources: SOURCE_LINKS(requestedDate),
       cachedAt: new Date().toISOString(),
       slateSource: loaded.source,
@@ -1498,9 +1637,22 @@ export async function getQualifiedPicks(body: unknown): Promise<
       getSlate(dateIso, source.forceRefresh === true),
       readRoiRegistry(strategy),
     ]);
+    const frameworkHistory = await getFrameworkHistory();
+    const decisionTime = Date.now();
+    const assessed = attachFrameworkAssessments(
+      loaded.fixtures,
+      frameworkHistory,
+      decisionTime
+    );
+    const controlled = await applyFrameworkSlateControls(
+      assessed,
+      dateIso,
+      decisionTime
+    );
+    const fixtures = controlled.fixtures;
     const response = buildQualifiedPicksResponse(
       dateIso,
-      loaded.fixtures,
+      fixtures,
       registry,
       strategy
     );
@@ -1533,17 +1685,34 @@ export async function buildRoiAccaTicket(body: unknown): Promise<
   const targetOdds = source.targetOdds === undefined
     ? 5
     : parseTargetOdds(source.targetOdds);
-  const maxLegs = source.maxLegs === undefined ? 8 : parseMaxLegs(source.maxLegs);
+  const maxLegs = source.maxLegs === undefined ? 3 : parseMaxLegs(source.maxLegs);
   try {
     const [loaded, registry] = await Promise.all([
       getSlate(dateIso, source.forceRefresh === true),
       readRoiRegistry(strategy),
     ]);
-    const built = buildRoiAcca(loaded.fixtures, registry, strategy, {
+    const frameworkHistory = await getFrameworkHistory();
+    const decisionTime = Date.now();
+    const assessed = attachFrameworkAssessments(
+      loaded.fixtures,
+      frameworkHistory,
+      decisionTime
+    );
+    const controlled = await applyFrameworkSlateControls(
+      assessed,
+      dateIso,
+      decisionTime
+    );
+    const built = buildRoiAcca(controlled.fixtures, registry, strategy, {
       targetOdds,
       maxLegs,
     });
     const graded = guardRoiAcca(built.legs);
+    const accaCheck = frameworkAccumulatorCheck(built.legs);
+    const frameworkReason =
+      accaCheck && accaCheck.status !== 'QUALIFIED'
+        ? ` Framework: ${accaCheck.reasonCodes.join(', ')}.`
+        : '';
     return ok({
       ...built,
       dateIso,
@@ -1551,7 +1720,7 @@ export async function buildRoiAccaTicket(body: unknown): Promise<
       recommended: false,
       mode: 'research-shadow',
       stake: 1,
-      reason: graded.reason,
+      reason: `${graded.reason}${frameworkReason}`,
       riskWarning: graded.riskWarning,
     });
   } catch (error) {
