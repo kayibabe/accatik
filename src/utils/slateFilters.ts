@@ -1,5 +1,5 @@
 import type { Fixture, MarketOption, MarketType } from '../types/fixtures.ts';
-import type { AngleConfidence, RecommendedAngle } from './recommendedAngle.ts';
+import { getAnalystNote, resolveAnalystNoteMarket } from './analystNote.ts';
 import {
   MARKET_SELECTION_CATALOG,
   resolveMarketSelection,
@@ -7,6 +7,11 @@ import {
 import type { MarketSelection } from './marketSelection.ts';
 import { isPriced } from './pickResolver.ts';
 import { marketProbability } from './probability.ts';
+import {
+  angleConfidence,
+  type AngleConfidence,
+  type RecommendedAngle,
+} from './recommendedAngle.ts';
 
 /**
  * Slate-level filters.
@@ -15,20 +20,30 @@ import { marketProbability } from './probability.ts';
  * match. A fixture is judged on its "qualifying market": the highest-probability
  * priced outcome in the selected market type, or across the whole book when the
  * type is `all`. The probability threshold and the price band both read that
- * same market, so the two controls can never disagree. The Recommended Angle
- * band is judged separately, on the fixture's own pick.
+ * same market, so the two controls can never disagree. The three insight
+ * bands are judged separately, each on its own market: the Recommended Angle
+ * on the fixture's pick, the Safer Cover on its cover, and the Analyst Note on
+ * the market the note resolves to. A fixture without that insight only passes
+ * its `all` chip.
  *
  * Two signal filters sit on top: the model edge (API-Football's 1X2 model
  * against the de-vigged book) and a kickoff window measured from "now". Neither
  * needs a bookmaker price except the model edge, which is defined against one.
  */
 
+/** Confidence-band chips shared by all three insight filters. */
 export type AngleFilter = 'all' | AngleConfidence;
+export type CoverFilter = AngleFilter;
+export type NoteFilter = AngleFilter;
 export type MarketTypeFilter = 'all' | MarketType;
 
 export interface SlateFilters {
   /** Confidence band of the fixture's Recommended Angle. */
   angle: AngleFilter;
+  /** Confidence band of the fixture's Safer Cover. */
+  cover: CoverFilter;
+  /** Confidence band of the market behind the fixture's Analyst Note. */
+  note: NoteFilter;
   /** Market type the fixture must offer at a usable price. */
   marketType: MarketTypeFilter;
   /** Canonical selection keys to narrow the board to. Empty = all selections. */
@@ -47,6 +62,8 @@ export interface SlateFilters {
 
 export const DEFAULT_SLATE_FILTERS: SlateFilters = {
   angle: 'all',
+  cover: 'all',
+  note: 'all',
   marketType: 'all',
   marketSelections: [],
   minProbability: 0,
@@ -64,6 +81,10 @@ export const ANGLE_FILTERS: readonly AngleFilter[] = [
   'Moderate',
   'Speculative',
 ];
+
+/** The same bands, named for the other two insight cards. */
+export const COVER_FILTERS: readonly CoverFilter[] = ANGLE_FILTERS;
+export const NOTE_FILTERS: readonly NoteFilter[] = ANGLE_FILTERS;
 
 /** Market chips, in the order the book publishes them. */
 export const MARKET_TYPE_FILTERS: readonly MarketType[] = [
@@ -280,17 +301,58 @@ export function bestModelEdge(fixture: Fixture): ModelEdge | null {
   return best;
 }
 
+/** True when an insight's band satisfies its chip (`all` accepts anything). */
+function matchesConfidenceFilter(
+  filter: AngleFilter,
+  band: AngleConfidence | null
+): boolean {
+  return filter === 'all' || band === filter;
+}
+
+/** Confidence of the card's safer cover, or null when the fixture has none. */
+export function coverConfidence(
+  angle: RecommendedAngle | null
+): AngleConfidence | null {
+  return angle?.cover ? angleConfidence(angle.coverProbability) : null;
+}
+
+/**
+ * Confidence of the market behind the analyst note, using the note the card
+ * shows. Callers with a fresher on-demand note pass its resolved market so the
+ * filter and the card can never rank the same fixture differently.
+ */
+export function noteConfidence(
+  fixture: Fixture,
+  noteMarket?: MarketOption | null
+): AngleConfidence | null {
+  const market =
+    noteMarket === undefined
+      ? resolveAnalystNoteMarket(fixture, getAnalystNote(fixture))
+      : noteMarket;
+  return market ? angleConfidence(marketProbability(market)) : null;
+}
+
 /**
  * True when the fixture survives every slate filter. `nowMs` is injectable so
- * the kickoff window can be tested without waiting for real time to pass.
+ * the kickoff window can be tested without waiting for real time to pass;
+ * `noteMarket` overrides the note market derived from the fixture.
  */
 export function matchesSlateFilters(
   fixture: Fixture,
   filters: SlateFilters,
   angle: RecommendedAngle | null,
-  nowMs: number = Date.now()
+  nowMs: number = Date.now(),
+  noteMarket?: MarketOption | null
 ): boolean {
-  if (filters.angle !== 'all' && angle?.confidence !== filters.angle) {
+  if (!matchesConfidenceFilter(filters.angle, angle?.confidence ?? null)) {
+    return false;
+  }
+  if (!matchesConfidenceFilter(filters.cover, coverConfidence(angle))) {
+    return false;
+  }
+  if (
+    !matchesConfidenceFilter(filters.note, noteConfidence(fixture, noteMarket))
+  ) {
     return false;
   }
 
@@ -329,36 +391,76 @@ export function matchesSlateFilters(
   return true;
 }
 
-/** Applies every slate filter. `angleFor` keeps angle building out of this module. */
+/**
+ * Applies every slate filter. `angleFor` and `noteMarketFor` keep insight
+ * building out of this module, so the board can pass the very same values its
+ * cards display.
+ */
 export function filterSlate(
   fixtures: Fixture[],
   filters: SlateFilters,
   angleFor: (fixture: Fixture) => RecommendedAngle | null,
-  nowMs: number = Date.now()
+  nowMs: number = Date.now(),
+  noteMarketFor?: (fixture: Fixture) => MarketOption | null
 ): Fixture[] {
   return fixtures.filter((fixture) =>
-    matchesSlateFilters(fixture, filters, angleFor(fixture), nowMs)
+    matchesSlateFilters(
+      fixture,
+      filters,
+      angleFor(fixture),
+      nowMs,
+      noteMarketFor?.(fixture)
+    )
   );
 }
 
-/** How many fixtures sit in each confidence band. Unpriced fixtures count nowhere. */
+function emptyBands(): Record<AngleConfidence, number> {
+  return { High: 0, Solid: 0, Moderate: 0, Speculative: 0 };
+}
+
+function countBands(
+  bands: Iterable<AngleConfidence | null>
+): Record<AngleConfidence, number> {
+  const counts = emptyBands();
+  for (const band of bands) {
+    if (band) counts[band]++;
+  }
+  return counts;
+}
+
+/** How many fixtures sit in each angle band. Unpriced fixtures count nowhere. */
 export function countAngleBands(
   fixtures: Fixture[],
   angleFor: (fixture: Fixture) => RecommendedAngle | null
 ): Record<AngleConfidence, number> {
-  const counts: Record<AngleConfidence, number> = {
-    High: 0,
-    Solid: 0,
-    Moderate: 0,
-    Speculative: 0,
-  };
+  return countBands(
+    fixtures.map((fixture) => angleFor(fixture)?.confidence ?? null)
+  );
+}
 
-  for (const fixture of fixtures) {
-    const angle = angleFor(fixture);
-    if (angle) counts[angle.confidence]++;
-  }
+/** How many fixtures offer a safer cover in each confidence band. */
+export function countCoverBands(
+  fixtures: Fixture[],
+  angleFor: (fixture: Fixture) => RecommendedAngle | null
+): Record<AngleConfidence, number> {
+  return countBands(
+    fixtures.map((fixture) => coverConfidence(angleFor(fixture)))
+  );
+}
 
-  return counts;
+/** How many fixtures have a note-backed market in each confidence band. */
+export function countNoteBands(
+  fixtures: Fixture[],
+  noteMarketFor?: (fixture: Fixture) => MarketOption | null
+): Record<AngleConfidence, number> {
+  return countBands(
+    fixtures.map((fixture) =>
+      noteConfidence(
+        fixture,
+        noteMarketFor ? noteMarketFor(fixture) : undefined
+      )
+    )
+  );
 }
 
 /** How many fixtures offer a priced outcome of each market type. */

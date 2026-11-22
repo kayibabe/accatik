@@ -41,6 +41,8 @@ const asStorage = (storage: MemoryStorage) => storage as unknown as Storage;
 
 const activeState: SlateFilterState = {
   angle: 'High',
+  cover: 'Solid',
+  note: 'Moderate',
   marketType: '1X2',
   marketSelections: ['GOALS-U2.5', 'BTTS-NO'],
   minProbability: 70,
@@ -69,9 +71,19 @@ test('a saved filter set round-trips', () => {
   assert.deepEqual(loadSlateFilterState(asStorage(storage)), activeState);
 });
 
+test('saved sets from before the insight filters gain them as off', () => {
+  const parsed = parseSlateFilterState({ angle: 'High', minOddsInput: '1.5' });
+
+  assert.equal(parsed.cover, 'all');
+  assert.equal(parsed.note, 'all');
+  assert.equal(parsed.angle, 'High');
+});
+
 test('unknown chip values are ignored one by one', () => {
   const parsed = parseSlateFilterState({
     angle: 'Superb',
+    cover: 'Bulletproof',
+    note: 'Interesting',
     marketType: 'Corners',
     minProbability: 55,
     minModelEdge: 7,
@@ -86,6 +98,8 @@ test('unknown chip values are ignored one by one', () => {
 test('valid values survive beside invalid ones', () => {
   const parsed = parseSlateFilterState({
     angle: 'Moderate',
+    cover: 'High',
+    note: 'Speculative',
     marketType: 'all',
     minProbability: 80,
     minModelEdge: 3,
@@ -96,6 +110,8 @@ test('valid values survive beside invalid ones', () => {
 
   assert.deepEqual(parsed, {
     angle: 'Moderate',
+    cover: 'High',
+    note: 'Speculative',
     marketType: 'all',
     marketSelections: [],
     minProbability: 80,

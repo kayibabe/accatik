@@ -1,12 +1,19 @@
 import {
   ANGLE_FILTERS,
+  COVER_FILTERS,
   KICKOFF_WINDOWS,
   MARKET_TYPE_FILTERS,
   MODEL_EDGE_THRESHOLDS,
+  NOTE_FILTERS,
   PROBABILITY_THRESHOLDS,
   SELECTION_FILTER_KEYS,
 } from './slateFilters.ts';
-import type { AngleFilter, MarketTypeFilter } from './slateFilters.ts';
+import type {
+  AngleFilter,
+  CoverFilter,
+  MarketTypeFilter,
+  NoteFilter,
+} from './slateFilters.ts';
 
 /**
  * The slate-filter chips as the user left them.
@@ -19,6 +26,8 @@ import type { AngleFilter, MarketTypeFilter } from './slateFilters.ts';
 
 export interface SlateFilterState {
   angle: AngleFilter;
+  cover: CoverFilter;
+  note: NoteFilter;
   marketType: MarketTypeFilter;
   /** Canonical selection keys; empty means every priced outcome. */
   marketSelections: string[];
@@ -32,6 +41,8 @@ export interface SlateFilterState {
 
 export const DEFAULT_SLATE_FILTER_STATE: SlateFilterState = {
   angle: 'all',
+  cover: 'all',
+  note: 'all',
   marketType: 'all',
   marketSelections: [],
   minProbability: 0,
@@ -84,6 +95,8 @@ export function parseSlateFilterState(raw: unknown): SlateFilterState {
 
   return {
     angle: oneOf<AngleFilter>(record.angle, ANGLE_FILTERS, 'all'),
+    cover: oneOf<CoverFilter>(record.cover, COVER_FILTERS, 'all'),
+    note: oneOf<NoteFilter>(record.note, NOTE_FILTERS, 'all'),
     marketType: oneOf<MarketTypeFilter>(
       record.marketType,
       MARKET_TYPE_VALUES,

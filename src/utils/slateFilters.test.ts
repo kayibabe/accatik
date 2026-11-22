@@ -5,14 +5,18 @@ import {
   bestModelEdge,
   boardMarketPool,
   countAngleBands,
+  countCoverBands,
   countMarketSelections,
   countMarketTypes,
   countModelEdges,
+  countNoteBands,
+  coverConfidence,
   filterSlate,
   hasMarketFilters,
   MARKET_FILTERS,
   matchingMarkets,
   matchesSlateFilters,
+  noteConfidence,
   parseOddsInput,
   qualifyingMarket,
 } from './slateFilters.ts';
@@ -233,6 +237,131 @@ test('angle facet counts match the bands the filter uses', () => {
   assert.equal(counts.High, 1);
   assert.equal(counts.Speculative, 1);
   assert.equal(counts.Solid, 0);
+});
+
+/** A risky recommended pick with a much safer cover of another market type. */
+const coveredFixture = (id: string) =>
+  makeFixture({
+    id,
+    markets: [
+      {
+        ...makeMarket(`${id}-1x2-h`, 2.5, '1X2', 'Home Win'),
+        fairProbability: 45,
+      },
+      {
+        ...makeMarket(`${id}-ou-15`, 1.2, 'Goals', 'Over 1.5 Goals'),
+        fairProbability: 75,
+      },
+    ],
+    recommendedPickId: `${id}-1x2-h`,
+  });
+
+/** A fixture whose stored analyst advice resolves to a known market. */
+const notedFixture = (id: string, noteProbability: number) =>
+  makeFixture({
+    id,
+    modelAdvice: 'Model leans Home',
+    analystNoteMarketId: `${id}-1x2-h`,
+    markets: [
+      {
+        ...makeMarket(`${id}-1x2-h`, 2, '1X2', 'Home Win'),
+        fairProbability: noteProbability,
+      },
+    ],
+  });
+
+test('the cover filter follows the safer cover band', () => {
+  const covered = coveredFixture('covered');
+  const noCover = homePickFixture('plain', 1.2);
+
+  assert.equal(coverConfidence(angleFor(covered)), 'High');
+  assert.equal(coverConfidence(angleFor(noCover)), null);
+  assert.deepEqual(
+    filterSlate([covered, noCover], filters({ cover: 'High' }), angleFor).map(
+      (fixture) => fixture.id
+    ),
+    ['covered']
+  );
+  assert.equal(
+    matchesSlateFilters(noCover, filters({ cover: 'High' }), angleFor(noCover)),
+    false
+  );
+
+  const counts = countCoverBands([covered, noCover], angleFor);
+  assert.deepEqual(counts, {
+    High: 1,
+    Solid: 0,
+    Moderate: 0,
+    Speculative: 0,
+  });
+});
+
+test('the note filter follows the band of the note market', () => {
+  const highNote = notedFixture('high-note', 75);
+  const solidNote = notedFixture('solid-note', 60);
+
+  assert.equal(noteConfidence(highNote), 'High');
+  assert.equal(noteConfidence(solidNote), 'Solid');
+  assert.deepEqual(
+    filterSlate(
+      [highNote, solidNote],
+      filters({ note: 'High' }),
+      angleFor
+    ).map((fixture) => fixture.id),
+    ['high-note']
+  );
+  assert.deepEqual(
+    filterSlate([highNote, solidNote], filters(), angleFor).map(
+      (fixture) => fixture.id
+    ),
+    ['high-note', 'solid-note']
+  );
+  assert.deepEqual(countNoteBands([highNote, solidNote]), {
+    High: 1,
+    Solid: 1,
+    Moderate: 0,
+    Speculative: 0,
+  });
+});
+
+test('a fresher note market is what the note filter judges', () => {
+  const fixture = notedFixture('fresh', 60);
+  const freshMarket = {
+    ...makeMarket('fresh-ou-25', 1.3, 'Goals', 'Over 2.5 Goals'),
+    fairProbability: 80,
+  };
+
+  assert.equal(noteConfidence(fixture), 'Solid');
+  assert.equal(noteConfidence(fixture, freshMarket), 'High');
+  assert.equal(
+    matchesSlateFilters(
+      fixture,
+      filters({ note: 'High' }),
+      angleFor(fixture),
+      Date.now(),
+      freshMarket
+    ),
+    true
+  );
+  assert.equal(
+    matchesSlateFilters(fixture, filters({ note: 'High' }), angleFor(fixture)),
+    false
+  );
+});
+
+test('a note without a resolvable market sits in no band', () => {
+  const ambiguous = makeFixture({
+    id: 'ambiguous',
+    modelAdvice: 'Use Double Chance or Over 1.5 Goals — check the team news.',
+    markets: [makeMarket('ambiguous-1x2-h', 2, '1X2', 'Home Win')],
+  });
+
+  assert.equal(noteConfidence(ambiguous), null);
+  assert.equal(countNoteBands([ambiguous]).High, 0);
+  assert.deepEqual(
+    filterSlate([ambiguous], filters({ note: 'High' }), angleFor),
+    []
+  );
 });
 
 test('typed prices parse defensively', () => {

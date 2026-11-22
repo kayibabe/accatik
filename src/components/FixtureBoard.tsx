@@ -43,23 +43,30 @@ import type { SortDirection, SortState } from '../utils/tableSort.ts';
 import { SORT_ASC, sortRows, toggleSort } from '../utils/tableSort.ts';
 import { resolvePick } from '../utils/pickResolver.ts';
 import { isPreMatchFixture } from '../utils/priceQuality.ts';
-import { buildRecommendedAngle } from '../utils/recommendedAngle.ts';
+import {
+  angleConfidence,
+  buildRecommendedAngle,
+} from '../utils/recommendedAngle.ts';
 import type {
   AngleConfidence,
   RecommendedAngle,
 } from '../utils/recommendedAngle.ts';
 import {
   ANGLE_FILTERS,
+  COVER_FILTERS,
   KICKOFF_WINDOWS,
   MARKET_FILTERS,
   MODEL_EDGE_THRESHOLDS,
+  NOTE_FILTERS,
   PROBABILITY_THRESHOLDS,
   bestModelEdge,
   boardMarketPool,
   countAngleBands,
+  countCoverBands,
   countMarketSelections,
   countMarketTypes,
   countModelEdges,
+  countNoteBands,
   hasMarketFilters,
   matchingMarkets,
   matchesSlateFilters,
@@ -105,7 +112,8 @@ interface FixtureBoardProps {
 type StatusFilter = 'all' | 'odds' | 'upcoming' | 'played' | 'void';
 type SortMode = 'board' | 'probability';
 
-const ANGLE_FILTER_LABELS: Record<AngleFilter, string> = {
+/** Shared by the angle, cover and note confidence chip rows. */
+const CONFIDENCE_FILTER_LABELS: Record<AngleFilter, string> = {
   all: 'All',
   High: 'High',
   Solid: 'Solid',
@@ -360,14 +368,21 @@ function PickRecordSummary({
   );
 }
 
+/** Active chip colours match each insight card's accent. */
+const FILTER_CHIP_ACTIVE_TONE: Record<InsightTone, string> = {
+  angle: 'bg-emerald-700 border-emerald-700 text-white',
+  cover: 'bg-sky-700 border-sky-700 text-white',
+  note: 'bg-violet-700 border-violet-700 text-white',
+};
+
 interface FilterChipGroupProps<T extends string> {
   label: string;
   ariaLabel: string;
   options: ReadonlyArray<{ id: T; label: string; count?: number }>;
   value: T;
   onChange: (id: T) => void;
-  /** `angle` uses the Recommended Angle card's emerald accent. */
-  tone?: 'neutral' | 'angle';
+  /** Insight tones reuse their card's accent; neutral is for other chips. */
+  tone?: 'neutral' | InsightTone;
 }
 
 /** One labelled row of slate-filter chips. */
@@ -399,9 +414,9 @@ function FilterChipGroup<T extends string>({
               aria-pressed={isActive}
               className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border transition-colors whitespace-nowrap cursor-pointer ${
                 isActive
-                  ? tone === 'angle'
-                    ? 'bg-emerald-700 border-emerald-700 text-white'
-                    : 'bg-slate-900 border-slate-900 text-white'
+                  ? tone === 'neutral'
+                    ? 'bg-slate-900 border-slate-900 text-white'
+                    : FILTER_CHIP_ACTIVE_TONE[tone]
                   : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50'
               }`}
             >
@@ -503,6 +518,8 @@ export function FixtureBoard({
 
   const {
     angle: angleFilter,
+    cover: coverFilter,
+    note: noteFilter,
     marketType,
     marketSelections,
     minProbability,
@@ -532,6 +549,8 @@ export function FixtureBoard({
   const slateFilters = useMemo(
     () => ({
       angle: filters.angle,
+      cover: filters.cover,
+      note: filters.note,
       marketType: filters.marketType,
       marketSelections: filters.marketSelections,
       minProbability: filters.minProbability,
@@ -569,10 +588,32 @@ export function FixtureBoard({
   const angleFor = (fixture: Fixture): RecommendedAngle | null =>
     anglesByFixture.get(fixture.id) ?? null;
 
+  // The note filter and the note card share one resolution. A fresh on-demand
+  // brief can override the stored advice, so it is part of the cache key.
+  const notesByFixture = useMemo(() => {
+    const map = new Map<
+      string,
+      { text: string | null; market: MarketOption | null }
+    >();
+    for (const fixture of fixtures) {
+      const text = getAnalystNote(fixture, deepAnalyses[fixture.id]?.bestAngle);
+      map.set(fixture.id, {
+        text,
+        market: text ? resolveAnalystNoteMarket(fixture, text) : null,
+      });
+    }
+    return map;
+  }, [fixtures, deepAnalyses]);
+
+  const noteMarketFor = (fixture: Fixture): MarketOption | null =>
+    notesByFixture.get(fixture.id)?.market ?? null;
+
   const marketChipsActive = hasMarketFilters(slateFilters);
 
   const hasSlateFilters =
     angleFilter !== 'all' ||
+    coverFilter !== 'all' ||
+    noteFilter !== 'all' ||
     marketChipsActive ||
     minModelEdge > 0 ||
     kickoffWindowHours > 0;
@@ -587,8 +628,22 @@ export function FixtureBoard({
   if (angleFilter !== 'all') {
     activeFilterChips.push({
       key: 'angle',
-      label: `Angle: ${ANGLE_FILTER_LABELS[angleFilter]}`,
+      label: `Angle: ${CONFIDENCE_FILTER_LABELS[angleFilter]}`,
       clear: () => updateFilters({ angle: 'all' }),
+    });
+  }
+  if (coverFilter !== 'all') {
+    activeFilterChips.push({
+      key: 'cover',
+      label: `Cover: ${CONFIDENCE_FILTER_LABELS[coverFilter]}`,
+      clear: () => updateFilters({ cover: 'all' }),
+    });
+  }
+  if (noteFilter !== 'all') {
+    activeFilterChips.push({
+      key: 'note',
+      label: `Note: ${CONFIDENCE_FILTER_LABELS[noteFilter]}`,
+      clear: () => updateFilters({ note: 'all' }),
     });
   }
   if (marketType !== 'all') {
@@ -714,24 +769,43 @@ export function FixtureBoard({
   const facetCounts = useMemo(
     () => ({
       angles: countAngleBands(baseFixtures, angleFor),
+      covers: countCoverBands(baseFixtures, angleFor),
+      notes: countNoteBands(baseFixtures, noteMarketFor),
       marketTypes: countMarketTypes(baseFixtures),
       selections: countMarketSelections(baseFixtures),
       modelEdges: countModelEdges(baseFixtures),
     }),
-    // `angleFor` closes over `anglesByFixture`, included here.
-    [baseFixtures, anglesByFixture]
+    // `angleFor` and `noteMarketFor` close over these caches.
+    [baseFixtures, anglesByFixture, notesByFixture]
   );
+
+  /** Chip labels and facet counts for one of the three insight rows. */
+  const confidenceOptions = (
+    ids: readonly AngleFilter[],
+    counts: Record<AngleConfidence, number>
+  ) =>
+    ids.map((id) => ({
+      id,
+      label: CONFIDENCE_FILTER_LABELS[id],
+      count: id === 'all' ? baseFixtures.length : counts[id],
+    }));
 
   const filteredFixtures = useMemo(() => {
     const matching = baseFixtures.filter((fixture) =>
-      matchesSlateFilters(fixture, slateFilters, angleFor(fixture))
+      matchesSlateFilters(
+        fixture,
+        slateFilters,
+        angleFor(fixture),
+        Date.now(),
+        noteMarketFor(fixture)
+      )
     );
 
     return sortMode === 'probability'
       ? sortFixturesByProbability(matching)
       : matching;
-    // `angleFor` closes over `anglesByFixture`, included here.
-  }, [baseFixtures, slateFilters, anglesByFixture, sortMode]);
+    // These helpers close over the per-fixture caches.
+  }, [baseFixtures, slateFilters, anglesByFixture, notesByFixture, sortMode]);
 
   const selectedByFixture = useMemo(() => {
     const map = new Map<string, AccaLeg>();
@@ -901,23 +975,36 @@ export function FixtureBoard({
           </div>
         </div>
 
-        {/* Universal slate filters: angle, market, probability, price band */}
-        <div className="grid gap-3 sm:grid-cols-2 border-t border-slate-100 pt-3">
+        {/* Universal slate filters: insight bands, market, probability, price */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 border-t border-slate-100 pt-3">
           <FilterChipGroup
             label="Recommended Angle"
             ariaLabel="Filter by recommended angle confidence"
             tone="angle"
             value={angleFilter}
             onChange={(value) => updateFilters({ angle: value })}
-            options={ANGLE_FILTERS.map((id) => ({
-              id,
-              label: ANGLE_FILTER_LABELS[id],
-              count:
-                id === 'all' ? baseFixtures.length : facetCounts.angles[id],
-            }))}
+            options={confidenceOptions(ANGLE_FILTERS, facetCounts.angles)}
           />
 
-          <div className="sm:col-span-2 min-w-0">
+          <FilterChipGroup
+            label="Safer Cover"
+            ariaLabel="Filter by safer cover confidence"
+            tone="cover"
+            value={coverFilter}
+            onChange={(value) => updateFilters({ cover: value })}
+            options={confidenceOptions(COVER_FILTERS, facetCounts.covers)}
+          />
+
+          <FilterChipGroup
+            label="Analyst Note"
+            ariaLabel="Filter by analyst note confidence"
+            tone="note"
+            value={noteFilter}
+            onChange={(value) => updateFilters({ note: value })}
+            options={confidenceOptions(NOTE_FILTERS, facetCounts.notes)}
+          />
+
+          <div className="sm:col-span-2 lg:col-span-3 min-w-0">
             <div className="mb-1.5 flex items-center justify-between gap-2">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 Market
@@ -1158,7 +1245,7 @@ export function FixtureBoard({
               onClick={resetSlateFilters}
               className="shrink-0 text-[11px] font-semibold text-emerald-800 hover:text-emerald-900 underline underline-offset-2 cursor-pointer"
             >
-              Clear angle, market &amp; price filters
+              Clear insight, market &amp; price filters
             </button>
           )}
         </div>
@@ -1256,8 +1343,9 @@ export function FixtureBoard({
             No fixtures match your current filters
           </p>
           <p className="mt-1 text-xs text-slate-500">
-            Loosen the angle, market, probability or price filters — or clear
-            the search and competition scope — to see more of this matchday.
+            Loosen the angle, cover, note, market, probability or price filters
+            — or clear the search and competition scope — to see more of this
+            matchday.
           </p>
           <button
             type="button"
@@ -1345,9 +1433,13 @@ export function FixtureBoard({
             // Provider advice, then a fresh API result, then a board-derived
             // note. Every fixture gets one on first render; the brief is only
             // a source of fresher detail, never a gate.
-            const analystNote = getAnalystNote(fixture, deepAnalysis?.bestAngle);
-            const noteMarket = analystNote
-              ? resolveAnalystNoteMarket(fixture, analystNote)
+            // Shared with the note filter's facet counts and match test, so a
+            // fresh brief cannot make the card and the chip disagree.
+            const analystNote =
+              notesByFixture.get(fixture.id)?.text ?? null;
+            const noteMarket = noteMarketFor(fixture);
+            const noteBand = noteMarket
+              ? angleConfidence(marketProbability(noteMarket))
               : null;
             const noteOutcome =
               noteMarket && isSettled
@@ -1570,6 +1662,14 @@ export function FixtureBoard({
                       <span className="font-mono text-slate-600 tabular-nums">
                         {angle.coverProbability.toFixed(0)}% fair
                       </span>
+                      <span
+                        className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
+                          ANGLE_TONE[angleConfidence(angle.coverProbability)]
+                        }`}
+                        title="Confidence band used by the Safer Cover filter"
+                      >
+                        {angleConfidence(angle.coverProbability)}
+                      </span>
                       <PickResultChip status={coverOutcome} label="Cover" />
                     </InsightCard>
                   )}
@@ -1580,6 +1680,16 @@ export function FixtureBoard({
                       label="Analyst note"
                       action={<PickResultChip status={noteOutcome} label="Note" />}
                     >
+                      {noteBand && (
+                        <span
+                          className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
+                            ANGLE_TONE[noteBand]
+                          }`}
+                          title="Confidence band used by the Analyst Note filter"
+                        >
+                          {noteBand}
+                        </span>
+                      )}
                       <span>{analystNote}</span>
                     </InsightCard>
                   )}
