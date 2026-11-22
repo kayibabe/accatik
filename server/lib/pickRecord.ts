@@ -6,8 +6,7 @@ import type {
   SettlementStatus,
 } from '../../src/types/fixtures.ts';
 import { evaluateMarketSettlement } from '../../src/utils/accaMath.ts';
-import { resolveAnalystNoteMarket } from '../../src/utils/analystNote.ts';
-import { buildRecommendedAngle } from '../../src/utils/recommendedAngle.ts';
+import { resolveFeaturedPick } from '../../src/utils/featuredPickSnapshot.ts';
 import { createTtlCache } from './cache.ts';
 import { listArchivedSlateDates, readArchivedSlate } from './slateArchive.ts';
 
@@ -79,16 +78,17 @@ export async function computePickRecords(
     let usedDate = false;
     for (const fixture of slate.fixtures) {
       if (!sampleFixture(fixture)) continue;
-      const recommended = buildRecommendedAngle(fixture, strategy);
-      if (!recommended) continue;
+      const angleMarket = resolveFeaturedPick(fixture, strategy, 'angle');
+      if (!angleMarket) continue;
 
       sampleFixtures += 1;
       usedDate = true;
-      record(angle, evaluateMarketSettlement(fixture, recommended.market));
-      if (recommended.cover) {
-        record(cover, evaluateMarketSettlement(fixture, recommended.cover));
+      record(angle, evaluateMarketSettlement(fixture, angleMarket));
+      const coverMarket = resolveFeaturedPick(fixture, strategy, 'cover');
+      if (coverMarket) {
+        record(cover, evaluateMarketSettlement(fixture, coverMarket));
       }
-      const noteMarket = resolveAnalystNoteMarket(fixture, fixture.modelAdvice);
+      const noteMarket = resolveFeaturedPick(fixture, strategy, 'note');
       if (noteMarket) {
         record(note, evaluateMarketSettlement(fixture, noteMarket));
       }

@@ -291,6 +291,9 @@ export function recaptureFixturePrices(
             fixture.analystNoteMarketId ?? saved.analystNoteMarketId,
           formHome: fixture.formHome === '—' ? saved.formHome : fixture.formHome,
           formAway: fixture.formAway === '—' ? saved.formAway : fixture.formAway,
+          // Pick history spans price eras: a recapture appends, never replaces.
+          featuredPickSnapshots:
+            fixture.featuredPickSnapshots ?? saved.featuredPickSnapshots,
         }
       : {};
 
@@ -317,8 +320,18 @@ export function mergeArchivedPrices(
 
   return fresh.map((fixture) => {
     const saved = previous.get(fixture.id);
-    if (!saved || saved.markets.length === 0) return fixture;
-    if (fixture.status === 'Scheduled') return fixture;
+    const featuredPickSnapshots =
+      saved?.featuredPickSnapshots ?? fixture.featuredPickSnapshots;
+    if (!saved || saved.markets.length === 0) {
+      return featuredPickSnapshots
+        ? { ...fixture, featuredPickSnapshots }
+        : fixture;
+    }
+    if (fixture.status === 'Scheduled') {
+      return featuredPickSnapshots
+        ? { ...fixture, featuredPickSnapshots }
+        : fixture;
+    }
 
     return {
       ...fixture,
@@ -329,6 +342,7 @@ export function mergeArchivedPrices(
       hasLiveOdds: saved.hasLiveOdds,
       pricedAt: saved.pricedAt,
       priceQuality: saved.priceQuality,
+      featuredPickSnapshots,
     };
   });
 }

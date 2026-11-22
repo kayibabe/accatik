@@ -23,6 +23,7 @@ import type {
 } from '../src/types/analytics.ts';
 import type { LedgerSummary, LedgerTicket } from '../src/types/ledger.ts';
 import { buildRecommendedAcca } from '../src/utils/accaEngine.ts';
+import { appendFeaturedPickSnapshots } from '../src/utils/featuredPickSnapshot.ts';
 import { evaluateAccumulator } from '../src/framework/accumulator.ts';
 import {
   MAX_RECOMMENDED_LEGS,
@@ -245,13 +246,18 @@ async function persistSlate(
   if (!slate.needsArchive) return;
   await archiveFlight.run(dateIso, async () => {
     try {
+      const updatedAt = new Date().toISOString();
       await writeArchivedSlate({
         dateIso,
         capturedAt: slate.capturedAt,
-        updatedAt: new Date().toISOString(),
+        updatedAt,
         // Framework decisions are derived per request; the archive stores only
-        // the frozen market inputs it can reproduce them from.
-        fixtures: stripFrameworkFromFixtures(slate.fixtures),
+        // the frozen market inputs it can reproduce them from. Featured picks
+        // are appended so a later recapture cannot rewrite what was captured.
+        fixtures: appendFeaturedPickSnapshots(
+          stripFrameworkFromFixtures(slate.fixtures),
+          Date.parse(updatedAt)
+        ),
       });
     } catch (error) {
       // A read-only archive must not take the app down, except for an explicit

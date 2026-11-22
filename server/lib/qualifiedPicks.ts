@@ -9,8 +9,7 @@ import { evaluateMarketSettlement } from '../../src/utils/accaMath.ts';
 import { isPreMatchFixture, inferPriceQuality } from '../../src/utils/priceQuality.ts';
 import { isPriced } from '../../src/utils/pickResolver.ts';
 import { resolveMarketSelection } from '../../src/utils/marketSelection.ts';
-import { buildRecommendedAngle } from '../../src/utils/recommendedAngle.ts';
-import { resolveAnalystNoteMarket } from '../../src/utils/analystNote.ts';
+import { resolveFeaturedPick } from '../../src/utils/featuredPickSnapshot.ts';
 import { formatKickoffCat } from './time.ts';
 
 /**
@@ -27,14 +26,10 @@ interface Card {
 }
 
 function cardsFor(fixture: Fixture, strategy: AccaStrategy): Card[] {
-  const angle = buildRecommendedAngle(fixture, strategy);
   return [
-    { source: 'angle', market: angle?.market ?? null },
-    { source: 'cover', market: angle?.cover ?? null },
-    {
-      source: 'note',
-      market: resolveAnalystNoteMarket(fixture, fixture.modelAdvice),
-    },
+    { source: 'angle', market: resolveFeaturedPick(fixture, strategy, 'angle') },
+    { source: 'cover', market: resolveFeaturedPick(fixture, strategy, 'cover') },
+    { source: 'note', market: resolveFeaturedPick(fixture, strategy, 'note') },
   ];
 }
 

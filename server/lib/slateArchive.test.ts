@@ -8,6 +8,7 @@ import {
   parseArchiveFixturePayloads,
   recaptureFixturePrices,
 } from './slateArchive.ts';
+import { appendFeaturedPickSnapshots } from '../../src/utils/featuredPickSnapshot.ts';
 import { makeFixture, makeMarket } from '../../src/utils/testFactories.ts';
 
 const HOUR = 1000 * 60 * 60;
@@ -112,6 +113,20 @@ test('an explicit recapture replaces kicked-off prices and restamps them', () =>
   assert.equal(recaptured.modelDataAt, archived.modelDataAt);
   assert.equal(recaptured.modelAdvice, archived.modelAdvice);
   assert.equal(recaptured.formHome, archived.formHome);
+});
+
+test('recapture carries the captured pick history into the new price era', () => {
+  const archived = appendFeaturedPickSnapshots([priced('a')], NOW)[0];
+  const fresh = priced('a', {
+    markets: [makeMarket('a-1x2-a', 1.35, '1X2', 'Away Win')],
+    recommendedPickId: 'a-1x2-a',
+  });
+
+  const [recaptured] = recaptureFixturePrices([fresh], [archived], NOW + HOUR);
+  assert.equal(recaptured.featuredPickSnapshots?.length, 5);
+
+  const [merged] = mergeArchivedPrices([archived], [fresh]);
+  assert.equal(merged.featuredPickSnapshots?.length, 5);
 });
 
 test('recapture leaves an unpriced fixture unstamped', () => {

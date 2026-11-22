@@ -4,6 +4,7 @@ import {
   MARKET_TYPE_FILTERS,
   MODEL_EDGE_THRESHOLDS,
   PROBABILITY_THRESHOLDS,
+  SELECTION_FILTER_KEYS,
 } from './slateFilters.ts';
 import type { AngleFilter, MarketTypeFilter } from './slateFilters.ts';
 
@@ -19,6 +20,8 @@ import type { AngleFilter, MarketTypeFilter } from './slateFilters.ts';
 export interface SlateFilterState {
   angle: AngleFilter;
   marketType: MarketTypeFilter;
+  /** Canonical selection keys; empty means every priced outcome. */
+  marketSelections: string[];
   minProbability: number;
   minModelEdge: number;
   kickoffWindowHours: number;
@@ -30,6 +33,7 @@ export interface SlateFilterState {
 export const DEFAULT_SLATE_FILTER_STATE: SlateFilterState = {
   angle: 'all',
   marketType: 'all',
+  marketSelections: [],
   minProbability: 0,
   minModelEdge: 0,
   kickoffWindowHours: 0,
@@ -67,6 +71,12 @@ function oddsText(value: unknown): string {
     : '';
 }
 
+function selectionKeys(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const known = new Set(SELECTION_FILTER_KEYS);
+  return [...new Set(value.filter((key): key is string => typeof key === 'string' && known.has(key)))];
+}
+
 /** Validates an unknown value (parsed JSON, another tab's write) into a state. */
 export function parseSlateFilterState(raw: unknown): SlateFilterState {
   if (!raw || typeof raw !== 'object') return DEFAULT_SLATE_FILTER_STATE;
@@ -79,6 +89,7 @@ export function parseSlateFilterState(raw: unknown): SlateFilterState {
       MARKET_TYPE_VALUES,
       'all'
     ),
+    marketSelections: selectionKeys(record.marketSelections),
     minProbability: oneOfNumber(
       record.minProbability,
       PROBABILITY_THRESHOLDS,

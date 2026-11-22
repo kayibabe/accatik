@@ -157,6 +157,12 @@ export interface Fixture {
    * instead of paying for another `/predictions` upstream call.
    */
   modelDataAt?: string;
+  /**
+   * Append-only history of the three featured cards for every strategy, one
+   * snapshot per price capture. Recapture starts a new price era without
+   * erasing what the earlier era actually recommended.
+   */
+  featuredPickSnapshots?: FeaturedPickSnapshot[];
   /** Framework decision for this fixture. Stripped before archival. */
   framework?: FixtureFrameworkSummary;
 }
@@ -230,6 +236,30 @@ export interface GroundingSource {
 export interface RecommendedPickRef {
   fixtureId: string;
   marketId: string;
+}
+
+/**
+ * One featured card as it was captured, independent of any later price change.
+ * The id, label and canonical key are enough to settle the pick even when a
+ * recapture replaces the fixture's price block.
+ */
+export interface FeaturedPickRef {
+  marketId: string;
+  selectionKey: string;
+  label: string;
+  marketType: MarketType;
+  odds: number;
+  fairProbability?: number;
+  bookmaker?: string;
+}
+
+/** The three board cards frozen with one capture of a fixture's prices. */
+export interface FeaturedPickSnapshot {
+  capturedAt: string;
+  strategy: AccaStrategy;
+  angle: FeaturedPickRef | null;
+  cover: FeaturedPickRef | null;
+  note: FeaturedPickRef | null;
 }
 
 /** Structural economics of a ticket, after removing the bookmaker margin. */

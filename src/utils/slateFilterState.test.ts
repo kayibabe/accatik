@@ -42,6 +42,7 @@ const asStorage = (storage: MemoryStorage) => storage as unknown as Storage;
 const activeState: SlateFilterState = {
   angle: 'High',
   marketType: '1X2',
+  marketSelections: ['GOALS-U2.5', 'BTTS-NO'],
   minProbability: 70,
   minModelEdge: 5,
   kickoffWindowHours: 6,
@@ -96,6 +97,7 @@ test('valid values survive beside invalid ones', () => {
   assert.deepEqual(parsed, {
     angle: 'Moderate',
     marketType: 'all',
+    marketSelections: [],
     minProbability: 80,
     minModelEdge: 3,
     kickoffWindowHours: 12,

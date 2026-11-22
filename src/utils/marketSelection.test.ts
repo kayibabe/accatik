@@ -26,6 +26,7 @@ test('team-specific winner labels collapse into one Home Win selection', () => {
   assert.deepEqual(alpha, {
     key: '1X2-H',
     label: 'Home Win',
+    shortLabel: '1',
     marketType: '1X2',
   });
   assert.equal(other.key, alpha.key);
@@ -45,14 +46,24 @@ test('goal lines resolve from both the id suffix and the label', () => {
       makeMarket('f1-ou-35', 2.2, 'Goals', 'Over 3.5 Goals'),
       fixture
     ),
-    { key: 'GOALS-O3.5', label: 'Over 3.5 Goals', marketType: 'Goals' }
+    {
+      key: 'GOALS-O3.5',
+      label: 'Over 3.5 Goals',
+      shortLabel: 'O3.5',
+      marketType: 'Goals',
+    }
   );
   assert.deepEqual(
     resolveMarketSelection(
       makeMarket('f1-ou-u45', 1.35, 'Goals', 'Under 4.5 Goals'),
       fixture
     ),
-    { key: 'GOALS-U4.5', label: 'Under 4.5 Goals', marketType: 'Goals' }
+    {
+      key: 'GOALS-U4.5',
+      label: 'Under 4.5 Goals',
+      shortLabel: 'U4.5',
+      marketType: 'Goals',
+    }
   );
   assert.equal(
     resolveMarketSelection(
@@ -80,6 +91,7 @@ test('BTTS, double chance and DNB sides get their own stable keys', () => {
   assert.deepEqual(dnb, {
     key: 'DNB-1',
     label: '1 (DNB)',
+    shortLabel: '1 (DNB)',
     marketType: 'Draw No Bet',
   });
   assert.equal(

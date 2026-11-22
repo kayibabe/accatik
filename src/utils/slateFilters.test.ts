@@ -3,11 +3,14 @@ import assert from 'node:assert/strict';
 import {
   DEFAULT_SLATE_FILTERS,
   bestModelEdge,
+  boardMarketPool,
   countAngleBands,
+  countMarketSelections,
   countMarketTypes,
   countModelEdges,
   filterSlate,
   hasMarketFilters,
+  MARKET_FILTERS,
   matchingMarkets,
   matchesSlateFilters,
   parseOddsInput,
@@ -470,5 +473,80 @@ test('an unpriced tile never survives a market chip', () => {
   assert.deepEqual(
     matchingMarkets(fixture, filters({ marketType: '1X2' })),
     []
+  );
+});
+
+/** Board shortlist hides unders; the full captured ladder keeps them. */
+const ladderFixture = () =>
+  makeFixture({
+    id: 'f',
+    recommendedPickId: 'f-1x2-h',
+    markets: [makeMarket('f-1x2-h', 1.4, '1X2', 'Home Win')],
+    allMarkets: [
+      makeMarket('f-1x2-h', 1.4, '1X2', 'Home Win'),
+      makeMarket('f-ou-u25', 1.6, 'Goals', 'Under 2.5 Goals'),
+      makeMarket('f-ou-u55', 1.05, 'Goals', 'Under 5.5 Goals'),
+    ],
+  });
+
+test('selection filters reach the held-back under-goals lines', () => {
+  const fixture = ladderFixture();
+  const under25 = filters({ marketSelections: ['GOALS-U2.5'] });
+
+  assert.deepEqual(
+    matchingMarkets(fixture, under25).map((market) => market.id),
+    ['f-ou-u25']
+  );
+  assert.equal(qualifyingMarket(fixture, 'all', ['GOALS-U2.5'])?.id, 'f-ou-u25');
+  assert.equal(countMarketSelections([fixture])['GOALS-U2.5'], 1);
+  assert.equal(matchesSlateFilters(fixture, under25, null), true);
+  assert.equal(
+    matchesSlateFilters(
+      fixture,
+      filters({ marketSelections: ['GOALS-U3.5'] }),
+      null
+    ),
+    false
+  );
+});
+
+test('market chips are the exact outcome-level drill-down, in order', () => {
+  assert.deepEqual(
+    MARKET_FILTERS.map((selection) => selection.label),
+    [
+      'Home Win',
+      'Away Win',
+      'Over 1.5 Goals',
+      'Over 2.5 Goals',
+      'Over 3.5 Goals',
+      'Over 4.5 Goals',
+      'Under 1.5 Goals',
+      'Under 2.5 Goals',
+      'Under 3.5 Goals',
+      'Under 4.5 Goals',
+      'BTTS Yes',
+      'BTTS No',
+      '1X (Home or Draw)',
+      'X (Draw)',
+      '12 (Home or Away)',
+      'X2 (Draw or Away)',
+      '1 (DNB)',
+      '2 (DNB)',
+    ]
+  );
+  assert.equal(new Set(MARKET_FILTERS.map((s) => s.key)).size, 18);
+});
+
+test('the angle follows the selected markets, including unders', () => {
+  const fixture = ladderFixture();
+  const pool = boardMarketPool(
+    fixture,
+    filters({ marketSelections: ['GOALS-U2.5'] })
+  );
+
+  assert.deepEqual(pool.map((market) => market.id), ['f-ou-u25']);
+  assert.equal(
+    buildRecommendedAngle(fixture, 'balanced', pool)?.market.id,
+    'f-ou-u25'
   );
 });

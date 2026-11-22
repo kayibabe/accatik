@@ -12,8 +12,7 @@ import type {
 import { legFromMarket } from './accaEngine.ts';
 import { isPriced } from './pickResolver.ts';
 import { resolveMarketSelection } from './marketSelection.ts';
-import { buildRecommendedAngle } from './recommendedAngle.ts';
-import { resolveAnalystNoteMarket } from './analystNote.ts';
+import { resolveFeaturedPick } from './featuredPickSnapshot.ts';
 import { inferPriceQuality, isPreMatchFixture } from './priceQuality.ts';
 import { guardTicket, ticketEconomics } from './ticketGuard.ts';
 
@@ -49,14 +48,10 @@ function candidatesFor(
   strategy: AccaStrategy,
   promoted: Map<string, RoiRegistryEntry>
 ): Candidate[] {
-  const angle = buildRecommendedAngle(fixture, strategy);
   const cards: Array<{ source: FeaturedPickSource; market: MarketOption | null }> = [
-    { source: 'angle', market: angle?.market ?? null },
-    { source: 'cover', market: angle?.cover ?? null },
-    {
-      source: 'note',
-      market: resolveAnalystNoteMarket(fixture, fixture.modelAdvice),
-    },
+    { source: 'angle', market: resolveFeaturedPick(fixture, strategy, 'angle') },
+    { source: 'cover', market: resolveFeaturedPick(fixture, strategy, 'cover') },
+    { source: 'note', market: resolveFeaturedPick(fixture, strategy, 'note') },
   ];
 
   const result: Candidate[] = [];

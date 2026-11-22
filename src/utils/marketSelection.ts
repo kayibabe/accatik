@@ -12,7 +12,10 @@ import type { Fixture, MarketOption, MarketType } from '../types/fixtures.ts';
  */
 export interface MarketSelection {
   key: string;
+  /** Long name used in tables and records. */
   label: string;
+  /** Compact betting-shop code used by filter chips (1, X, O2.5, X2, ...). */
+  shortLabel?: string;
   marketType: MarketType;
 }
 
@@ -68,9 +71,12 @@ export const MARKET_SELECTION_CATALOG: MarketSelection[] = SELECTION_ORDER.map(
   (key): MarketSelection => {
     const [group, side] = key.split('-');
     if (group === '1X2') {
+      const label =
+        side === 'H' ? 'Home Win' : side === 'A' ? 'Away Win' : 'Draw';
       return {
         key,
-        label: side === 'H' ? 'Home Win' : side === 'A' ? 'Away Win' : 'Draw',
+        label,
+        shortLabel: side === 'H' ? '1' : side === 'A' ? '2' : 'X',
         marketType: '1X2',
       };
     }
@@ -78,26 +84,48 @@ export const MARKET_SELECTION_CATALOG: MarketSelection[] = SELECTION_ORDER.map(
       return {
         key,
         label: `${side[0] === 'O' ? 'Over' : 'Under'} ${side.slice(1)} Goals`,
+        shortLabel: side,
         marketType: 'Goals',
       };
     }
     if (group === 'BTTS') {
-      return {
-        key,
-        label: side === 'NO' ? 'BTTS No' : 'BTTS Yes',
-        marketType: 'BTTS',
-      };
+      const label = side === 'NO' ? 'BTTS No' : 'BTTS Yes';
+      return { key, label, shortLabel: label, marketType: 'BTTS' };
     }
     if (group === 'DC') {
-      return { key, label: DC_LABELS[key], marketType: 'Double Chance' };
+      return {
+        key,
+        label: DC_LABELS[key],
+        shortLabel: side,
+        marketType: 'Double Chance',
+      };
     }
+    const dnbLabel = side === '1' ? '1 (DNB)' : '2 (DNB)';
     return {
       key,
-      label: side === '1' ? '1 (DNB)' : '2 (DNB)',
+      label: dnbLabel,
+      shortLabel: dnbLabel,
       marketType: 'Draw No Bet',
     };
   }
 );
+
+const KNOWN_SELECTIONS = new Map(
+  MARKET_SELECTION_CATALOG.map((selection) => [selection.key, selection])
+);
+
+function withShortLabel(
+  key: string,
+  label: string,
+  marketType: MarketType
+): MarketSelection {
+  return {
+    key,
+    label,
+    shortLabel: KNOWN_SELECTIONS.get(key)?.shortLabel ?? label,
+    marketType,
+  };
+}
 
 /** `15` -> `1.5`, `05` -> `0.5`. Goal lines are stored compactly in market ids. */
 function formatLine(compact: string): string {
@@ -155,11 +183,12 @@ export function resolveMarketSelection(
             ? 'A'
             : sideFromLabel(lower, fixture);
     if (side) {
-      return {
-        key: `1X2-${side}`,
-        label: side === 'D' ? 'Draw' : side === 'H' ? 'Home Win' : 'Away Win',
-        marketType: type,
-      };
+      const key = `1X2-${side}`;
+      return withShortLabel(
+        key,
+        side === 'D' ? 'Draw' : side === 'H' ? 'Home Win' : 'Away Win',
+        type
+      );
     }
   }
 
@@ -178,21 +207,22 @@ export function resolveMarketSelection(
       }
     }
     if (side && line) {
-      return {
-        key: `GOALS-${side}${line}`,
-        label: `${side === 'O' ? 'Over' : 'Under'} ${line} Goals`,
-        marketType: type,
-      };
+      const key = `GOALS-${side}${line}`;
+      return withShortLabel(
+        key,
+        `${side === 'O' ? 'Over' : 'Under'} ${line} Goals`,
+        type
+      );
     }
   }
 
   if (type === 'BTTS') {
     const isNo = suffix.endsWith('-btts-no') || /\bno\b/.test(lower);
-    return {
-      key: isNo ? 'BTTS-NO' : 'BTTS-YES',
-      label: isNo ? 'BTTS No' : 'BTTS Yes',
-      marketType: type,
-    };
+    return withShortLabel(
+      isNo ? 'BTTS-NO' : 'BTTS-YES',
+      isNo ? 'BTTS No' : 'BTTS Yes',
+      type
+    );
   }
 
   if (type === 'Double Chance') {
@@ -209,7 +239,7 @@ export function resolveMarketSelection(
         'DC-12': '12 (Home or Away)',
         'DC-X2': 'X2 (Draw or Away)',
       };
-      return { key, label: labels[key], marketType: type };
+      return withShortLabel(key, labels[key], type);
     }
   }
 
@@ -233,16 +263,14 @@ export function resolveMarketSelection(
                   ? 'A'
                   : null;
     if (side) {
-      return {
-        key: side === 'H' ? 'DNB-1' : 'DNB-2',
-        label: side === 'H' ? '1 (DNB)' : '2 (DNB)',
-        marketType: type,
-      };
+      const key = side === 'H' ? 'DNB-1' : 'DNB-2';
+      return withShortLabel(key, side === 'H' ? '1 (DNB)' : '2 (DNB)', type);
     }
   }
 
   // Never drop an unfamiliar bet: it still gets a stable, distinct row.
-  return { key: `${type}|${label}`, label, marketType: type };
+  const key = `${type}|${label}`;
+  return withShortLabel(key, label, type);
 }
 
 /** Canonical order: market first, then the known selection, then the label. */

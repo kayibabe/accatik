@@ -51,11 +51,13 @@ import type {
 import {
   ANGLE_FILTERS,
   KICKOFF_WINDOWS,
-  MARKET_TYPE_FILTERS,
+  MARKET_FILTERS,
   MODEL_EDGE_THRESHOLDS,
   PROBABILITY_THRESHOLDS,
   bestModelEdge,
+  boardMarketPool,
   countAngleBands,
+  countMarketSelections,
   countMarketTypes,
   countModelEdges,
   hasMarketFilters,
@@ -490,9 +492,19 @@ export function FixtureBoard({
     else setInternalFilters(next);
   };
 
+  const toggleSelection = (key: string) => {
+    const next = marketSelections.includes(key)
+      ? marketSelections.filter((item) => item !== key)
+      : [...marketSelections, key];
+    // A legacy type chip (from a shared link or saved preferences) must not
+    // contradict the outcome the user just picked.
+    updateFilters({ marketSelections: next, marketType: 'all' });
+  };
+
   const {
     angle: angleFilter,
     marketType,
+    marketSelections,
     minProbability,
     minModelEdge,
     kickoffWindowHours,
@@ -517,23 +529,11 @@ export function FixtureBoard({
     sortMode,
   ]);
 
-  // One angle per fixture, shared by the filters, the facet counts and the
-  // cards so the screen cannot rank the same match two different ways.
-  const anglesByFixture = useMemo(() => {
-    const map = new Map<string, RecommendedAngle | null>();
-    for (const fixture of fixtures) {
-      map.set(fixture.id, buildRecommendedAngle(fixture, strategy));
-    }
-    return map;
-  }, [fixtures, strategy]);
-
-  const angleFor = (fixture: Fixture): RecommendedAngle | null =>
-    anglesByFixture.get(fixture.id) ?? null;
-
   const slateFilters = useMemo(
     () => ({
       angle: filters.angle,
       marketType: filters.marketType,
+      marketSelections: filters.marketSelections,
       minProbability: filters.minProbability,
       minOdds: parseOddsInput(filters.minOddsInput),
       maxOdds: parseOddsInput(filters.maxOddsInput),
@@ -542,6 +542,32 @@ export function FixtureBoard({
     }),
     [filters]
   );
+
+  // Selecting individual outcomes switches the board from its five-card
+  // shortlist to the full priced ladder, where unders and other lines live.
+  const marketPools = useMemo(() => {
+    const map = new Map<string, MarketOption[]>();
+    for (const fixture of fixtures) {
+      map.set(fixture.id, boardMarketPool(fixture, slateFilters));
+    }
+    return map;
+  }, [fixtures, slateFilters]);
+
+  // One angle per fixture, shared by the filters, the facet counts and the
+  // cards so the screen cannot rank the same match two different ways.
+  const anglesByFixture = useMemo(() => {
+    const map = new Map<string, RecommendedAngle | null>();
+    for (const fixture of fixtures) {
+      map.set(
+        fixture.id,
+        buildRecommendedAngle(fixture, strategy, marketPools.get(fixture.id))
+      );
+    }
+    return map;
+  }, [fixtures, strategy, marketPools]);
+
+  const angleFor = (fixture: Fixture): RecommendedAngle | null =>
+    anglesByFixture.get(fixture.id) ?? null;
 
   const marketChipsActive = hasMarketFilters(slateFilters);
 
@@ -570,6 +596,19 @@ export function FixtureBoard({
       key: 'market',
       label: `Market: ${marketTypeShortLabel(marketType)}`,
       clear: () => updateFilters({ marketType: 'all' }),
+    });
+  }
+  if (marketSelections.length > 0) {
+    activeFilterChips.push({
+      key: 'selections',
+      label: `Markets: ${marketSelections
+        .map(
+          (key) =>
+            MARKET_FILTERS.find((selection) => selection.key === key)
+              ?.shortLabel ?? key
+        )
+        .join(', ')}`,
+      clear: () => updateFilters({ marketSelections: [], marketType: 'all' }),
     });
   }
   if (minProbability > 0) {
@@ -676,6 +715,7 @@ export function FixtureBoard({
     () => ({
       angles: countAngleBands(baseFixtures, angleFor),
       marketTypes: countMarketTypes(baseFixtures),
+      selections: countMarketSelections(baseFixtures),
       modelEdges: countModelEdges(baseFixtures),
     }),
     // `angleFor` closes over `anglesByFixture`, included here.
@@ -877,20 +917,81 @@ export function FixtureBoard({
             }))}
           />
 
-          <FilterChipGroup
-            label="Market"
-            ariaLabel="Filter by market type"
-            value={marketType}
-            onChange={(value) => updateFilters({ marketType: value })}
-            options={[
-              { id: 'all' as const, label: 'All', count: baseFixtures.length },
-              ...MARKET_TYPE_FILTERS.map((type) => ({
-                id: type,
-                label: marketTypeShortLabel(type),
-                count: facetCounts.marketTypes[type],
-              })),
-            ]}
-          />
+          <div className="sm:col-span-2 min-w-0">
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Market
+              </p>
+              {marketSelections.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateFilters({ marketSelections: [], marketType: 'all' })
+                  }
+                  className="text-[11px] font-semibold text-emerald-800 hover:text-emerald-900 underline underline-offset-2 cursor-pointer"
+                >
+                  Clear markets
+                </button>
+              )}
+            </div>
+            <div
+              role="group"
+              aria-label="Filter by market selection"
+              className="flex flex-wrap items-center gap-1"
+            >
+              <button
+                type="button"
+                onClick={() =>
+                  updateFilters({ marketSelections: [], marketType: 'all' })
+                }
+                aria-pressed={
+                  marketSelections.length === 0 && marketType === 'all'
+                }
+                className={`inline-flex items-center gap-1 px-1.5 py-1 text-[11px] font-semibold rounded border transition-colors cursor-pointer ${
+                  marketSelections.length === 0 && marketType === 'all'
+                    ? 'bg-slate-900 border-slate-900 text-white'
+                    : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <span>All</span>
+                <span
+                  className={`font-mono tabular-nums ${
+                    marketSelections.length === 0 && marketType === 'all'
+                      ? 'text-white/70'
+                      : 'text-slate-400'
+                  }`}
+                >
+                  {baseFixtures.length}
+                </span>
+              </button>
+              {MARKET_FILTERS.map((selection) => {
+                const active = marketSelections.includes(selection.key);
+                return (
+                  <button
+                    key={selection.key}
+                    type="button"
+                    onClick={() => toggleSelection(selection.key)}
+                    aria-pressed={active}
+                    title={selection.marketType}
+                    className={`inline-flex items-center gap-1 px-1.5 py-1 text-[11px] font-medium rounded border transition-colors cursor-pointer ${
+                      active
+                        ? 'bg-emerald-700 border-emerald-700 text-white'
+                        : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>{selection.label}</span>
+                    <span
+                      className={`font-mono tabular-nums ${
+                        active ? 'text-white/70' : 'text-slate-400'
+                      }`}
+                    >
+                      {facetCounts.selections[selection.key] ?? 0}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           <div className="min-w-0">
             <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
@@ -1185,7 +1286,7 @@ export function FixtureBoard({
             );
             // Only the expanded brief renders this table.
             const tableMarkets = isExpanded
-              ? sortRows<MarketOption>(fixture.markets, marketSort, {
+              ? sortRows<MarketOption>(matchingMarkets(fixture, slateFilters), marketSort, {
                   market: (m) => m.label,
                   odds: (m) => m.odds,
                   fair: (m) => marketProbability(m),
@@ -1215,7 +1316,11 @@ export function FixtureBoard({
               fixture.score?.halftimeAway !== undefined;
             // The angle card, the highlighted tile and the auto-ticket all read
             // the same resolver, so they cannot name different markets.
-            const pickMarket = resolvePick(fixture, strategy);
+            const pickMarket = resolvePick(
+              fixture,
+              strategy,
+              marketPools.get(fixture.id)
+            );
             const isPreMatch = isPreMatchFixture(fixture);
             const pickLabel =
               strategy === 'probability' ? 'Highest chance' : 'Recommended';

@@ -72,13 +72,15 @@ function highestProbability(markets: MarketOption[]): MarketOption {
  *
  * `balanced` keeps following the server's `recommendedPickId` (the price-band
  * sweet spot computed from the live book) so the card stays stable between
- * re-renders. Every other strategy is scored locally.
+ * re-renders. Every other strategy is scored locally. Callers can pass a pool
+ * (for example the outcomes left by the market filters) to restrict the pick.
  */
 export function resolvePick(
   fixture: Fixture,
-  strategy: AccaStrategy
+  strategy: AccaStrategy,
+  pool?: MarketOption[]
 ): MarketOption | null {
-  const priced = fixture.markets.filter(isPriced);
+  const priced = (pool ?? fixture.markets).filter(isPriced);
   if (priced.length === 0) return null;
 
   if (strategy === 'probability') return highestProbability(priced);

@@ -1,5 +1,10 @@
 import type { Fixture, MarketOption, MarketType } from '../types/fixtures.ts';
 import type { AngleConfidence, RecommendedAngle } from './recommendedAngle.ts';
+import {
+  MARKET_SELECTION_CATALOG,
+  resolveMarketSelection,
+} from './marketSelection.ts';
+import type { MarketSelection } from './marketSelection.ts';
 import { isPriced } from './pickResolver.ts';
 import { marketProbability } from './probability.ts';
 
@@ -26,6 +31,8 @@ export interface SlateFilters {
   angle: AngleFilter;
   /** Market type the fixture must offer at a usable price. */
   marketType: MarketTypeFilter;
+  /** Canonical selection keys to narrow the board to. Empty = all selections. */
+  marketSelections: string[];
   /** Minimum margin-adjusted win probability (percent). 0 = any. */
   minProbability: number;
   /** Minimum decimal odds on the qualifying market. 0 = no floor. */
@@ -41,6 +48,7 @@ export interface SlateFilters {
 export const DEFAULT_SLATE_FILTERS: SlateFilters = {
   angle: 'all',
   marketType: 'all',
+  marketSelections: [],
   minProbability: 0,
   minOdds: 0,
   maxOdds: 0,
@@ -66,6 +74,65 @@ export const MARKET_TYPE_FILTERS: readonly MarketType[] = [
   'BTTS',
 ];
 
+/**
+ * Every bet the system can price, including the under-goal lines and both BTTS
+ * sides held back from the board's headline grid. Keys are the same canonical
+ * ids used by analytics and ROI, so a chip always selects one known outcome.
+ */
+export const SELECTION_FILTERS = MARKET_SELECTION_CATALOG.map(
+  ({ key, label, shortLabel, marketType }) => ({
+    key,
+    label,
+    shortLabel,
+    marketType,
+  })
+);
+
+export const SELECTION_FILTER_KEYS: readonly string[] =
+  MARKET_SELECTION_CATALOG.map((selection) => selection.key);
+
+/**
+ * The outcome-level Market chips shown on the board. These replace the coarse
+ * 1X2/DC/DNB/Goals/BTTS grouping: each chip is one real selection from the full
+ * captured ladder, so the Under lines and BTTS No are directly reachable.
+ * Order follows the betting-shop list used by the board.
+ */
+const MARKET_FILTER_KEYS: readonly string[] = [
+  '1X2-H',
+  '1X2-A',
+  'GOALS-O1.5',
+  'GOALS-O2.5',
+  'GOALS-O3.5',
+  'GOALS-O4.5',
+  'GOALS-U1.5',
+  'GOALS-U2.5',
+  'GOALS-U3.5',
+  'GOALS-U4.5',
+  'BTTS-YES',
+  'BTTS-NO',
+  'DC-1X',
+  '1X2-D',
+  'DC-12',
+  'DC-X2',
+  'DNB-1',
+  'DNB-2',
+];
+
+/** The board calls a straight draw "X (Draw)", next to the double chances. */
+const MARKET_FILTER_LABELS: Record<string, string> = {
+  '1X2-D': 'X (Draw)',
+};
+
+export const MARKET_FILTERS: MarketSelection[] = MARKET_FILTER_KEYS.map(
+  (key) => {
+    const selection = MARKET_SELECTION_CATALOG.find((item) => item.key === key);
+    if (!selection) throw new Error(`Unknown market filter key: ${key}`);
+    return MARKET_FILTER_LABELS[key]
+      ? { ...selection, label: MARKET_FILTER_LABELS[key] }
+      : selection;
+  }
+);
+
 /** Win-probability floors offered by the UI, in percent. 0 = any. */
 export const PROBABILITY_THRESHOLDS = [0, 50, 60, 70, 80, 90] as const;
 
@@ -86,15 +153,44 @@ const BEST_MARKET_TYPES: readonly MarketType[] = [
 ];
 
 /**
+ * The priced outcomes a fixture can be judged on. The headline board normally
+ * uses its five-card shortlist; selecting individual outcomes opts into the
+ * full captured ladder, which is where under-goals and other held-back lines
+ * live.
+ */
+function pricedPool(fixture: Fixture, selectionKeys: string[]): MarketOption[] {
+  const source =
+    selectionKeys.length > 0
+      ? (fixture.allMarkets ?? fixture.markets)
+      : fixture.markets;
+  const priced = source.filter(isPriced);
+  if (selectionKeys.length === 0) return priced;
+
+  const wanted = new Set(selectionKeys);
+  return priced.filter((market) =>
+    wanted.has(resolveMarketSelection(market, fixture).key)
+  );
+}
+
+/** Board-wide pool for the current filters, also used to build the angle. */
+export function boardMarketPool(
+  fixture: Fixture,
+  filters: SlateFilters
+): MarketOption[] {
+  return pricedPool(fixture, filters.marketSelections);
+}
+
+/**
  * The market a fixture is judged on: the highest-probability priced outcome in
  * `marketType`, or in the whole book when the type is `all`. Null when the book
  * has no usable price for that type.
  */
 export function qualifyingMarket(
   fixture: Fixture,
-  marketType: MarketTypeFilter
+  marketType: MarketTypeFilter,
+  selectionKeys: string[] = []
 ): MarketOption | null {
-  const priced = fixture.markets.filter(isPriced);
+  const priced = pricedPool(fixture, selectionKeys);
   const pool =
     marketType === 'all'
       ? priced
@@ -117,6 +213,7 @@ export interface ModelEdge {
 export function hasMarketFilters(filters: SlateFilters): boolean {
   return (
     filters.marketType !== 'all' ||
+    filters.marketSelections.length > 0 ||
     filters.minProbability > 0 ||
     filters.minOdds > 0 ||
     filters.maxOdds > 0
@@ -136,14 +233,13 @@ export function matchingMarkets(
 ): MarketOption[] {
   if (!hasMarketFilters(filters)) return fixture.markets;
 
-  return fixture.markets.filter((market) => {
+  return pricedPool(fixture, filters.marketSelections).filter((market) => {
     if (
       filters.marketType !== 'all' &&
       market.marketType !== filters.marketType
     ) {
       return false;
     }
-    if (!isPriced(market)) return false;
     if (marketProbability(market) < filters.minProbability) return false;
     if (filters.minOdds > 0 && market.odds < filters.minOdds) return false;
     if (filters.maxOdds > 0 && market.odds > filters.maxOdds) return false;
@@ -209,12 +305,17 @@ export function matchesSlateFilters(
     if (!edge || edge.points < filters.minModelEdge) return false;
   }
 
-  const market = qualifyingMarket(fixture, filters.marketType);
+  const market = qualifyingMarket(
+    fixture,
+    filters.marketType,
+    filters.marketSelections
+  );
   if (!market) {
-    // An unpriced fixture can only survive the default market settings: a
-    // specific type, a probability floor or a price band all need a price.
+    // An unpriced fixture can only survive the default market settings: any
+    // market-level filter needs a price to judge it by.
     return (
       filters.marketType === 'all' &&
+      filters.marketSelections.length === 0 &&
       filters.minProbability <= 0 &&
       filters.minOdds <= 0 &&
       filters.maxOdds <= 0
@@ -278,6 +379,24 @@ export function countMarketTypes(
     }
   }
 
+  return counts;
+}
+
+/** How many fixtures offer each priced selection, including held-back lines. */
+export function countMarketSelections(
+  fixtures: Fixture[]
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const fixture of fixtures) {
+    const seen = new Set<string>();
+    for (const market of fixture.allMarkets ?? fixture.markets) {
+      if (!isPriced(market)) continue;
+      const key = resolveMarketSelection(market, fixture).key;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+  }
   return counts;
 }
 

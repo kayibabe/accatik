@@ -54,12 +54,13 @@ export function angleConfidence(probability: number): AngleConfidence {
  */
 export function buildRecommendedAngle(
   fixture: Fixture,
-  strategy: AccaStrategy
+  strategy: AccaStrategy,
+  pool?: MarketOption[]
 ): RecommendedAngle | null {
-  const priced = fixture.markets.filter(isPriced);
+  const priced = (pool ?? fixture.markets).filter(isPriced);
   if (priced.length === 0) return null;
 
-  const primary = resolvePick(fixture, strategy);
+  const primary = resolvePick(fixture, strategy, priced);
   if (!primary) return null;
 
   const probability = marketProbability(primary);

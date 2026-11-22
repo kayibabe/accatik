@@ -15,9 +15,8 @@ import type {
   PickAnalyticsRow,
 } from '../../src/types/analytics.ts';
 import { evaluateMarketSettlement } from '../../src/utils/accaMath.ts';
-import { resolveAnalystNoteMarket } from '../../src/utils/analystNote.ts';
+import { resolveFeaturedPick } from '../../src/utils/featuredPickSnapshot.ts';
 import { isPriced } from '../../src/utils/pickResolver.ts';
-import { buildRecommendedAngle } from '../../src/utils/recommendedAngle.ts';
 import {
   compareMarketTypes,
   compareSelections,
@@ -297,46 +296,20 @@ export async function computePickAnalytics(
       sampleFixtures += 1;
 
       const featuredDate = getTally(featuredByDate, dateIso, dateIso);
-      const recommended = buildRecommendedAngle(fixture, strategy);
-      if (recommended) {
+      for (const source of ['angle', 'cover', 'note'] as const) {
+        const market = resolveFeaturedPick(fixture, strategy, source);
+        if (!market) continue;
+        const aggregate = source === 'angle' ? angle : source === 'cover' ? cover : note;
         recordFeaturedPick(
-          'angle',
-          angle,
+          source,
+          aggregate,
           featuredDate,
           featuredSelections,
           featuredSamples,
           fixture,
-          recommended.market,
+          market,
           dateIso
         );
-        if (recommended.cover) {
-          recordFeaturedPick(
-            'cover',
-            cover,
-            featuredDate,
-            featuredSelections,
-            featuredSamples,
-            fixture,
-            recommended.cover,
-            dateIso
-          );
-        }
-        const noteMarket = resolveAnalystNoteMarket(
-          fixture,
-          fixture.modelAdvice
-        );
-        if (noteMarket) {
-          recordFeaturedPick(
-            'note',
-            note,
-            featuredDate,
-            featuredSelections,
-            featuredSamples,
-            fixture,
-            noteMarket,
-            dateIso
-          );
-        }
       }
 
       // New archives keep the full priced ladder in `allMarkets` while the
