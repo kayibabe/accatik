@@ -12,12 +12,14 @@ import { MyActivityView } from './components/MyActivityView.tsx';
 import { AnalyticsView } from './components/AnalyticsView.tsx';
 import { PositiveRoiView } from './components/PositiveRoiView.tsx';
 import { SourcesView } from './components/SourcesView.tsx';
+import { AiView } from './components/AiView.tsx';
 import { AuthDialog } from './components/AuthDialog.tsx';
 import { AdminPanel } from './components/AdminPanel.tsx';
 import { LandingPage } from './components/LandingPage.tsx';
 import { NotificationRegion, type NoticeItem } from './components/ui/NotificationRegion.tsx';
 import { ErrorState } from './components/ui/States.tsx';
 import { useAuth } from './context/AuthContext.tsx';
+import type { AiTicketLeg } from './types/ai.ts';
 import type {
   AccaLeg,
   AccaStrategy,
@@ -807,6 +809,34 @@ export default function App() {
     setSelectedLegs((prev) => guardLegs(prev));
   };
 
+  /** Folds AI-desk selections into the regular slip, then returns to the slate. */
+  const handleApplyAiTicket = useCallback(
+    (legs: AiTicketLeg[]) => {
+      if (!slate || legs.length === 0) return;
+      const built = buildLegsFromRefs(
+        slate.fixtures,
+        legs.map((leg) => ({ fixtureId: leg.fixtureId, marketId: leg.marketId }))
+      );
+      if (built.length === 0) return;
+      setSelectedLegs((prev) => {
+        if (built.length === 1) {
+          const replacement = built[0];
+          if (prev.some((leg) => leg.fixtureId === replacement.fixtureId)) {
+            return guardLegs(
+              prev.map((leg) => (leg.fixtureId === replacement.fixtureId ? replacement : leg))
+            );
+          }
+          if (prev.length < MAX_RECOMMENDED_LEGS) {
+            return guardLegs([...prev, ...built]);
+          }
+        }
+        return guardLegs(built);
+      });
+      navigate('slate');
+    },
+    [slate, navigate]
+  );
+
   const handleSaveTicket = async (ticketStake: number) => {
     if (selectedLegs.length === 0) return;
 
@@ -1218,6 +1248,17 @@ export default function App() {
             selectedDate={selectedDate}
             displayDate={slate?.displayDate || selectedDate}
             onGoToSlate={() => navigate('slate')}
+          />
+        ) : !isGuest && activeTab === 'ai' ? (
+          <AiView
+            selectedDate={selectedDate}
+            displayDate={slate?.displayDate || selectedDate}
+            strategy={strategy}
+            minOdds={minOdds}
+            maxLegs={maxLegs}
+            canApplyTicket={Boolean(slate)}
+            onGoToSlate={() => navigate('slate')}
+            onApplyTicket={handleApplyAiTicket}
           />
         ) : isGuest ? (
           <LandingPage

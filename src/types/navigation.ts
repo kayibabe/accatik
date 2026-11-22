@@ -6,6 +6,7 @@ export type ActiveTab =
   | 'activity'
   | 'analytics'
   | 'roi'
+  | 'ai'
   | 'sources';
 
 export const ACTIVE_TABS: readonly ActiveTab[] = [
@@ -15,6 +16,7 @@ export const ACTIVE_TABS: readonly ActiveTab[] = [
   'activity',
   'analytics',
   'roi',
+  'ai',
   'sources',
 ];
 
@@ -60,6 +62,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     items: [
       { id: 'analytics', label: 'Analytics' },
       { id: 'roi', label: 'Positive ROI', research: true },
+      { id: 'ai', label: 'AI Desk', research: true },
     ],
   },
   {

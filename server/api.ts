@@ -1,6 +1,7 @@
 import { performance } from 'node:perf_hooks';
 import type {
   AccaLeg,
+  AccaStrategy,
   DailySlateResponse,
   DeepAnalysisResponse,
   Fixture,
@@ -23,6 +24,11 @@ import type {
   RoiPromotionResult,
   RoiRegistryEntry,
 } from '../src/types/analytics.ts';
+import type {
+  AiAccumulatorResponse,
+  AiBriefingResponse,
+  AiRiskMode,
+} from '../src/types/ai.ts';
 import type { LedgerSummary, LedgerTicket } from '../src/types/ledger.ts';
 import { buildRecommendedAcca } from '../src/utils/accaEngine.ts';
 import { appendFeaturedPickSnapshots } from '../src/utils/featuredPickSnapshot.ts';
@@ -44,6 +50,8 @@ import { computeTicketAnalytics } from './lib/ticketAnalytics.ts';
 import { computeCombinationRoi } from './lib/combinationRoi.ts';
 import { refreshAnalyticsArchives } from './lib/analyticsRefresh.ts';
 import { computePickRecords } from './lib/pickRecord.ts';
+import { buildAiAccumulator, buildBriefing } from './lib/aiBriefing.ts';
+import { buildNarratives } from './lib/aiNarrative.ts';
 import { buildQualifiedPicksResponse } from './lib/qualifiedPicks.ts';
 import {
   attachFrameworkAssessments,
@@ -1795,5 +1803,158 @@ export async function buildRoiAccaTicket(body: unknown): Promise<
   } catch (error) {
     console.error('Error building ROI accumulator:', error);
     return fail(500, errorMessage(error, 'Could not build the ROI accumulator.'));
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* AI desk: free local ensemble + optional free-tier narrative         */
+/* ------------------------------------------------------------------ */
+
+const AI_BRIEFING_TTL_MS = 2 * 60 * 1000;
+const aiBriefingCache = createTtlCache<AiBriefingResponse>(AI_BRIEFING_TTL_MS, 24);
+const aiBriefingFlight = createSingleFlight<ApiResult<AiBriefingResponse | ErrorBody>>();
+
+function parseAiRiskMode(value: unknown): AiRiskMode {
+  return value === 'conservative' || value === 'aggressive' ? value : 'balanced';
+}
+
+function parseAiFilter(value: unknown, maxLength: number, pattern: RegExp): string {
+  if (typeof value !== 'string') return 'all';
+  const trimmed = value.trim();
+  return trimmed.length <= maxLength && pattern.test(trimmed) ? trimmed : 'all';
+}
+
+interface AiSharedInput {
+  dateIso: string;
+  strategy: AccaStrategy;
+  marketFilter: string;
+  competitionFilter: string;
+  riskMode: AiRiskMode;
+}
+
+function readAiRequest(body: unknown): AiSharedInput {
+  const source = asRecord(body);
+  const dateIso = asDateIso(source.dateIso ?? source.date) ?? getTodayIsoDate();
+  const strategy = isAccaStrategy(source.strategy) ? source.strategy : 'balanced';
+  return {
+    dateIso,
+    strategy,
+    marketFilter: parseAiFilter(source.marketFilter ?? source.market, 40, /^[A-Za-z0-9 .-]+$/),
+    competitionFilter: parseAiFilter(
+      source.competitionFilter ?? source.competition,
+      80,
+      /^[A-Za-z0-9 &'-]+$/
+    ),
+    riskMode: parseAiRiskMode(source.riskMode),
+  };
+}
+
+/**
+ * One archive-backed read across the whole workbench: slate, analytics, ROI
+ * registry, daily qualified table, shadow ledger and provenance. The only
+ * network hop is the optional free-tier narrative model, and it receives
+ * computed numbers rather than raw user data.
+ */
+export function getAiBriefing(body: unknown): Promise<ApiResult<AiBriefingResponse | ErrorBody>> {
+  const request = readAiRequest(body);
+  const key = `${request.dateIso}|${request.strategy}|${request.marketFilter}|${request.competitionFilter}`;
+  const cached = aiBriefingCache.get(key);
+  if (cached) return Promise.resolve(ok(cached));
+
+  return aiBriefingFlight.run(key, async () => {
+    try {
+      const loaded = await getSlate(request.dateIso, false);
+      const frameworkHistory = await getFrameworkHistory();
+      const decisionTime = Date.now();
+      const assessed = attachFrameworkAssessments(
+        loaded.fixtures,
+        frameworkHistory,
+        decisionTime
+      );
+      const controlled = await applyFrameworkSlateControls(
+        assessed,
+        request.dateIso,
+        decisionTime
+      );
+      const fixtures = controlled.fixtures;
+
+      const [analytics, combination, registry, ledger] = await Promise.all([
+        computePickAnalytics(request.strategy, false),
+        computeCombinationRoi(request.strategy, false),
+        readRoiRegistry(request.strategy),
+        getLedgerSummary(),
+      ]);
+      const qualified = buildQualifiedPicksResponse(
+        request.dateIso,
+        fixtures,
+        registry,
+        request.strategy
+      );
+
+      const shared = {
+        fixtures,
+        dateIso: request.dateIso,
+        displayDate: formatDisplayDate(request.dateIso),
+        strategy: request.strategy,
+        marketFilter: request.marketFilter,
+        competitionFilter: request.competitionFilter,
+        analytics,
+        combination,
+        registry,
+        qualified,
+        ledger,
+        sources: SOURCE_LINKS(request.dateIso),
+      };
+
+      const local = buildBriefing(shared);
+      const narrative = await buildNarratives(
+        request.dateIso,
+        request.marketFilter,
+        local.picks
+      );
+      const result = buildBriefing({
+        ...shared,
+        narratives: narrative.narratives,
+        narrativeProvider: narrative.provider,
+        narrativeNote: narrative.note,
+      });
+      aiBriefingCache.set(key, result);
+      return ok(result);
+    } catch (error) {
+      console.error('Error building AI briefing:', error);
+      return fail(
+        500,
+        errorMessage(error, 'Could not build the AI football briefing.')
+      );
+    }
+  });
+}
+
+/** Risk-controlled accumulator assembled from the same ranked picks. */
+export async function getAiAccumulator(
+  body: unknown
+): Promise<ApiResult<AiAccumulatorResponse | ErrorBody>> {
+  const request = readAiRequest(body);
+  const source = asRecord(body);
+  const targetOdds = parseTargetOdds(source.targetOdds ?? 2.8);
+  const maxLegs = parseMaxLegs(source.maxLegs ?? 3);
+
+  try {
+    const briefingResult = await getAiBriefing(body);
+    if (briefingResult.status !== 200 || !('picks' in briefingResult.body)) {
+      return fail(briefingResult.status, 'Could not load the picks needed for an accumulator.');
+    }
+    const briefing = briefingResult.body as AiBriefingResponse;
+    const ticket = buildAiAccumulator({
+      dateIso: request.dateIso,
+      picks: briefing.picks,
+      targetOdds,
+      maxLegs,
+      riskMode: request.riskMode,
+    });
+    return ok(ticket);
+  } catch (error) {
+    console.error('Error building AI accumulator:', error);
+    return fail(500, errorMessage(error, 'Could not build the AI accumulator.'));
   }
 }

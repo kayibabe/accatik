@@ -4,6 +4,8 @@ import {
   SLATE_CACHE_CONTROL,
   analyzeFixture,
   buildRoiAccaTicket,
+  getAiAccumulator,
+  getAiBriefing,
   getLedgerSummaryResult,
   getCombinationRoi,
   getMatchDetail,
@@ -162,6 +164,8 @@ const routes: Route[] = [
   { method: 'POST', pattern: '/analytics/roi-promotion/run', handler: ({ body }) => runRoiPromotion(body) },
   { method: 'POST', pattern: '/analytics/qualified-picks', handler: ({ body }) => getQualifiedPicks(body) },
   { method: 'POST', pattern: '/analytics/roi-acca', handler: ({ body }) => buildRoiAccaTicket(body) },
+  { method: 'POST', pattern: '/ai/briefing', handler: ({ body }) => getAiBriefing(body) },
+  { method: 'POST', pattern: '/ai/accumulator', handler: ({ body }) => getAiAccumulator(body) },
   {
     method: 'GET',
     pattern: '/ledger/summary',

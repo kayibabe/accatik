@@ -7,6 +7,7 @@ import {
   ClipboardList,
   LogOut,
   ShieldCheck,
+  Sparkles,
   TrendingUp,
   X,
   ChartColumn,
@@ -35,6 +36,7 @@ const TAB_ICONS: Record<ActiveTab, typeof CalendarDays> = {
   activity: Activity,
   analytics: ChartColumn,
   roi: TrendingUp,
+  ai: Sparkles,
   sources: BookOpen,
 };
 
