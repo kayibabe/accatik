@@ -1,5 +1,6 @@
 import type { PositiveReadPick } from '../types/analytics.ts';
 import type { AccaLeg } from '../types/fixtures.ts';
+import { mergeResearchLegs } from './researchSlip.ts';
 
 /** A positive-read card is already a fully priced pick; no board lookup needed. */
 export function legFromPositiveReadPick(pick: PositiveReadPick): AccaLeg {
@@ -47,15 +48,8 @@ export function mergePositiveReadPicks(
   current: AccaLeg[],
   picks: PositiveReadPick[]
 ): AccaLeg[] {
-  const eligible = eligiblePositiveReadPicks(picks);
-  if (eligible.length === 0) return current;
-
-  const next = [...current];
-  for (const pick of eligible) {
-    const leg = legFromPositiveReadPick(pick);
-    const index = next.findIndex((item) => item.fixtureId === leg.fixtureId);
-    if (index >= 0) next[index] = leg;
-    else next.push(leg);
-  }
-  return next;
+  return mergeResearchLegs(
+    current,
+    eligiblePositiveReadPicks(picks).map(legFromPositiveReadPick)
+  );
 }

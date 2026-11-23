@@ -135,11 +135,11 @@ export function CuratedAccaView({
           className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs leading-relaxed text-emerald-900"
         >
           <span className="font-semibold">
-            Positive Reads wide slip — shown in full.
+            Wide research slip — shown in full.
           </span>{' '}
-          All {fmtCount(legs.length)} eligible picks were kept. This is a research
-          basket, not a recommended accumulator; bookmaker margin compounds with
-          each added leg.
+          All {fmtCount(legs.length)} research picks were kept. Positive Reads and
+          AI Desk additions are shown for research, not as a recommended
+          accumulator; bookmaker margin compounds with each added leg.
         </div>
       )}
 

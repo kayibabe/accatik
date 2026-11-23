@@ -42,6 +42,7 @@ import {
   eligiblePositiveReadPicks,
   mergePositiveReadPicks,
 } from './utils/positiveReadSlip.ts';
+import { mergeResearchLegs } from './utils/researchSlip.ts';
 import { MAX_RECOMMENDED_LEGS, guardTicket } from './utils/ticketGuard.ts';
 import { apiFetch } from './utils/api.ts';
 import { describeStrategy } from './utils/strategy.ts';
@@ -815,7 +816,10 @@ export default function App() {
     setSelectedLegs((prev) => guardLegs(prev));
   };
 
-  /** Folds AI-desk selections into the regular slip, then returns to the slate. */
+  /**
+   * AI-desk picks are research selections, like Positive Reads. They fold into
+   * the slip without the recommendation cap; one leg per fixture still holds.
+   */
   const handleApplyAiTicket = useCallback(
     (legs: AiTicketLeg[]) => {
       if (!slate || legs.length === 0) return;
@@ -824,20 +828,7 @@ export default function App() {
         legs.map((leg) => ({ fixtureId: leg.fixtureId, marketId: leg.marketId }))
       );
       if (built.length === 0) return;
-      setSelectedLegs((prev) => {
-        if (built.length === 1) {
-          const replacement = built[0];
-          if (prev.some((leg) => leg.fixtureId === replacement.fixtureId)) {
-            return guardLegs(
-              prev.map((leg) => (leg.fixtureId === replacement.fixtureId ? replacement : leg))
-            );
-          }
-          if (prev.length < MAX_RECOMMENDED_LEGS) {
-            return guardLegs([...prev, ...built]);
-          }
-        }
-        return guardLegs(built);
-      });
+      setSelectedLegs((prev) => mergeResearchLegs(prev, built));
       navigate('slate');
     },
     [slate, navigate]

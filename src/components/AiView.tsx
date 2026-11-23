@@ -232,8 +232,9 @@ export function AiView({
         <p>
           <strong>Research, not certainty.</strong> No model can know the result of a match. These
           picks are probability estimates with uncertainty attached; the accumulator assumes
-          independent outcomes, which is optimistic. Verify prices with your bookmaker, 18+,
-          bet responsibly.
+          independent outcomes, which is optimistic. Selections added to the slip keep every leg,
+          with wide slips labelled as research rather than recommended. Verify prices with your
+          bookmaker, 18+, bet responsibly.
         </p>
       </div>
 
@@ -465,7 +466,7 @@ export function AiView({
                             type="button"
                             onClick={() => onApplyTicket([toLeg(pick)])}
                             disabled={!canApplyTicket}
-                            title={canApplyTicket ? undefined : 'Load the matchday slate first'}
+                            title={canApplyTicket ? 'Add to a wide research slip; the five-leg cap is not applied' : 'Load the matchday slate first'}
                             className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50 cursor-pointer"
                           >
                             Add to slip
@@ -581,7 +582,7 @@ export function AiView({
                         type="button"
                         onClick={() => onApplyTicket(ticket.legs)}
                         disabled={!canApplyTicket}
-                        title={canApplyTicket ? undefined : 'Load the matchday slate first'}
+                        title={canApplyTicket ? 'Load into a wide research slip; the five-leg cap is not applied' : 'Load the matchday slate first'}
                         className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-60 cursor-pointer"
                       >
                         <Ticket className="h-3.5 w-3.5" aria-hidden="true" />
@@ -616,9 +617,10 @@ export function AiView({
                   </p>
                   <p className="flex gap-2">
                     <Layers3 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
-                    Accumulators are capped at five legs from separate matches, penalise shared
-                    competitions, and size stakes with quarter-Kelly capped at 2% per pick and 1% per
-                    ticket.
+                    The generated accumulator is capped at five legs from separate matches, penalises
+                    shared competitions, and sizes stakes with quarter-Kelly capped at 2% per pick and
+                    1% per ticket. Selections added from this desk become a wide research slip, shown
+                    in full in Ticket Review and never marked as recommended.
                   </p>
                   <p className="flex gap-2">
                     <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
