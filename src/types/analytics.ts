@@ -1,5 +1,6 @@
 import type {
   AccaStrategy,
+  Fixture,
   MarketType,
   SettlementStatus,
 } from './fixtures.ts';
@@ -170,6 +171,60 @@ export interface CombinationRoiResponse {
   priceQuality: PickAnalyticsResponse['priceQuality'];
   /** How many settled fixtures still carry a frozen featured-pick snapshot. */
   snapshotFixtures: number;
+  caveats: string[];
+}
+
+/* ------------------------------------------------------------------ */
+/* Daily matches behind a positive section x band x market read        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * One `section × band × market` cell whose inception-to-date ROI is positive.
+ * These are the parameters used to label matches in the daily feed.
+ */
+export interface PositiveReadCombo {
+  /** The study row key: `${section}:${band}:${marketKey}`. */
+  key: string;
+  section: FeaturedPickSource;
+  sectionLabel: string;
+  band: RoiBand;
+  marketKey: string;
+  marketLabel: string;
+  /** `Analyst Note · High · Over 2.5 Goals`. */
+  label: string;
+  roi: number | null;
+  staked: number;
+  smallSample: boolean;
+  roiCiLow: number | null;
+}
+
+/** A matchday fixture and every positive combination its cards matched. */
+export interface PositiveReadMatch {
+  fixtureId: string;
+  homeTeam: string;
+  awayTeam: string;
+  competition: string;
+  country: string;
+  kickoffTime: string;
+  kickoffTimestamp: number | null;
+  status: Fixture['status'];
+  /** `2–1`, or null before a final score exists. */
+  score: string | null;
+  /** Every positive parameter this fixture matched, band then section order. */
+  combos: PositiveReadCombo[];
+}
+
+export interface PositiveReadMatchesResponse {
+  strategy: AccaStrategy;
+  dateIso: string;
+  /** Archive is the default; live explicitly pulls the upstream slate. */
+  source: 'archive' | 'live';
+  generatedAt: string;
+  /** Most recent archived matchdays, newest first, for the date picker. */
+  availableDates: string[];
+  /** The active positive-read parameters driving this feed. */
+  combos: PositiveReadCombo[];
+  matches: PositiveReadMatch[];
   caveats: string[];
 }
 

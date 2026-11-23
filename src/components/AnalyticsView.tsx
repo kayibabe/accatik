@@ -21,6 +21,7 @@ import { AnalyticsSummaryCards } from './analytics/AnalyticsSummaryCards.tsx';
 import { FeaturedPicksTable } from './analytics/FeaturedPicksTable.tsx';
 import { MarketAnalyticsTable } from './analytics/MarketAnalyticsTable.tsx';
 import { CumulativePnlSection } from './analytics/CumulativePnlSection.tsx';
+import { PositiveReadMatches } from './analytics/PositiveReadMatches.tsx';
 import { EmptyState, LoadingState } from './ui/States.tsx';
 import {
   FEATURED_ACCESSORS,
@@ -41,6 +42,8 @@ interface AnalyticsViewProps {
   /** Current slip controls, so the ticket replay can describe this shape too. */
   minOdds: number;
   maxLegs: number;
+  /** Client-local matchday, used by the daily feed's date navigator. */
+  todayDate: string;
   onGoToSlate: () => void;
 }
 
@@ -49,6 +52,7 @@ export function AnalyticsView({
   strategyName,
   minOdds,
   maxLegs,
+  todayDate,
   onGoToSlate,
 }: AnalyticsViewProps) {
   const [data, setData] = useState<PickAnalyticsResponse | null>(null);
@@ -406,6 +410,18 @@ export function AnalyticsView({
               strategy={strategy}
               minOdds={minOdds}
               maxLegs={maxLegs}
+              refreshKey={refreshKey}
+            />
+          </section>
+
+          <section
+            id="positive-reads"
+            className="scroll-mt-16"
+            aria-label="Daily positive-read matches"
+          >
+            <PositiveReadMatches
+              strategy={strategy}
+              todayDate={todayDate}
               refreshKey={refreshKey}
             />
           </section>

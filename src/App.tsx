@@ -1240,6 +1240,7 @@ export default function App() {
             strategyName={strategyCopy.title}
             minOdds={minOdds}
             maxLegs={maxLegs}
+            todayDate={todayDate}
             onGoToSlate={() => navigate('slate')}
           />
         ) : !isGuest && activeTab === 'roi' ? (

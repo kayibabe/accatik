@@ -240,6 +240,38 @@ function resolveStudyPick(
   return resolveFeaturedPick(fixture, strategy, source);
 }
 
+/** The canonical `(section, band, market)` triple for one fixture card. */
+export interface StudyPick {
+  market: MarketOption;
+  selectionKey: string;
+  marketLabel: string;
+  band: RoiBand;
+  status: SettlementStatus;
+}
+
+/**
+ * Resolve one fixture card exactly as the ROI study does. The daily
+ * positive-read feed reuses this so its labels can never drift from the cells
+ * the study measured. Returns null when the card has no supported pick.
+ */
+export function studyPickForFixture(
+  fixture: Fixture,
+  strategy: AccaStrategy,
+  source: FeaturedPickSource
+): StudyPick | null {
+  const market = resolveStudyPick(fixture, strategy, source);
+  if (!market || !isPriced(market)) return null;
+  const selection = resolveMarketSelection(market, fixture);
+  if (!MARKET_KEYS.has(selection.key)) return null;
+  return {
+    market,
+    selectionKey: selection.key,
+    marketLabel: MARKET_LABELS.get(selection.key) ?? selection.key,
+    band: angleConfidence(marketProbability(market)),
+    status: evaluateMarketSettlement(fixture, market),
+  };
+}
+
 function sampleFixture(fixture: Fixture): boolean {
   const home = fixture.score?.home;
   const away = fixture.score?.away;
@@ -296,24 +328,20 @@ export async function computeCombinationRoi(
       // the engine's own angleConfidence applied to the fair probability of the
       // exact price the card referred to.
       for (const source of SECTIONS) {
-        const market = resolveStudyPick(fixture, strategy, source);
-        if (!market || !isPriced(market)) continue;
-        const selection = resolveMarketSelection(market, fixture);
-        if (!MARKET_KEYS.has(selection.key)) continue;
-        const status = evaluateMarketSettlement(fixture, market);
-        if (!isDecided(status)) continue;
+        const studyPick = studyPickForFixture(fixture, strategy, source);
+        if (!studyPick || !isDecided(studyPick.status)) continue;
 
-        const band = angleConfidence(marketProbability(market));
+        const { band, selectionKey, market } = studyPick;
         record(
-          getTally(tallies, `${source}:${band}:${selection.key}`, 'section-band', source, band, selection.key),
+          getTally(tallies, `${source}:${band}:${selectionKey}`, 'section-band', source, band, selectionKey),
           market,
-          status,
+          studyPick.status,
           dateIso
         );
         record(
-          getTally(tallies, `${source}:All:${selection.key}`, 'section', source, 'All', selection.key),
+          getTally(tallies, `${source}:All:${selectionKey}`, 'section', source, 'All', selectionKey),
           market,
-          status,
+          studyPick.status,
           dateIso
         );
       }

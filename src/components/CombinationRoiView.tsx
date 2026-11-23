@@ -8,6 +8,7 @@ import type {
   FeaturedPickSource,
 } from '../types/analytics.ts';
 import { apiFetch } from '../utils/api.ts';
+import { FEATURED_SOURCE_LABELS } from '../utils/featuredPickLabels.ts';
 import {
   fmtCount,
   fmtFixed,
@@ -40,11 +41,7 @@ interface CombinationRoiViewProps {
   onReload: () => void;
 }
 
-const SECTION_LABELS: Record<FeaturedPickSource, string> = {
-  angle: 'Recommended Angle',
-  cover: 'Safer Cover',
-  note: 'Analyst Note',
-};
+const SECTION_LABELS = FEATURED_SOURCE_LABELS;
 
 const BAND_ORDER: Record<CombinationRoiBand, number> = {
   High: 0,

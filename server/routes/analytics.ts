@@ -4,6 +4,7 @@ import {
   buildRoiAccaTicket,
   getCombinationRoi,
   getPickAnalytics,
+  getPositiveReadMatches,
   getQualifiedPicks,
   getRoiRegistry,
   getTicketAnalytics,
@@ -26,6 +27,11 @@ analyticsRouter.post('/tickets', async (req: Request, res: Response) => {
 
 analyticsRouter.post('/combination-roi', async (req: Request, res: Response) => {
   const result = await getCombinationRoi(req.body);
+  res.status(result.status).json(result.body);
+});
+
+analyticsRouter.post('/positive-read-matches', async (req: Request, res: Response) => {
+  const result = await getPositiveReadMatches(req.body);
   res.status(result.status).json(result.body);
 });
 

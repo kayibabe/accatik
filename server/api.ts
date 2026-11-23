@@ -18,6 +18,7 @@ import type {
   CombinationRoiResponse,
   PickAnalyticsResponse,
   TicketReplayResponse,
+  PositiveReadMatchesResponse,
   QualifiedPicksResponse,
   RoiAccaResponse,
   RoiPromotionConfig,
@@ -48,6 +49,10 @@ import {
 import { computePickAnalytics } from './lib/pickAnalytics.ts';
 import { computeTicketAnalytics } from './lib/ticketAnalytics.ts';
 import { computeCombinationRoi } from './lib/combinationRoi.ts';
+import {
+  buildPositiveReadMatchesResponse,
+  positiveCombosFromStudy,
+} from './lib/positiveReadMatches.ts';
 import { refreshAnalyticsArchives } from './lib/analyticsRefresh.ts';
 import { computePickRecords } from './lib/pickRecord.ts';
 import { buildAiAccumulator, buildBriefing } from './lib/aiBriefing.ts';
@@ -94,6 +99,7 @@ import {
 } from './lib/cache.ts';
 import {
   isSlateSettled,
+  listArchivedSlateDates,
   mergeArchivedPrices,
   readArchivedSlate,
   recaptureFixturePrices,
@@ -1516,6 +1522,49 @@ export async function getCombinationRoi(
   } catch (error) {
     console.error('Error computing combination ROI:', error);
     return fail(500, errorMessage(error, 'Failed to build the combination ROI study.'));
+  }
+}
+
+/**
+ * Matches for one matchday whose featured cards hit a historically positive
+ * section x band x market read. The archive is the default; `live: true` opts
+ * into the upstream slate for upcoming matches.
+ */
+export async function getPositiveReadMatches(
+  body: unknown
+): Promise<ApiResult<PositiveReadMatchesResponse | ErrorBody>> {
+  const source = asRecord(body);
+  const strategy = isAccaStrategy(source.strategy) ? source.strategy : 'balanced';
+  const force = source.force === true;
+  const live = source.live === true;
+  const requestedDate = asDateIso(source.dateIso);
+
+  try {
+    const [study, archiveDates] = await Promise.all([
+      computeCombinationRoi(strategy, force),
+      listArchivedSlateDates(),
+    ]);
+    const combos = positiveCombosFromStudy(study);
+    const availableDates = archiveDates.slice(0, 30);
+    const dateIso = requestedDate ?? availableDates[0] ?? getTodayIsoDate();
+
+    const fixtures = live
+      ? (await getSlate(dateIso, force)).fixtures
+      : (await readArchivedSlate(dateIso))?.fixtures ?? [];
+
+    return ok(
+      buildPositiveReadMatchesResponse({
+        strategy,
+        dateIso,
+        source: live ? 'live' : 'archive',
+        fixtures,
+        combos,
+        availableDates,
+      })
+    );
+  } catch (error) {
+    console.error('Error building positive-read matches:', error);
+    return fail(500, errorMessage(error, 'Could not load matches for the positive reads.'));
   }
 }
 
