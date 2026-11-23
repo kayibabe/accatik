@@ -43,6 +43,12 @@ import {
   mergePositiveReadPicks,
 } from './utils/positiveReadSlip.ts';
 import { mergeResearchLegs } from './utils/researchSlip.ts';
+import {
+  originFromTicketName,
+  renameLegacyTicketName,
+  ticketName,
+  type SlipOrigin,
+} from './utils/ticketNaming.ts';
 import { MAX_RECOMMENDED_LEGS, guardTicket } from './utils/ticketGuard.ts';
 import { apiFetch } from './utils/api.ts';
 import { describeStrategy } from './utils/strategy.ts';
@@ -89,10 +95,20 @@ function loadLocalTickets(): SavedTicket[] {
     const raw = localStorage.getItem(SAVED_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    // Slips saved before origin tracking get an origin prefix on first load.
+    return renameLegacyTickets(parsed as SavedTicket[]);
   } catch {
     return [];
   }
+}
+
+/** One-off provenance rename applied to slips saved before origin tracking. */
+function renameLegacyTickets(tickets: SavedTicket[]): SavedTicket[] {
+  return tickets.map((ticket) => {
+    const renamed = renameLegacyTicketName(ticket.name);
+    return renamed ? { ...ticket, name: renamed } : ticket;
+  });
 }
 
 function clearLocalTickets(): void {
@@ -164,6 +180,8 @@ export default function App() {
 
   const [slate, setSlate] = useState<DailySlateResponse | null>(null);
   const [selectedLegs, setSelectedLegs] = useState<AccaLeg[]>([]);
+  /** Carried into the saved ticket name so research slips stay traceable. */
+  const [slipOrigin, setSlipOrigin] = useState<SlipOrigin>('slate');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRecapturing, setIsRecapturing] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -356,6 +374,7 @@ export default function App() {
       // receive one from the public endpoint in the first place.
       setSlate(null);
       setSelectedLegs([]);
+      setSlipOrigin('slate');
       setActiveTab('slate');
       setPrefsReady(true);
       return;
@@ -372,10 +391,23 @@ export default function App() {
         if (cancelled) return;
 
         const serverTickets = Array.isArray(ticketsResult.tickets)
-          ? ticketsResult.tickets
+          ? renameLegacyTickets(ticketsResult.tickets)
           : [];
         setSavedTickets(serverTickets);
         if (serverTickets.length > 0) clearLocalTickets();
+        // Persist the one-off rename so the origin prefix survives a reload.
+        if (
+          serverTickets.some((ticket, index) => {
+            const raw = ticketsResult.tickets[index];
+            return raw && ticket.name !== raw.name;
+          })
+        ) {
+          void apiFetch('/api/tickets', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tickets: serverTickets }),
+          }).catch(() => undefined);
+        }
 
         try {
           setFilters(
@@ -454,6 +486,7 @@ export default function App() {
     ) => {
       prefRecomputedSlateRef.current = '';
       setSlate(typed);
+      setSlipOrigin('slate');
       setFixtureSnapshots((prev) =>
         withSnapshot(
           prev,
@@ -578,6 +611,7 @@ export default function App() {
     const key = `${user.id}:${slate.cachedAt}`;
     if (prefRecomputedSlateRef.current === key) return;
     prefRecomputedSlateRef.current = key;
+    setSlipOrigin('slate');
 
     const initialLegs = buildLegsFromRefs(slate.fixtures, slate.recommendedLegIds);
     setSelectedLegs(
@@ -631,6 +665,7 @@ export default function App() {
 
   const handleChangeStrategy = (nextStrategy: AccaStrategy) => {
     setStrategy(nextStrategy);
+    setSlipOrigin('slate');
     if (slate && slate.fixtures.length > 0) {
       const locked = selectedLegs.filter((l) => l.locked);
       const rebuilt = guardLegs(
@@ -650,6 +685,7 @@ export default function App() {
 
   const handleChangeMinOdds = (nextMinOdds: number) => {
     setMinOdds(nextMinOdds);
+    setSlipOrigin('slate');
     if (slate && slate.fixtures.length > 0) {
       const updated = guardLegs(
         completeAccaToTargetOdds(
@@ -667,6 +703,7 @@ export default function App() {
   const handleChangeMaxLegs = (nextMaxLegs: number) => {
     const cappedMaxLegs = Math.min(nextMaxLegs, MAX_RECOMMENDED_LEGS);
     setMaxLegs(cappedMaxLegs);
+    setSlipOrigin('slate');
     if (slate && slate.fixtures.length > 0) {
       const updated = guardLegs(
         completeAccaToTargetOdds(
@@ -686,6 +723,7 @@ export default function App() {
     setStrategy(shape.strategy);
     setMinOdds(shape.targetOdds);
     setMaxLegs(cappedMaxLegs);
+    setSlipOrigin('slate');
 
     if (!slate) return;
     const locked = selectedLegs.filter((leg) => leg.locked);
@@ -750,6 +788,7 @@ export default function App() {
 
   const handleAutoCompleteToTarget = () => {
     if (!slate) return;
+    setSlipOrigin('slate');
     setSelectedLegs((prev) =>
       guardLegs(
         completeAccaToTargetOdds(
@@ -765,6 +804,7 @@ export default function App() {
 
   const handleRebuildUnlocked = () => {
     if (!slate) return;
+    setSlipOrigin('slate');
     const locked = selectedLegs.filter((l) => l.locked);
     const unlockedIds = new Set(
       selectedLegs.filter((l) => !l.locked).map((l) => l.fixtureId)
@@ -791,6 +831,7 @@ export default function App() {
 
   const handleResetRecommended = () => {
     if (!slate) return;
+    setSlipOrigin('slate');
     const recommended = buildLegsFromRefs(
       slate.fixtures,
       slate.recommendedLegIds
@@ -813,6 +854,7 @@ export default function App() {
    * single action that returns to the structurally sound shape.
    */
   const handleTrimToRecommended = () => {
+    setSlipOrigin('slate');
     setSelectedLegs((prev) => guardLegs(prev));
   };
 
@@ -828,6 +870,7 @@ export default function App() {
         legs.map((leg) => ({ fixtureId: leg.fixtureId, marketId: leg.marketId }))
       );
       if (built.length === 0) return;
+      setSlipOrigin('ai-desk');
       setSelectedLegs((prev) => mergeResearchLegs(prev, built));
       navigate('slate');
     },
@@ -843,6 +886,7 @@ export default function App() {
   const handleAddPositiveReadPicks = useCallback((picks: PositiveReadPick[]): number => {
     const eligible = eligiblePositiveReadPicks(picks);
     if (eligible.length === 0) return 0;
+    setSlipOrigin('positive-reads');
     setSelectedLegs((prev) => mergePositiveReadPicks(prev, eligible));
     return eligible.length;
   }, []);
@@ -861,7 +905,12 @@ export default function App() {
     const totalOdds = calculateTotalOdds(selectedLegs);
     const ticket: SavedTicket = {
       id: `slip-${Date.now()}`,
-      name: `${selectedLegs.length}-Leg ${strategy.charAt(0).toUpperCase() + strategy.slice(1)} Acca (${totalOdds.toFixed(2)} Odds)`,
+      name: ticketName({
+        origin: slipOrigin,
+        legCount: selectedLegs.length,
+        strategy,
+        totalOdds,
+      }),
       createdAt: new Date().toISOString(),
       date: slate?.displayDate || getClientLocalIsoDate(),
       dateIso: slate?.date,
@@ -894,6 +943,7 @@ export default function App() {
 
   const handleLoadTicket = (ticket: SavedTicket) => {
     setSelectedLegs(ticket.legs);
+    setSlipOrigin(originFromTicketName(ticket.name) ?? 'slate');
     setStake(ticket.stake);
     navigate('slate');
   };
@@ -1411,7 +1461,10 @@ export default function App() {
                     onRebuildUnlocked={handleRebuildUnlocked}
                     onResetRecommended={handleResetRecommended}
                     onTrimToRecommended={handleTrimToRecommended}
-                    onClearAll={() => setSelectedLegs([])}
+                    onClearAll={() => {
+                      setSelectedLegs([]);
+                      setSlipOrigin('slate');
+                    }}
                     onSaveTicket={handleSaveTicket}
                   />
                 </div>
