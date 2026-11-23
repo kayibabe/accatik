@@ -7,6 +7,7 @@ import {
   Filter,
   Info,
   Layers3,
+  Plus,
   RefreshCw,
   ShieldAlert,
   Sparkles,
@@ -365,6 +366,24 @@ export function AiView({
               <DataCard
                 title={`Ranked picks · ${marketFilter === 'all' ? 'all markets' : marketFilter}`}
                 subtitle={briefing.summary}
+                actions={
+                  picks.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => onApplyTicket(picks.map(toLeg))}
+                      disabled={!canApplyTicket}
+                      title={
+                        canApplyTicket
+                          ? `Add all ${picks.length} visible picks to a wide research slip; the five-leg cap is not applied`
+                          : 'Load the matchday slate first'
+                      }
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50 cursor-pointer"
+                    >
+                      <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                      Add all to slip
+                    </button>
+                  ) : null
+                }
               >
                 {picks.length === 0 ? (
                   <EmptyState
