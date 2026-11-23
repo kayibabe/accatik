@@ -8,6 +8,7 @@ import {
   LogOut,
   ShieldCheck,
   Sparkles,
+  Target,
   TrendingUp,
   X,
   ChartColumn,
@@ -32,6 +33,7 @@ interface SideMenuProps {
 const TAB_ICONS: Record<ActiveTab, typeof CalendarDays> = {
   slate: CalendarDays,
   acca: ClipboardList,
+  'positive-reads': Target,
   saved: Bookmark,
   activity: Activity,
   analytics: ChartColumn,

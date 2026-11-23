@@ -198,6 +198,33 @@ export interface PositiveReadCombo {
   roiCiLow: number | null;
 }
 
+/**
+ * The bettable card behind one positive combo. Built from the same frozen
+ * market the study measured, so a slip leg and its label cannot disagree.
+ */
+export interface PositiveReadPick {
+  /** The combo this pick came from: `${section}:${band}:${marketKey}`. */
+  comboKey: string;
+  /** `Analyst Note · High · Over 2.5 Goals`. */
+  label: string;
+  fixtureId: string;
+  homeTeam: string;
+  awayTeam: string;
+  competition: string;
+  matchDate: string;
+  kickoffTime: string;
+  marketId: string;
+  marketLabel: string;
+  marketType: MarketType;
+  odds: number;
+  impliedProbability: number;
+  fairProbability: number | null;
+  rationale: string;
+  bookmaker?: string;
+  /** Settlement of this exact market; only Pending picks can join a live slip. */
+  status: SettlementStatus;
+}
+
 /** A matchday fixture and every positive combination its cards matched. */
 export interface PositiveReadMatch {
   fixtureId: string;
@@ -212,6 +239,8 @@ export interface PositiveReadMatch {
   score: string | null;
   /** Every positive parameter this fixture matched, band then section order. */
   combos: PositiveReadCombo[];
+  /** Bettable cards aligned with `combos` via `comboKey`. */
+  picks: PositiveReadPick[];
 }
 
 export interface PositiveReadMatchesResponse {

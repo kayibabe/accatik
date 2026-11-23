@@ -5,6 +5,7 @@ import type {
   PositiveReadCombo,
   PositiveReadMatch,
   PositiveReadMatchesResponse,
+  PositiveReadPick,
   RoiBand,
 } from '../../src/types/analytics.ts';
 import { FEATURED_SOURCE_LABELS } from '../../src/utils/featuredPickLabels.ts';
@@ -32,6 +33,7 @@ export const POSITIVE_READ_CAVEATS: readonly string[] = [
   'Rows below the study’s minimum sample are still included, matching the table’s Positive toggle, and are badged as small samples.',
   'Bands are the engine’s confidence label for the fair probability of the frozen pre-match price, not a guarantee of the outcome.',
   'Live mode prices a card from the current book, so its band can differ from the archived price that produced the study.',
+  'Adding a pick copies the price shown here into your slip. Archive uses the frozen pre-match price; switch to Live for the current book.',
 ];
 
 function compareCombos(a: PositiveReadCombo, b: PositiveReadCombo): number {
@@ -88,14 +90,37 @@ export function buildPositiveReadMatchesResponse({
 
   for (const fixture of fixtures) {
     const matched: PositiveReadCombo[] = [];
+    const picks: PositiveReadPick[] = [];
     for (const section of SECTION_SOURCES) {
       const pick = studyPickForFixture(fixture, strategy, section);
       if (!pick) continue;
       const combo = byKey.get(`${section}:${pick.band}:${pick.selectionKey}`);
-      if (combo && !matched.some((item) => item.key === combo.key)) matched.push(combo);
+      if (!combo || matched.some((item) => item.key === combo.key)) continue;
+      matched.push(combo);
+      picks.push({
+        comboKey: combo.key,
+        label: combo.label,
+        fixtureId: fixture.id,
+        homeTeam: fixture.homeTeam,
+        awayTeam: fixture.awayTeam,
+        competition: fixture.competition,
+        matchDate: fixture.matchDate,
+        kickoffTime: fixture.kickoffTime,
+        marketId: pick.market.id,
+        marketLabel: pick.marketLabel,
+        marketType: pick.market.marketType,
+        odds: pick.market.odds,
+        impliedProbability: pick.market.impliedProbability,
+        fairProbability: pick.market.fairProbability ?? null,
+        rationale: pick.market.rationale,
+        bookmaker: pick.market.bookmaker,
+        status: pick.status,
+      });
     }
     if (matched.length === 0) continue;
 
+    const combosForMatch = matched.sort(compareCombos);
+    const pickByCombo = new Map(picks.map((pick) => [pick.comboKey, pick]));
     const home = fixture.score?.home;
     const away = fixture.score?.away;
     grouped.set(fixture.id, {
@@ -111,7 +136,10 @@ export function buildPositiveReadMatchesResponse({
         home !== null && home !== undefined && away !== null && away !== undefined
           ? `${home}–${away}`
           : null,
-      combos: matched.sort(compareCombos),
+      combos: combosForMatch,
+      picks: combosForMatch
+        .map((combo) => pickByCombo.get(combo.key))
+        .filter((pick): pick is PositiveReadPick => pick !== undefined),
     });
   }
 

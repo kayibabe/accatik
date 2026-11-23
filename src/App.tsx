@@ -11,6 +11,7 @@ import { SavedSlipsView } from './components/SavedSlipsView.tsx';
 import { MyActivityView } from './components/MyActivityView.tsx';
 import { AnalyticsView } from './components/AnalyticsView.tsx';
 import { PositiveRoiView } from './components/PositiveRoiView.tsx';
+import { PositiveReadMatches } from './components/analytics/PositiveReadMatches.tsx';
 import { SourcesView } from './components/SourcesView.tsx';
 import { AiView } from './components/AiView.tsx';
 import { AuthDialog } from './components/AuthDialog.tsx';
@@ -20,6 +21,7 @@ import { NotificationRegion, type NoticeItem } from './components/ui/Notificatio
 import { ErrorState } from './components/ui/States.tsx';
 import { useAuth } from './context/AuthContext.tsx';
 import type { AiTicketLeg } from './types/ai.ts';
+import type { PositiveReadPick } from './types/analytics.ts';
 import type {
   AccaLeg,
   AccaStrategy,
@@ -118,6 +120,26 @@ function getClientLocalIsoDate(): string {
 /** Trim engine output to the structural guard, preserving explicit locks. */
 function guardLegs(legs: AccaLeg[]): AccaLeg[] {
   return guardTicket(legs, { preserveLocked: true }).legs;
+}
+
+/** A positive-read card is already a fully priced pick; no board lookup needed. */
+function legFromPositiveReadPick(pick: PositiveReadPick): AccaLeg {
+  return {
+    fixtureId: pick.fixtureId,
+    homeTeam: pick.homeTeam,
+    awayTeam: pick.awayTeam,
+    competition: pick.competition,
+    matchDate: pick.matchDate,
+    kickoffTime: pick.kickoffTime,
+    marketId: pick.marketId,
+    marketLabel: pick.marketLabel,
+    marketType: pick.marketType,
+    odds: pick.odds,
+    impliedProbability: pick.impliedProbability,
+    fairProbability: pick.fairProbability ?? undefined,
+    rationale: pick.rationale || pick.label,
+    bookmaker: pick.bookmaker,
+  };
 }
 
 export default function App() {
@@ -837,6 +859,32 @@ export default function App() {
     [slate, navigate]
   );
 
+  /**
+   * Positive-read cards carry their own market and price, so they go straight
+   * into the slip. One pick per fixture: a later selection replaces the leg
+   * already held for that match rather than creating a same-match combination.
+   */
+  const handleAddPositiveReadPicks = useCallback((picks: PositiveReadPick[]): number => {
+    const byFixture = new Map<string, PositiveReadPick>();
+    for (const pick of picks) {
+      if (pick.status !== 'Pending') continue;
+      if (!byFixture.has(pick.fixtureId)) byFixture.set(pick.fixtureId, pick);
+    }
+    if (byFixture.size === 0) return 0;
+
+    const additions = [...byFixture.values()].map(legFromPositiveReadPick);
+    setSelectedLegs((prev) => {
+      const next = [...prev];
+      for (const leg of additions) {
+        const index = next.findIndex((item) => item.fixtureId === leg.fixtureId);
+        if (index >= 0) next[index] = leg;
+        else next.push(leg);
+      }
+      return guardLegs(next);
+    });
+    return additions.length;
+  }, []);
+
   const handleSaveTicket = async (ticketStake: number) => {
     if (selectedLegs.length === 0) return;
 
@@ -1422,6 +1470,19 @@ export default function App() {
                 onGoToSlate={() => navigate('slate')}
                 onSaveTicket={handleSaveTicket}
                 onAutoComplete={handleAutoCompleteToTarget}
+              />
+            )}
+
+            {activeTab === 'positive-reads' && (
+              <PositiveReadMatches
+                strategy={strategy}
+                todayDate={todayDate}
+                refreshKey={0}
+                mode="build"
+                selectedDate={selectedDate}
+                onAddPicks={handleAddPositiveReadPicks}
+                onOpenTicket={() => navigate('acca')}
+                maxLegs={maxLegs}
               />
             )}
 

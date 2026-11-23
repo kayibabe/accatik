@@ -2,6 +2,7 @@
 export type ActiveTab =
   | 'slate'
   | 'acca'
+  | 'positive-reads'
   | 'saved'
   | 'activity'
   | 'analytics'
@@ -12,6 +13,7 @@ export type ActiveTab =
 export const ACTIVE_TABS: readonly ActiveTab[] = [
   'slate',
   'acca',
+  'positive-reads',
   'saved',
   'activity',
   'analytics',
@@ -44,6 +46,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     items: [
       { id: 'slate', label: 'Matchday Slate' },
       { id: 'acca', label: 'Ticket Review' },
+      { id: 'positive-reads', label: 'Positive Reads' },
     ],
   },
   {

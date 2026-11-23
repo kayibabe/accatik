@@ -236,6 +236,34 @@ test('one match carries every hit combo, with no duplicate fixtures', () => {
     response.matches[0].combos.map((item) => item.key),
     ['angle:High:GOALS-O2.5', 'cover:Solid:1X2-H']
   );
+  assert.deepEqual(
+    response.matches[0].picks.map((pick) => ({
+      comboKey: pick.comboKey,
+      marketId: pick.marketId,
+      marketType: pick.marketType,
+      odds: pick.odds,
+      status: pick.status,
+    })),
+    [
+      {
+        comboKey: 'angle:High:GOALS-O2.5',
+        marketId: 'snap-ou25',
+        marketType: 'Goals',
+        odds: 1.9,
+        status: 'Win',
+      },
+      {
+        comboKey: 'cover:Solid:1X2-H',
+        marketId: 'snap-1x2-h',
+        marketType: '1X2',
+        odds: 1.5,
+        status: 'Win',
+      },
+    ]
+  );
+  assert.equal(response.matches[0].picks[0].label, 'Recommended Angle · High · Over 2.5 Goals');
+  assert.equal(response.matches[0].picks[0].homeTeam, 'Home FC');
+  assert.equal(response.matches[0].picks[0].awayTeam, 'Away FC');
   assert.equal(response.matches[0].score, '2–1');
   assert.equal(response.matches[0].status, 'Finished');
   assert.equal(response.source, 'archive');
@@ -334,4 +362,12 @@ test('upcoming fixtures stay in the feed with a null score and are kickoff-sorte
   );
   assert.equal(response.matches[0].score, null);
   assert.equal(response.matches[0].status, 'Scheduled');
+  assert.deepEqual(
+    response.matches[0].picks.map((pick) => ({
+      comboKey: pick.comboKey,
+      marketId: pick.marketId,
+      status: pick.status,
+    })),
+    [{ comboKey: 'angle:High:GOALS-O2.5', marketId: 'early-ou25', status: 'Pending' }]
+  );
 });
