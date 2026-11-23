@@ -56,21 +56,26 @@ test('a shared competition is reviewed only when configured', () => {
   );
 });
 
-test('one leg and four legs are both invalid accumulator shapes', () => {
+test('one leg and six legs are both invalid accumulator shapes', () => {
   assert.deepEqual(evaluateAccumulator([leg('fixture-1')]), {
     status: 'REJECTED',
     reasonCodes: ['INVALID_LEG_COUNT'],
     metrics: null,
   });
   assert.equal(
-    evaluateAccumulator([
-      leg('fixture-1'),
-      leg('fixture-2'),
-      leg('fixture-3'),
-      leg('fixture-4'),
-    ]).status,
+    evaluateAccumulator(
+      Array.from({ length: 6 }, (_, index) => leg(`fixture-${index + 1}`))
+    ).status,
     'REJECTED'
   );
+});
+
+test('five independent qualified legs are a valid accumulator', () => {
+  const result = evaluateAccumulator(
+    Array.from({ length: 5 }, (_, index) => leg(`fixture-${index + 1}`))
+  );
+  assert.equal(result.status, 'QUALIFIED');
+  assert.deepEqual(result.reasonCodes, []);
 });
 
 test('every leg must be qualified as a single', () => {

@@ -99,7 +99,7 @@ test('a one-sided market is held as INCOMPLETE_MARKET', () => {
 });
 
 test('stale odds hold every passing market', () => {
-  const stale = new Date(now - 3 * 60 * 60 * 1000).toISOString();
+  const stale = new Date(now - 9 * 60 * 60 * 1000).toISOString();
   const assessment = assessFixtureFramework(fixture({ pricedAt: stale }), [], {
     nowMs: now,
     modelInput,

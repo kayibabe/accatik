@@ -144,7 +144,7 @@ export const DEFAULT_TARGET_ODDS = 2.8;
 export const DEFAULT_MAX_LEGS = 3;
 export const MIN_TARGET_ODDS = 1.5;
 export const MAX_TARGET_ODDS = 100;
-export const MAX_LEG_LIMIT = 3;
+export const MAX_LEG_LIMIT = 5;
 
 interface LoadedSlate {
   fixtures: Fixture[];
@@ -412,7 +412,7 @@ export function parseTargetOdds(value: unknown): number {
   );
 }
 
-/** Accepts a leg budget of 1–8 and falls back to the balanced 3-leg shape. */
+/** Accepts a leg budget of 1–5 and falls back to the balanced 3-leg shape. */
 export function parseMaxLegs(value: unknown): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return DEFAULT_MAX_LEGS;
@@ -1014,7 +1014,7 @@ export async function getTodayFixtures(
     };
 
     const rawLegs = buildRecommendedAcca(fixtures, minOdds, strategy, maxLegs);
-    // Structural gate: the headline ticket is capped at three legs (two when
+    // Structural gate: the headline ticket is capped at five legs (two when
     // the average price is ultra-short) and is never labelled recommended when
     // the de-vigged chance sits below the price's break-even rate.
     const guard = guardTicket(rawLegs, {

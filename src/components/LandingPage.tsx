@@ -68,7 +68,7 @@ const PRO_MODULES = [
 const HOW_IT_WORKS = [
   'Collect the day’s fixtures and pre-match bookmaker prices.',
   'Strip the margin and compare the book with the provider’s model.',
-  'Assemble a capped 2–3 leg ticket using the structural guard.',
+  'Assemble a capped 2–5 leg ticket using the structural guard.',
   'Settle saved slips and review how the approach performs over time.',
 ];
 

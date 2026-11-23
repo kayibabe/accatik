@@ -43,8 +43,8 @@ test('FX-V03: a +4.8 pp edge is rejected by the edge gate', () => {
   assert.ok(value.evStress > 0);
 });
 
-test('FX-V02: a price below 1.45 is rejected by the odds floor', () => {
-  const value = evaluateValue({ pModel: 0.85, pFair: 0.65, odds: 1.34 });
+test('FX-V02: a price below 1.30 is rejected by the odds floor', () => {
+  const value = evaluateValue({ pModel: 0.85, pFair: 0.65, odds: 1.29 });
   assert.ok(value.hardFail.includes('ODDS_BELOW_MIN'));
   assert.ok(value.ev > 0);
   assert.ok(value.evStress > 0);
@@ -57,10 +57,10 @@ test('a model zero cannot manufacture an edge', () => {
   assert.ok(value.hardFail.includes('EDGE_BELOW_MIN'));
 });
 
-test('stress EV shrinks the model halfway to the market', () => {
+test('stress EV shrinks the model a quarter of the way to the market', () => {
   const value = evaluateValue({ pModel: 0.8, pFair: 0.6, odds: 1.6 });
-  assert.ok(close(value.pStress, 0.7));
-  assert.ok(close(value.evStress, 0.7 * 1.6 - 1));
+  assert.ok(close(value.pStress, 0.75));
+  assert.ok(close(value.evStress, 0.75 * 1.6 - 1));
   assert.ok(value.evStress < value.ev);
 });
 

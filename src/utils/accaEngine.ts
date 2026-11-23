@@ -30,8 +30,8 @@ export function legFromMarket(fixture: Fixture, market: MarketOption): AccaLeg {
   };
 }
 
-/** The framework caps accumulators at three legs (§14.1). */
-export const MAX_ACCA_LEGS = 3;
+/** The framework caps accumulators at five legs (§14.1). */
+export const MAX_ACCA_LEGS = 5;
 
 function hasFrameworkDecision(fixture: Fixture): boolean {
   return Boolean(

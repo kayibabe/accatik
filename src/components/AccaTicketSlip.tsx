@@ -59,8 +59,8 @@ interface AccaTicketSlipProps {
 
 const STRATEGIES = TICKET_STRATEGY_OPTIONS;
 const TARGET_ODDS_OPTIONS = TICKET_TARGET_ODDS_OPTIONS;
-// The structural cap is three legs, so offering 4/6/8 here would only create
-// a control that silently rewrites the user's choice back to three.
+// The structural cap is now five legs; the controls are derived from it so a
+// clicked leg budget is never silently rewritten.
 const LEG_OPTIONS = TICKET_MAX_LEGS_OPTIONS;
 
 export function AccaTicketSlip({

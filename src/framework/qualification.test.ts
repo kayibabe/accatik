@@ -57,7 +57,7 @@ test('FX-V04: no model probability is SCREEN_ONLY', () => {
 test('FX-V02: the odds floor rejects before suitability is considered', () => {
   const result = qualifyCandidate(
     candidate({
-      value: evaluateValue({ pModel: 0.85, pFair: 0.65, odds: 1.34 }),
+      value: evaluateValue({ pModel: 0.85, pFair: 0.65, odds: 1.29 }),
     })
   );
   assert.equal(result.status, 'REJECTED');

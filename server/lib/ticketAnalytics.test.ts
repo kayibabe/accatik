@@ -129,7 +129,7 @@ test('ticket replay rebuilds each slip control from clean pre-match archives', a
   assert.equal(result.shapes.length, 4);
   assert.equal(result.strategies.length, 5);
   assert.equal(result.odds.length, 5);
-  assert.equal(result.legs.length, 2);
+  assert.equal(result.legs.length, 4);
   assert.ok(result.current);
 
   const balanced = result.shapes.find((row) => row.id === 'shape:balanced');

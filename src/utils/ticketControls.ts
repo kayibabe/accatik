@@ -22,7 +22,7 @@ export const TICKET_STRATEGY_OPTIONS: ReadonlyArray<{
 /** The slip's "Min Odds" buttons are builder targets, not filter thresholds. */
 export const TICKET_TARGET_ODDS_OPTIONS: readonly number[] = [2, 2.8, 3.6, 5, 8];
 
-/** Structural cap of three legs: 4/6/8 would only invite lottery accumulators. */
+/** Structural cap of five legs; anything above it would invite lottery accumulators. */
 export const TICKET_MAX_LEGS_OPTIONS: readonly number[] = Array.from(
   { length: MAX_RECOMMENDED_LEGS - 1 },
   (_, index) => index + 2

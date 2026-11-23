@@ -294,13 +294,16 @@ export function assessFixtureFramework(
 
   const markets: MarketFrameworkAssessment[] = priced.map((market) => {
     const pModel = probabilities[market.selectionKey] ?? null;
-    const marketConfidence = assessMarketConfidence({
-      base: modelInput.confidence,
-      market: market.selectionKey,
-      pModel: pModel ?? 0.5,
-      sampleSize: Math.min(modelInput.sampleHome, modelInput.sampleAway),
-      oddsAgeSeconds: age.age,
-    });
+    const marketConfidence = assessMarketConfidence(
+      {
+        base: modelInput.confidence,
+        market: market.selectionKey,
+        pModel: pModel ?? 0.5,
+        sampleSize: Math.min(modelInput.sampleHome, modelInput.sampleAway),
+        oddsAgeSeconds: age.age,
+      },
+      cfg
+    );
     const marketContext = teamGoalsContext(market.selectionKey, modelInput);
     const benchmarkEntry = benchmark.entries.get(market.selectionKey) ?? null;
     const pFair = benchmarkEntry?.pFair ?? null;

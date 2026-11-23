@@ -157,16 +157,19 @@ export interface FrameworkConfig {
 }
 
 export const DEFAULT_FRAMEWORK_CONFIG: FrameworkConfig = {
-  minEdge: 0.15,
-  minOdds: 1.45,
+  // Relaxed from 0.15/1.45/0.5 so a model-backed price can still qualify on
+  // thin slates. EV and stressed EV must still be strictly positive; these are
+  // thresholds for how much edge is required, not permission to take -EV odds.
+  minEdge: 0.05,
+  minOdds: 1.3,
   outlierEdge: 0.35,
   epsilon: 0.005,
-  stressShrinkage: 0.5,
-  maxOddsAgeSeconds: 2 * 60 * 60,
+  stressShrinkage: 0.25,
+  maxOddsAgeSeconds: 8 * 60 * 60,
   assumedOverround: 0.05,
   standardStakeUnits: 1,
   minAccaLegs: 2,
-  maxAccaLegs: 3,
+  maxAccaLegs: 5,
   maxDailySelections: 6,
   maxWeeklyExposureUnits: 20,
   priorWeeklyStakeUnits: 0,
@@ -174,7 +177,7 @@ export const DEFAULT_FRAMEWORK_CONFIG: FrameworkConfig = {
   maxPerTeam: 1,
   lowScoringTotalThreshold: 2.4,
   failedToScoreThreshold: 0.4,
-  confidenceStandardErrorCeiling: 0.15,
+  confidenceStandardErrorCeiling: 0.45,
   confidenceOddsAgeFraction: 0.5,
   minMarketCalibrationSamples: 100,
   marketCalibrationBrierCeiling: 0.25,

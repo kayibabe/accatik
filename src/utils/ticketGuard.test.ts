@@ -14,16 +14,16 @@ function legs(count: number, odds: number, fairProbability: number) {
   );
 }
 
-test('research mode allows short prices but still applies the three-leg cap', () => {
+test('research mode allows short prices but still applies the five-leg cap', () => {
   const shortLegs = legs(8, 1.12, 85);
   const normal = guardTicket(shortLegs);
   const research = guardTicket(shortLegs, { researchMode: true, maxLegs: 8 });
 
-  assert.ok(normal.legs.length <= 3);
-  assert.equal(research.legs.length, 3);
+  assert.ok(normal.legs.length <= 5);
+  assert.equal(research.legs.length, 5);
   assert.equal(research.recommended, false);
   assert.match(research.reason, /not a recommendation/);
-  assert.equal(research.economics.legCount, 3);
+  assert.equal(research.economics.legCount, 5);
 });
 
 test('ticket economics removes the margin and reports the compounded overround', () => {
@@ -64,8 +64,8 @@ test('the cap holds ultra-short legs to two selections', () => {
   assert.equal(recommendedLegCap(legs(8, 1.07, 93)), 2);
 });
 
-test('the cap holds normal short legs to three selections', () => {
-  assert.equal(recommendedLegCap(legs(5, 1.5, 66)), 3);
+test('the cap holds normally priced legs to five selections', () => {
+  assert.equal(recommendedLegCap(legs(8, 1.5, 66)), 5);
 });
 
 test('the cap never pads a ticket that is already short', () => {
@@ -73,9 +73,9 @@ test('the cap never pads a ticket that is already short', () => {
   assert.equal(recommendedLegCap(legs(1, 1.5, 66)), 1);
 });
 
-test('one long price cannot disguise three ultra-short legs', () => {
+test('one long price cannot disguise ultra-short legs', () => {
   const mixed = [
-    ...legs(3, 1.1, 90),
+    ...legs(5, 1.1, 90),
     makeLeg('long', 'long-1x2-h', 5, { fairProbability: 20 }),
   ];
 
@@ -96,11 +96,11 @@ test('guarding an eight-leg ticket trims it to two and explains why', () => {
   assert.match(result.reason, /Capped at 2 legs/);
 });
 
-test('guarding a five-leg ticket trims it to the three-leg maximum', () => {
-  const result = guardTicket(legs(5, 1.5, 66));
+test('guarding an eight-leg ticket trims it to the five-leg maximum', () => {
+  const result = guardTicket(legs(8, 1.5, 66));
 
   assert.equal(result.legs.length, MAX_RECOMMENDED_LEGS);
-  assert.equal(result.trimmedCount, 2);
+  assert.equal(result.trimmedCount, 3);
 });
 
 test('a negative-EV ticket is never labelled recommended', () => {
@@ -120,24 +120,24 @@ test('a ticket that genuinely beats fair keeps the recommended label', () => {
 });
 
 test('locked selections survive the trim', () => {
-  const legsWithLocks = legs(5, 1.5, 66).map((leg, index) => ({
+  const legsWithLocks = legs(7, 1.5, 66).map((leg, index) => ({
     ...leg,
-    locked: index >= 3,
+    locked: index >= 5,
   }));
 
   const result = guardTicket(legsWithLocks, { preserveLocked: true });
 
-  assert.equal(result.legs.length, 3);
+  assert.equal(result.legs.length, 5);
   assert.equal(result.legs.filter((leg) => leg.locked).length, 2);
   assert.ok(result.legs.some((leg) => !leg.locked));
 });
 
 test('locks cannot lift the ticket above the cap', () => {
-  const allLocked = legs(4, 1.5, 66).map((leg) => ({ ...leg, locked: true }));
+  const allLocked = legs(7, 1.5, 66).map((leg) => ({ ...leg, locked: true }));
 
   const result = guardTicket(allLocked, { preserveLocked: true });
 
-  assert.equal(result.legs.length, 3);
+  assert.equal(result.legs.length, 5);
   assert.ok(result.legs.every((leg) => leg.locked));
 });
 

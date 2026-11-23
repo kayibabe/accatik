@@ -78,14 +78,14 @@ test('builds a ticket that reaches the target without repeating a fixture', () =
   assert.equal(new Set(legs.map((leg) => leg.fixtureId)).size, legs.length);
 });
 
-test('stops at the three-leg cap when the target is unreachable', () => {
+test('stops at the requested cap when the target is unreachable', () => {
   const fixtures = Array.from({ length: 10 }, (_, index) =>
     pricedFixture(`f${index}`, 1.2)
   );
 
   const legs = buildRecommendedAcca(fixtures, 100, 'balanced', 4);
 
-  assert.equal(legs.length, 3);
+  assert.equal(legs.length, 4);
   assert.ok(calculateTotalOdds(legs) < 100);
 });
 

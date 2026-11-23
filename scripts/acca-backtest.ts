@@ -1224,7 +1224,7 @@ function main(): void {
   lines.push('');
   lines.push('   What to do next:');
   lines.push(
-    '   1. Keep the current 2-3 leg cap and the negative-EV warning; do not chase 5.00+ targets.'
+    '   1. Keep the current 2-5 leg cap and the negative-EV warning; do not chase 5.00+ targets.'
   );
   lines.push(
     '   2. Keep recording every variant with pre-match prices. You need ~1,000+ legs per bucket, not 182.'

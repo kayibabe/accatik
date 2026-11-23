@@ -115,10 +115,10 @@ test('target odds default to the balanced shape and never fall below 1.50', () =
   assert.equal(parseTargetOdds(2.834), 2.83);
 });
 
-test('max legs defaults to 3 and stays within 1–3', () => {
+test('max legs defaults to 3 and stays within 1–5', () => {
   assert.equal(parseMaxLegs(undefined), DEFAULT_MAX_LEGS);
   assert.equal(parseMaxLegs(0), 1);
   assert.equal(parseMaxLegs(99), MAX_LEG_LIMIT);
-  assert.equal(parseMaxLegs(6), 3);
+  assert.equal(parseMaxLegs(6), 5);
   assert.equal(parseMaxLegs(3.4), 3);
 });

@@ -17,7 +17,7 @@ import { combinedFairProbability } from './probability.ts';
  * and an 8-leg ticket ~56% behind, no matter how good the individual picks
  * look. The guard does two things:
  *
- *   1. It caps the headline ticket at three legs (two when the average price is
+ *   1. It caps the headline ticket at five legs (two when the average price is
  *      so short that the margin compounds fastest).
  *   2. It withholds the "recommended" label when the de-vigged chance is far
  *      below the break-even rate the quoted price needs.
@@ -25,7 +25,7 @@ import { combinedFairProbability } from './probability.ts';
  * It does not pretend a ticket is positive-EV. It only stops the product from
  * presenting a structurally losing ticket as a recommendation.
  */
-export const MAX_RECOMMENDED_LEGS = 3;
+export const MAX_RECOMMENDED_LEGS = 5;
 
 /**
  * A ticket must beat fair, not merely sit close to it. Because the fair
@@ -50,8 +50,8 @@ export interface TicketGuardOptions {
   preserveLocked?: boolean;
   /**
    * Research/shadow tickets only. Skips the short-price cap and never grants
-   * the "recommended" label. The 2–3 leg framework cap still applies, so a
-   * 5.00+ target is left short rather than padded with extra legs.
+   * the "recommended" label. The 2–5 leg framework cap still applies, so a
+   * large target is left short rather than padded with extra legs.
    */
   researchMode?: boolean;
 }
@@ -183,7 +183,7 @@ export function guardTicket(
   const reasons: string[] = [];
   if (research) {
     reasons.push(
-      'Research ticket: short-price legs are allowed, but the 2–3 leg framework cap still applies and this is not a recommendation.'
+      'Research ticket: short-price legs are allowed, but the 2–5 leg framework cap still applies and this is not a recommendation.'
     );
   }
   if (trimmedCount > 0) {
