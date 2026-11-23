@@ -9,6 +9,7 @@ import { makeFixture, makeMarket } from '../../src/utils/testFactories.ts';
 import {
   buildAiAccumulator,
   buildBriefing,
+  MAX_AI_ACCUMULATOR_LEGS,
   poissonSelectionProbability,
   providerSelectionProbability,
 } from './aiBriefing.ts';
@@ -374,7 +375,46 @@ test('accumulator respects risk bands, fixture uniqueness and competition caps',
     riskMode: 'conservative',
   });
   assert.equal(sameFixture.legs.length, 0);
-  assert.match(sameFixture.reason, /No two selections/);
+  assert.match(sameFixture.reason, /No qualifying selections/);
+});
+
+test('AI accumulator can use five legs when the target needs them', () => {
+  // Strong per-leg confidence keeps the combined chance above the conservative
+  // hit-probability floor, so the raised ceiling is genuinely reachable.
+  const picks = Array.from({ length: 6 }, (_, index) =>
+    aiPick({
+      fixtureId: `five-${index}`,
+      marketId: `five-${index}-1x2-h`,
+      competition: `League ${index}`,
+      odds: 2,
+      pStress: 0.8,
+    })
+  );
+
+  const ticket = buildAiAccumulator({
+    dateIso: '2026-11-22',
+    picks,
+    targetOdds: 20,
+    maxLegs: MAX_AI_ACCUMULATOR_LEGS,
+    riskMode: 'conservative',
+  });
+
+  assert.equal(ticket.maxLegs, MAX_AI_ACCUMULATOR_LEGS);
+  assert.equal(ticket.legs.length, MAX_AI_ACCUMULATOR_LEGS);
+  assert.equal(new Set(ticket.legs.map((leg) => leg.fixtureId)).size, MAX_AI_ACCUMULATOR_LEGS);
+  assert.ok(ticket.totalOdds >= 20);
+  assert.ok(ticket.hitProbability >= 0.12);
+  assert.equal(ticket.targetReached, true);
+
+  const overBudget = buildAiAccumulator({
+    dateIso: '2026-11-22',
+    picks,
+    targetOdds: 20,
+    maxLegs: 8,
+    riskMode: 'conservative',
+  });
+  assert.equal(overBudget.maxLegs, MAX_AI_ACCUMULATOR_LEGS);
+  assert.equal(overBudget.legs.length, MAX_AI_ACCUMULATOR_LEGS);
 });
 
 test('aggressive risk mode admits speculative picks that conservative mode rejects', () => {

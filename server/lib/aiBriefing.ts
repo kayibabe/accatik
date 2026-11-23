@@ -600,10 +600,13 @@ interface CandidateSet {
   sharedCompetitions: number;
 }
 
+/** Hard ceiling for AI desk accumulators, matching the framework's five-leg cap. */
+export const MAX_AI_ACCUMULATOR_LEGS = 5;
+
 /** Enumerate small leg sets, then pick the best risk-adjusted combination. */
 export function buildAiAccumulator(input: AccumulatorInput): AiAccumulatorResponse {
   const { dateIso, picks, riskMode } = input;
-  const maxLegs = clamp(Math.floor(input.maxLegs), 2, 3);
+  const maxLegs = clamp(Math.floor(input.maxLegs), 2, MAX_AI_ACCUMULATOR_LEGS);
   const targetOdds = clamp(input.targetOdds, 1.5, 100);
 
   const minBand: AiConfidenceBand[] =
@@ -614,6 +617,9 @@ export function buildAiAccumulator(input: AccumulatorInput): AiAccumulatorRespon
         : ['High', 'Solid', 'Moderate', 'Speculative'];
   // A small model edge does not justify a near-lottery ticket. Even the wide
   // mode keeps a floor on the combined hit chance before odds are considered.
+  // That floor is deliberately on the *combined* chance: a five-leg ticket needs
+  // stronger per-leg confidence than a two-leg one, so raising the leg ceiling
+  // never quietly turns a conservative desk into a lottery ticket generator.
   const minHitProbability =
     riskMode === 'conservative' ? 0.12 : riskMode === 'balanced' ? 0.06 : 0.03;
   const pool = picks
@@ -664,7 +670,7 @@ export function buildAiAccumulator(input: AccumulatorInput): AiAccumulatorRespon
     (set.avgScore / 100) * 0.3 +
     Math.log(set.totalOdds) * 0.05 -
     set.sharedCompetitions * 0.04 -
-    (set.legs.length === 2 && maxLegs === 3 ? 0.02 : 0);
+    (set.legs.length === 2 && maxLegs > 2 ? 0.02 : 0);
 
   const admissible = candidates.filter((set) => set.probability >= minHitProbability);
   const onTarget = admissible.filter((set) => set.totalOdds >= targetOdds);
@@ -700,7 +706,7 @@ export function buildAiAccumulator(input: AccumulatorInput): AiAccumulatorRespon
       stakePct: 0,
       targetReached: false,
       reason:
-        'No two selections cleared the stressed-EV, confidence and combined hit-probability gate ' +
+        'No qualifying selections cleared the stressed-EV, confidence and combined hit-probability gate ' +
         'for this risk mode. An empty ticket is the correct answer on a thin slate.',
       risks: [],
       rejected: [],

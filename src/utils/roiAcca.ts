@@ -14,14 +14,18 @@ import { isPriced } from './pickResolver.ts';
 import { resolveMarketSelection } from './marketSelection.ts';
 import { resolveFeaturedPick } from './featuredPickSnapshot.ts';
 import { inferPriceQuality, isPreMatchFixture } from './priceQuality.ts';
-import { guardTicket, ticketEconomics } from './ticketGuard.ts';
+import {
+  guardTicket,
+  MAX_RECOMMENDED_LEGS,
+  ticketEconomics,
+} from './ticketGuard.ts';
 
 /**
  * Research accumulator built exclusively from promoted ROI selections.
  *
  * No leg is added to chase the headline price: every candidate has already
  * passed the promotion gate and the framework's QUALIFIED status. The 5.00+
- * target simply decides how many promoted legs are needed; if three short legs
+ * target simply decides how many promoted legs are needed; if five short legs
  * still fall short, the ticket stays short and `targetReached` is false. The
  * guard runs in research mode so the short-price bypass is documented rather
  * than silently applied.
@@ -195,7 +199,10 @@ export function guardRoiAcca(legs: AccaLeg[]): {
   reason: string;
   riskWarning: string;
 } {
-  const guard = guardTicket(legs, { researchMode: true, maxLegs: 3 });
+  const guard = guardTicket(legs, {
+    researchMode: true,
+    maxLegs: MAX_RECOMMENDED_LEGS,
+  });
   const marginPts = Math.max(
     0,
     guard.economics.breakEvenChance - guard.economics.fairChance

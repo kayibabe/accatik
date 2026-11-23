@@ -88,7 +88,7 @@ export function PositiveRoiView({
             dateIso: selectedDate,
             strategy,
             targetOdds: 5,
-            maxLegs: 3,
+            maxLegs: 5,
           }),
         })
       );

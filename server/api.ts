@@ -1762,7 +1762,10 @@ export async function buildRoiAccaTicket(body: unknown): Promise<
   const targetOdds = source.targetOdds === undefined
     ? 5
     : parseTargetOdds(source.targetOdds);
-  const maxLegs = source.maxLegs === undefined ? 3 : parseMaxLegs(source.maxLegs);
+  const maxLegs =
+    source.maxLegs === undefined
+      ? MAX_RECOMMENDED_LEGS
+      : parseMaxLegs(source.maxLegs);
   try {
     const [loaded, registry] = await Promise.all([
       getSlate(dateIso, source.forceRefresh === true),

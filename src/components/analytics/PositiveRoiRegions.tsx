@@ -132,7 +132,7 @@ export function PositiveRoiOverview({
         <p>
           <span className="font-semibold">Research, not a recommendation.</span>{' '}
           Promoted selections must also clear every framework gate, and the
-          accumulator is capped at three legs. A 5.00 target may therefore be
+          accumulator is capped at five legs. A 5.00 target may therefore be
           left short rather than padded. Bookmaker margins compound with every
           leg; no ticket here is presented as positive-EV or recommended. Flat
           staking and exposure caps still apply. Closing line value is tracked
@@ -188,7 +188,7 @@ export function ResearchTicketCard({
       <section id="cards" className="scroll-mt-16" aria-label="Research accumulator">
         <EmptyState
           title="No research accumulator generated"
-          description="Build a shadow accumulator from promoted, framework-qualified markets. It is capped at three legs and is never placed with a bookmaker."
+          description="Build a shadow accumulator from promoted, framework-qualified markets. It is capped at five legs and is never placed with a bookmaker."
           action={
             <button
               type="button"

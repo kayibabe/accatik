@@ -481,7 +481,7 @@ export function AiView({
             <div className="lg:col-span-5 min-w-0 space-y-3">
               <DataCard
                 title="AI accumulator"
-                subtitle="Correlation-aware, capped at three legs"
+                subtitle="Correlation-aware, capped at five legs"
                 actions={
                   ticket ? (
                     <button
@@ -616,7 +616,7 @@ export function AiView({
                   </p>
                   <p className="flex gap-2">
                     <Layers3 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
-                    Accumulators are capped at three legs from separate matches, penalise shared
+                    Accumulators are capped at five legs from separate matches, penalise shared
                     competitions, and size stakes with quarter-Kelly capped at 2% per pick and 1% per
                     ticket.
                   </p>
