@@ -1529,6 +1529,10 @@ export async function getCombinationRoi(
  * Matches for one matchday whose featured cards hit a historically positive
  * section x band x market read. The archive is the default; `live: true` opts
  * into the upstream slate for upcoming matches.
+ *
+ * An archived review excludes its own matchday from the display study, so the
+ * label is out-of-sample. A second study, cut one contributing matchday
+ * earlier, marks which cells stayed positive for the Confirmed badge.
  */
 export async function getPositiveReadMatches(
   body: unknown
@@ -1540,13 +1544,32 @@ export async function getPositiveReadMatches(
   const requestedDate = asDateIso(source.dateIso);
 
   try {
-    const [study, archiveDates] = await Promise.all([
-      computeCombinationRoi(strategy, force),
-      listArchivedSlateDates(),
-    ]);
-    const combos = positiveCombosFromStudy(study);
+    const archiveDates = await listArchivedSlateDates();
     const availableDates = archiveDates.slice(0, 30);
     const dateIso = requestedDate ?? availableDates[0] ?? getTodayIsoDate();
+
+    // An archived review must not let the reviewed day's results into the ROI
+    // that labels it, otherwise the feed looks prescient by construction. Live
+    // mode is forward-looking, so there is nothing to exclude.
+    const displayExclusions = live ? [] : [dateIso];
+    const study = await computeCombinationRoi(strategy, force, {
+      excludeDates: displayExclusions,
+    });
+
+    // Confirmation needs a second cut: drop the latest matchday that contributed
+    // to the display study and check the cell was still positive there. A cell
+    // that only appears once never earns the badge.
+    const priorExclusions = study.lastDateIso
+      ? [...displayExclusions, study.lastDateIso]
+      : displayExclusions;
+    const priorStudy =
+      priorExclusions.length > 0
+        ? await computeCombinationRoi(strategy, force, {
+            excludeDates: priorExclusions,
+          })
+        : study;
+
+    const combos = positiveCombosFromStudy(study, priorStudy);
 
     const fixtures = live
       ? (await getSlate(dateIso, force)).fixtures
@@ -1560,6 +1583,9 @@ export async function getPositiveReadMatches(
         fixtures,
         combos,
         availableDates,
+        studyGeneratedAt: study.generatedAt,
+        studyExcludedDateIso: live ? null : dateIso,
+        minSample: study.minSample,
       })
     );
   } catch (error) {

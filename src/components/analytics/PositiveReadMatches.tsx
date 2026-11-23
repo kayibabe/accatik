@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
   CalendarDays,
@@ -14,10 +14,24 @@ import type {
   PositiveReadPick,
 } from '../../types/analytics.ts';
 import { apiFetch } from '../../utils/api.ts';
-import { fmtCount, fmtOdds, fmtSignedPercent } from '../../utils/format.ts';
+import { fmtCount, fmtOdds, fmtShortDate, fmtSignedPercent } from '../../utils/format.ts';
+import {
+  applyPositiveReadFilters,
+  derivePositiveReadOptions,
+  groupPositiveReadCombos,
+  loadPositiveReadFilters,
+  positiveReadTier,
+  reconcilePositiveReadFilters,
+  samePositiveReadFilters,
+  savePositiveReadFilters,
+  DEFAULT_POSITIVE_READ_FILTERS,
+  type PositiveReadFilterState,
+  type PositiveReadTier,
+} from '../../utils/positiveReadFilters.ts';
 import { DateNavigator } from '../DateNavigator.tsx';
 import { DataCard } from '../ui/DataCard.tsx';
 import { EmptyState, ErrorState, InlineLoading, LoadingState } from '../ui/States.tsx';
+import { PositiveReadDrillDown } from './PositiveReadDrillDown.tsx';
 
 interface PositiveReadMatchesProps {
   strategy: AccaStrategy;
@@ -34,6 +48,13 @@ interface PositiveReadMatchesProps {
   maxLegs?: number;
 }
 
+const TIER_STYLES: Record<PositiveReadTier, { label: string; className: string }> = {
+  confirmed: { label: 'Confirmed', className: 'bg-emerald-800 text-white' },
+  qualified: { label: 'Qualified', className: 'bg-emerald-100 text-emerald-800' },
+  observed: { label: 'Observed', className: 'bg-slate-100 text-slate-600' },
+  'small-sample': { label: 'Small sample', className: 'bg-amber-100 text-amber-800' },
+};
+
 function ComboChip({
   combo,
   pick,
@@ -44,10 +65,22 @@ function ComboChip({
   onAdd?: (pick: PositiveReadPick) => number;
 }) {
   const addable = Boolean(pick && pick?.status === 'Pending' && onAdd);
+  const tier = TIER_STYLES[positiveReadTier(combo)];
+  const title = [
+    combo.label,
+    `Inception ROI ${fmtSignedPercent(combo.roi)} from ${fmtCount(combo.staked)} staked picks`,
+    `95% interval ${fmtSignedPercent(combo.roiCiLow)} to ${fmtSignedPercent(combo.roiCiHigh)}`,
+    `${combo.positiveDates} of ${combo.totalDates} matchdays positive`,
+    tier.label,
+    combo.stable ? 'Stable' : null,
+    pick?.bandDrift ? `Live band ${pick.band} drifted from study band ${combo.band}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
   return (
     <span
       className="inline-flex flex-wrap items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] text-emerald-900"
-      title={`Inception ROI ${fmtSignedPercent(combo.roi)} from ${fmtCount(combo.staked)} staked picks`}
+      title={title}
     >
       <Target className="h-3 w-3 shrink-0 text-emerald-700" aria-hidden="true" />
       <span className="font-semibold">{combo.label}</span>
@@ -59,9 +92,17 @@ function ComboChip({
           {fmtOdds(pick.odds)}
         </span>
       )}
-      {combo.smallSample && (
-        <span className="rounded bg-amber-100 px-1 py-0.5 text-[9px] font-semibold uppercase text-amber-800">
-          Small sample
+      <span
+        className={`rounded px-1 py-0.5 text-[9px] font-semibold uppercase ${tier.className}`}
+      >
+        {tier.label}
+      </span>
+      {pick?.bandDrift && (
+        <span
+          className="rounded bg-amber-100 px-1 py-0.5 text-[9px] font-semibold uppercase text-amber-800"
+          title={`Live ${pick.band} vs study ${combo.band}`}
+        >
+          Band drift
         </span>
       )}
       {pick && pick.status !== 'Pending' && (
@@ -109,6 +150,9 @@ export function PositiveReadMatches({
   const [error, setError] = useState<string | null>(null);
   const [localReload, setLocalReload] = useState(0);
   const [lastAdded, setLastAdded] = useState<number | null>(null);
+  const [filters, setFilters] = useState<PositiveReadFilterState>(() =>
+    loadPositiveReadFilters()
+  );
 
   const effectiveDate = isBuild ? selectedDate || '' : dateIso;
 
@@ -147,7 +191,40 @@ export function PositiveReadMatches({
     };
   }, [strategy, effectiveDate, live, refreshKey, localReload, isBuild, dateIso]);
 
+  const effectiveFilters = useMemo(
+    () => (data ? reconcilePositiveReadFilters(filters, data.combos) : filters),
+    [filters, data]
+  );
+
+  // Stored or stale choices that are no longer in the feed are cleaned up once.
+  useEffect(() => {
+    if (!data || samePositiveReadFilters(effectiveFilters, filters)) return;
+    setFilters(effectiveFilters);
+  }, [data, effectiveFilters, filters]);
+
+  useEffect(() => {
+    savePositiveReadFilters(filters);
+  }, [filters]);
+
+  const options = useMemo(
+    () => (data ? derivePositiveReadOptions(data.combos, effectiveFilters) : null),
+    [data, effectiveFilters]
+  );
+  const filtered = useMemo(
+    () => (data ? applyPositiveReadFilters(data, effectiveFilters) : null),
+    [data, effectiveFilters]
+  );
+  const groups = useMemo(
+    () => (filtered ? groupPositiveReadCombos(filtered.combos) : []),
+    [filtered]
+  );
+
   const reload = () => setLocalReload((value) => value + 1);
+
+  const updateFilters = (patch: Partial<PositiveReadFilterState>) => {
+    setFilters((prev) => ({ ...prev, ...patch }));
+  };
+  const resetFilters = () => setFilters(DEFAULT_POSITIVE_READ_FILTERS);
 
   const addPicks = (picks: PositiveReadPick[]): number => {
     if (!onAddPicks) return 0;
@@ -156,9 +233,11 @@ export function PositiveReadMatches({
     return sent;
   };
 
-  const eligiblePicks = (data?.matches ?? []).flatMap((match) =>
-    match.picks.filter((pick) => pick.status === 'Pending')
-  );
+  const eligiblePicks = filtered?.eligiblePicks ?? [];
+  const universe = data?.universe;
+  const universeLabel = universe
+    ? `${universe.sections.length} sections × ${universe.bands.length} bands × ${universe.markets.length} markets`
+    : '3 sections × 4 bands × 18 markets';
 
   return (
     <section aria-label="Daily positive-read matches" className="space-y-3">
@@ -252,7 +331,7 @@ export function PositiveReadMatches({
         </p>
       )}
 
-      {isBuild && !live && data && data.matches.length > 0 && eligiblePicks.length === 0 && (
+      {isBuild && !live && filtered && filtered.matches.length > 0 && eligiblePicks.length === 0 && (
         <p
           role="status"
           className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"
@@ -284,9 +363,56 @@ export function PositiveReadMatches({
         />
       ) : (
         <>
+          <div className="flex flex-wrap items-center gap-x-1 gap-y-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
+            <span>
+              Study as of <strong className="font-semibold">{fmtShortDate(data.studyGeneratedAt)}</strong>
+            </span>
+            <span aria-hidden="true">·</span>
+            <span>
+              Universe: <strong className="font-semibold">{universeLabel}</strong>, fixed for every
+              read
+            </span>
+            <span aria-hidden="true">·</span>
+            <span>
+              <strong className="font-semibold">{fmtCount(data.qualifiedCount)}</strong> qualified
+            </span>
+            <span aria-hidden="true">·</span>
+            <span>
+              <strong className="font-semibold">{fmtCount(data.confirmedCount)}</strong> confirmed
+            </span>
+            <span aria-hidden="true">·</span>
+            <span>min sample {fmtCount(data.minSample)}</span>
+            <span aria-hidden="true">·</span>
+            {data.studyExcludedDateIso ? (
+              <span className="font-medium text-emerald-700">
+                {fmtShortDate(data.studyExcludedDateIso)} excluded (out-of-sample)
+              </span>
+            ) : (
+              <span className="font-medium text-emerald-700">
+                Live study includes every archived matchday
+              </span>
+            )}
+          </div>
+
+          {options && filtered && (
+            <PositiveReadDrillDown
+              options={options}
+              state={effectiveFilters}
+              onChange={updateFilters}
+              onReset={resetFilters}
+              idPrefix={isBuild ? 'build-positive-reads' : 'analytics-positive-reads'}
+              counts={{
+                combos: filtered.combos.length,
+                totalCombos: data.combos.length,
+                matches: filtered.matches.length,
+                totalMatches: data.matches.length,
+              }}
+            />
+          )}
+
           <DataCard
             title="Active parameters"
-            subtitle={`${fmtCount(data.combos.length)} positive ${data.combos.length === 1 ? 'combination' : 'combinations'} from the study`}
+            subtitle={`${fmtCount(filtered?.combos.length ?? 0)} of ${fmtCount(data.combos.length)} positive ${data.combos.length === 1 ? 'combination' : 'combinations'} from the study`}
             actions={
               <div className="flex items-center gap-2">
                 {isBuild && eligiblePicks.length > 0 && (
@@ -302,34 +428,77 @@ export function PositiveReadMatches({
               </div>
             }
           >
-            <div className="flex flex-wrap gap-2 p-4">
-              {data.combos.map((combo) => (
-                <ComboChip key={combo.key} combo={combo} />
-              ))}
-            </div>
+            {filtered && filtered.combos.length === 0 ? (
+              <div className="p-4">
+                <EmptyState
+                  title="No parameters match these filters"
+                  description="Loosen the section, band, market, sample or ROI filters to bring parameters back."
+                  action={
+                    <button
+                      type="button"
+                      onClick={resetFilters}
+                      className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                    >
+                      Reset filters
+                    </button>
+                  }
+                />
+              </div>
+            ) : (
+              <div className="space-y-3 p-4">
+                {groups.map((group) => (
+                  <div key={group.sectionLabel}>
+                    <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      {group.sectionLabel} · {fmtCount(group.combos.length)}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {group.combos.map((combo) => (
+                        <ComboChip key={combo.key} combo={combo} />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </DataCard>
 
-          {data.matches.length === 0 ? (
-            <EmptyState
-              title={`No matches on ${data.dateIso}`}
-              description={
-                data.source === 'archive'
-                  ? 'No fixture on this matchday produced one of the positive parameters. Try another date or switch to Live for upcoming games.'
-                  : 'No upcoming fixture currently produces one of the positive parameters. Try another date or switch back to Archive.'
-              }
-              action={
-                <button
-                  type="button"
-                  onClick={() => setLive(!live)}
-                  className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
-                >
-                  {live ? 'View archive' : 'View live slate'}
-                </button>
-              }
-            />
+          {filtered && filtered.combos.length > 0 && filtered.matches.length === 0 ? (
+            data.matches.length === 0 ? (
+              <EmptyState
+                title={`No matches on ${data.dateIso}`}
+                description={
+                  data.source === 'archive'
+                    ? 'No fixture on this matchday produced one of the positive parameters. Try another date or switch to Live for upcoming games.'
+                    : 'No upcoming fixture currently produces one of the positive parameters. Try another date or switch back to Archive.'
+                }
+                action={
+                  <button
+                    type="button"
+                    onClick={() => setLive(!live)}
+                    className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                  >
+                    {live ? 'View archive' : 'View live slate'}
+                  </button>
+                }
+              />
+            ) : (
+              <EmptyState
+                title="No matches match these filters"
+                description="Those parameters exist in the study, but no fixture on this matchday matches the current drill-down or search. Reset the filters or change the matchday."
+                action={
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                  >
+                    Reset filters
+                  </button>
+                }
+              />
+            )
           ) : (
             <div className="space-y-2">
-              {data.matches.map((match) => {
+              {(filtered?.matches ?? []).map((match) => {
                 const picksByCombo = new Map(match.picks.map((pick) => [pick.comboKey, pick]));
                 return (
                   <DataCard

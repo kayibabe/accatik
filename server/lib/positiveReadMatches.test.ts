@@ -77,6 +77,12 @@ function combo(
     staked: 24,
     smallSample: false,
     roiCiLow: 4,
+    roiCiHigh: 20,
+    positiveDates: 3,
+    totalDates: 4,
+    qualified: true,
+    confirmed: false,
+    stable: true,
     ...overrides,
   };
 }
@@ -319,6 +325,154 @@ test('two cards hitting the same combo collapse to one chip', () => {
     ['angle:High:GOALS-O2.5']
   );
   assert.equal(response.matches[0].score, '2–1');
+});
+
+test('quality flags require sample, interval and a prior-cutoff study', () => {
+  const display = study([
+    row({ key: 'note:High:GOALS-O2.5', roi: 12 }),
+    row({
+      key: 'note:Solid:BTTS-YES',
+      roi: 8,
+      staked: 8,
+      smallSample: true,
+      roiCiLow: -4,
+    }),
+    row({ key: 'cover:High:1X2-H', roi: 5, roiCiLow: -1 }),
+    row({ key: 'angle:High:GOALS-O2.5', roi: 9 }),
+  ]);
+  const prior = study([
+    row({ key: 'note:High:GOALS-O2.5', roi: 3 }),
+    row({ key: 'cover:High:1X2-H', roi: 2 }),
+  ]);
+
+  const byKey = new Map(
+    positiveCombosFromStudy(display, prior).map((item) => [item.key, item])
+  );
+
+  assert.deepEqual(
+    (({ qualified, confirmed, stable, positiveDates, totalDates, roiCiHigh }) => ({
+      qualified,
+      confirmed,
+      stable,
+      positiveDates,
+      totalDates,
+      roiCiHigh,
+    }))(byKey.get('note:High:GOALS-O2.5')!),
+    {
+      qualified: true,
+      confirmed: true,
+      stable: true,
+      positiveDates: 3,
+      totalDates: 4,
+      roiCiHigh: 35,
+    }
+  );
+
+  // A small sample is never qualified, even when it is positive and appears in
+  // the prior study.
+  const small = byKey.get('note:Solid:BTTS-YES')!;
+  assert.equal(small.qualified, false);
+  assert.equal(small.confirmed, false);
+  assert.equal(small.stable, false);
+
+  // A cell whose interval still touches zero stays Observed.
+  const observed = byKey.get('cover:High:1X2-H')!;
+  assert.equal(observed.qualified, false);
+  assert.equal(observed.confirmed, false);
+
+  // Qualified but missing from the prior study: no confirmation.
+  const unconfirmed = byKey.get('angle:High:GOALS-O2.5')!;
+  assert.equal(unconfirmed.qualified, true);
+  assert.equal(unconfirmed.confirmed, false);
+
+  // Without a prior study nothing can be confirmed.
+  assert.equal(
+    positiveCombosFromStudy(display).every((item) => !item.confirmed),
+    true
+  );
+});
+
+test('live band drift falls back to the nearest positive band for the same market', () => {
+  const fixture = snapshotFixture(); // angle resolves to High / GOALS-O2.5
+  const solid = combo('angle:Solid:GOALS-O2.5', {
+    band: 'Solid',
+    label: 'Recommended Angle · Solid · Over 2.5 Goals',
+    roi: 6,
+  });
+
+  const live = buildPositiveReadMatchesResponse({
+    strategy: 'balanced',
+    dateIso: '2026-11-22',
+    source: 'live',
+    fixtures: [fixture],
+    combos: [solid],
+    availableDates: [],
+  });
+
+  assert.equal(live.matches.length, 1);
+  assert.deepEqual(
+    live.matches[0].picks.map((pick) => ({
+      comboKey: pick.comboKey,
+      band: pick.band,
+      studyBand: pick.studyBand,
+      bandDrift: pick.bandDrift,
+    })),
+    [
+      {
+        comboKey: 'angle:Solid:GOALS-O2.5',
+        band: 'High',
+        studyBand: 'Solid',
+        bandDrift: true,
+      },
+    ]
+  );
+
+  // Archive keeps the exact triple and must not invent a drifted match.
+  const archive = buildPositiveReadMatchesResponse({
+    strategy: 'balanced',
+    dateIso: '2026-11-22',
+    source: 'archive',
+    fixtures: [fixture],
+    combos: [solid],
+    availableDates: [],
+  });
+  assert.equal(archive.matches.length, 0);
+});
+
+test('response discloses the study cut, fixed universe and quality counts', () => {
+  const response = buildPositiveReadMatchesResponse({
+    strategy: 'balanced',
+    dateIso: '2026-11-22',
+    source: 'archive',
+    fixtures: [snapshotFixture()],
+    combos: [
+      combo('angle:High:GOALS-O2.5'),
+      combo('cover:Solid:1X2-H', {
+        section: 'cover',
+        sectionLabel: 'Safer Cover',
+        band: 'Solid',
+        marketKey: '1X2-H',
+        marketLabel: 'Home Win',
+        label: 'Safer Cover · Solid · Home Win',
+        confirmed: true,
+      }),
+    ],
+    availableDates: ['2026-11-22'],
+    generatedAt: '2026-11-23T04:00:00.000Z',
+    studyGeneratedAt: '2026-11-23T03:00:00.000Z',
+    studyExcludedDateIso: '2026-11-22',
+    minSample: 20,
+  });
+
+  assert.equal(response.studyGeneratedAt, '2026-11-23T03:00:00.000Z');
+  assert.equal(response.studyExcludedDateIso, '2026-11-22');
+  assert.equal(response.minSample, 20);
+  assert.equal(response.universe.sections.length, 3);
+  assert.equal(response.universe.bands.length, 4);
+  assert.equal(response.universe.markets.length, 18);
+  assert.equal(response.universe.marketLabels['GOALS-O2.5'], 'Over 2.5 Goals');
+  assert.equal(response.qualifiedCount, 2);
+  assert.equal(response.confirmedCount, 1);
 });
 
 test('upcoming fixtures stay in the feed with a null score and are kickoff-sorted', () => {

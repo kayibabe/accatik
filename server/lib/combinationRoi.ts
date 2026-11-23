@@ -47,7 +47,8 @@ import { clusterRoiCi } from './roiPromotion.ts';
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const ARCHIVE_READ_CONCURRENCY = 4;
 const STAKE_PER_PICK = 1;
-const MIN_SAMPLE = 20;
+/** Staked picks a cell needs before it stops being flagged as a small sample. */
+export const MIN_SAMPLE = 20;
 const BOOTSTRAP_ITERATIONS = 2000;
 
 const SECTIONS: readonly FeaturedPickSource[] = ['angle', 'cover', 'note'];
@@ -292,15 +293,36 @@ function qualityKey(fixture: Fixture): 'prematch' | 'live' | 'unknown' {
 const cache = createTtlCache<CombinationRoiResponse>(CACHE_TTL_MS, 8);
 registerAnalyticsCache(() => cache.clear());
 
+export interface CombinationRoiOptions {
+  /**
+   * Matchdays left out of the study. The daily positive-read feed uses this to
+   * review an archived day without letting that day's results into the ROI that
+   * labelled it, and again to build a prior-cutoff study for confirmation.
+   */
+  excludeDates?: readonly string[];
+}
+
 export async function computeCombinationRoi(
   strategy: AccaStrategy,
-  force = false
+  force = false,
+  options: CombinationRoiOptions = {}
 ): Promise<CombinationRoiResponse> {
-  const cacheKey = strategy;
+  const excluded = new Set(
+    (options.excludeDates ?? []).filter((dateIso) =>
+      /^\d{4}-\d{2}-\d{2}$/.test(dateIso)
+    )
+  );
+  // Different exclusions are different studies, so they cannot share a cache
+  // entry. Sorting keeps two equivalent request orders on the same entry.
+  const cacheKey = excluded.size
+    ? `${strategy}|exclude=${[...excluded].sort().join(',')}`
+    : strategy;
   const cached = cache.get(cacheKey);
   if (cached && !force) return cached;
 
-  const dates = await listArchivedSlateDates();
+  const dates = (await listArchivedSlateDates()).filter(
+    (dateIso) => !excluded.has(dateIso)
+  );
   const slates: (Awaited<ReturnType<typeof readArchivedSlate>> | undefined)[] =
     new Array(dates.length);
   await mapWithConcurrency(dates, ARCHIVE_READ_CONCURRENCY, async (dateIso, i) => {

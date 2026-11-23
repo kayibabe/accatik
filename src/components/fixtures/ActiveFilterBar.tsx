@@ -4,15 +4,21 @@ import type { ActiveFilterChip } from './fixtureShared.ts';
 interface ActiveFilterBarProps {
   chips: ReadonlyArray<ActiveFilterChip>;
   onReset: () => void;
+  /** Screen-reader label; defaults to the slate so existing callers need no change. */
+  label?: string;
 }
 
 /** One-click undo for every narrowed dimension, kept visible while scrolling. */
-export function ActiveFilterBar({ chips, onReset }: ActiveFilterBarProps) {
+export function ActiveFilterBar({
+  chips,
+  onReset,
+  label = 'Active slate filters',
+}: ActiveFilterBarProps) {
   if (chips.length === 0) return null;
 
   return (
     <div
-      aria-label="Active slate filters"
+      aria-label={label}
       className="sticky top-12 z-20 flex flex-wrap items-center gap-1.5 rounded-xl border border-slate-200 bg-white/95 px-2.5 py-2 shadow-sm backdrop-blur"
     >
       <span className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">

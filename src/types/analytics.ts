@@ -196,6 +196,23 @@ export interface PositiveReadCombo {
   staked: number;
   smallSample: boolean;
   roiCiLow: number | null;
+  roiCiHigh: number | null;
+  /** Matchdays that contributed a settled staked pick to this cell. */
+  positiveDates: number;
+  totalDates: number;
+  /**
+   * Clears the minimum sample and its matchday-clustered 95% interval lies
+   * wholly above zero. Still descriptive: an interval clearing zero is not proof
+   * of edge, only the weakest evidence bar the study sets.
+   */
+  qualified: boolean;
+  /**
+   * Qualified here and positive again in a study that stops before this one's
+   * latest contributing matchday. The cell survived one out-of-sample cut.
+   */
+  confirmed: boolean;
+  /** Qualified and positive on at least half its matchdays (minimum two). */
+  stable: boolean;
 }
 
 /**
@@ -221,6 +238,18 @@ export interface PositiveReadPick {
   fairProbability: number | null;
   rationale: string;
   bookmaker?: string;
+  /**
+   * Confidence band of the price this card is currently quoting. Live prices
+   * are re-banded from the current book, so this can differ from `studyBand`.
+   */
+  band: RoiBand;
+  /** The band of the study cell that matched this pick. */
+  studyBand: RoiBand;
+  /**
+   * True when a live price drifted out of the study's band and the pick was
+   * matched by section and market instead of the exact triple.
+   */
+  bandDrift: boolean;
   /** Settlement of this exact market; only Pending picks can join a live slip. */
   status: SettlementStatus;
 }
@@ -243,12 +272,32 @@ export interface PositiveReadMatch {
   picks: PositiveReadPick[];
 }
 
+/** The fixed parameter space the study evaluates, positive or not. */
+export interface PositiveReadUniverse {
+  sections: FeaturedPickSource[];
+  bands: RoiBand[];
+  markets: Array<{ key: string; label: string }>;
+  marketLabels: Record<string, string>;
+}
+
 export interface PositiveReadMatchesResponse {
   strategy: AccaStrategy;
   dateIso: string;
   /** Archive is the default; live explicitly pulls the upstream slate. */
   source: 'archive' | 'live';
   generatedAt: string;
+  /** When the display study was computed. */
+  studyGeneratedAt: string;
+  /** Matchday left out of the display study, or null when nothing was cut. */
+  studyExcludedDateIso: string | null;
+  /** Staked picks below which the study calls a cell a small sample. */
+  minSample: number;
+  /** The fixed section × band × market space, so the UI can disclose it. */
+  universe: PositiveReadUniverse;
+  /** Positive cells that also clear the qualification bar. */
+  qualifiedCount: number;
+  /** Positive cells that survived the prior-cutoff check. */
+  confirmedCount: number;
   /** Most recent archived matchdays, newest first, for the date picker. */
   availableDates: string[];
   /** The active positive-read parameters driving this feed. */
