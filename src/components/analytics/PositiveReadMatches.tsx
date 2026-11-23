@@ -7,7 +7,7 @@ import {
   RefreshCw,
   Target,
 } from 'lucide-react';
-import type { AccaStrategy } from '../../types/fixtures.ts';
+import type { AccaStrategy, SettlementStatus } from '../../types/fixtures.ts';
 import type {
   PositiveReadCombo,
   PositiveReadMatchesResponse,
@@ -54,6 +54,14 @@ const TIER_STYLES: Record<PositiveReadTier, { label: string; className: string }
   'small-sample': { label: 'Small sample', className: 'bg-amber-100 text-amber-800' },
 };
 
+/** Settled picks read at a glance: green win, red loss, amber void. */
+const PICK_STATUS_STYLES: Record<Exclude<SettlementStatus, 'Pending'>, string> = {
+  Win: 'bg-emerald-100 text-emerald-800',
+  Lost: 'bg-red-100 text-red-700',
+  Void: 'bg-amber-100 text-amber-800',
+  Live: 'bg-sky-100 text-sky-700',
+};
+
 function ComboChip({
   combo,
   pick,
@@ -78,34 +86,36 @@ function ComboChip({
     .join(' · ');
   return (
     <span
-      className="inline-flex flex-wrap items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] text-emerald-900"
+      className="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] text-emerald-900"
       title={title}
     >
       <Target className="h-3 w-3 shrink-0 text-emerald-700" aria-hidden="true" />
-      <span className="font-semibold">{combo.label}</span>
-      <span className="font-mono tabular-nums text-emerald-700">
+      <span className="min-w-0 truncate font-semibold">{combo.label}</span>
+      <span className="shrink-0 font-mono tabular-nums text-emerald-700">
         {fmtSignedPercent(combo.roi)}
       </span>
       {pick && (
-        <span className="rounded bg-white/80 px-1 py-0.5 font-mono tabular-nums text-emerald-800">
+        <span className="shrink-0 rounded bg-white/80 px-1 py-0.5 font-mono tabular-nums text-emerald-800">
           {fmtOdds(pick.odds)}
         </span>
       )}
       <span
-        className={`rounded px-1 py-0.5 text-[9px] font-semibold uppercase ${tier.className}`}
+        className={`shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold uppercase ${tier.className}`}
       >
         {tier.label}
       </span>
       {pick?.bandDrift && (
         <span
-          className="rounded bg-amber-100 px-1 py-0.5 text-[9px] font-semibold uppercase text-amber-800"
+          className="shrink-0 rounded bg-amber-100 px-1 py-0.5 text-[9px] font-semibold uppercase text-amber-800"
           title={`Live ${pick.band} vs study ${combo.band}`}
         >
           Band drift
         </span>
       )}
       {pick && pick.status !== 'Pending' && (
-        <span className="rounded bg-slate-200 px-1 py-0.5 text-[9px] font-semibold uppercase text-slate-600">
+        <span
+          className={`shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold uppercase ${PICK_STATUS_STYLES[pick.status]}`}
+        >
           {pick.status}
         </span>
       )}
@@ -113,7 +123,7 @@ function ComboChip({
         <button
           type="button"
           onClick={() => onAdd?.(pick!)}
-          className="inline-flex items-center gap-0.5 rounded bg-emerald-700 px-1.5 py-0.5 text-[10px] font-semibold text-white hover:bg-emerald-800 cursor-pointer"
+          className="inline-flex shrink-0 items-center gap-0.5 rounded bg-emerald-700 px-1.5 py-0.5 text-[10px] font-semibold text-white hover:bg-emerald-800 cursor-pointer"
         >
           <Plus className="h-3 w-3" aria-hidden="true" />
           Add
