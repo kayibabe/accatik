@@ -96,7 +96,10 @@ export function AiView({
   const [loading, setLoading] = useState(false);
   const [building, setBuilding] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{
+    scope: 'load' | 'generate';
+    message: string;
+  } | null>(null);
 
   const payload = useMemo(
     () => ({
@@ -120,7 +123,10 @@ export function AiView({
         body: JSON.stringify(payload),
       }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not build the AI briefing.');
+      setError({
+        scope: 'load',
+        message: err instanceof Error ? err.message : 'Could not build the AI briefing.',
+      });
     } finally {
       setLoading(false);
     }
@@ -146,7 +152,10 @@ export function AiView({
         })
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not build the AI accumulator.');
+      setError({
+        scope: 'generate',
+        message: err instanceof Error ? err.message : 'Could not build the AI accumulator.',
+      });
     } finally {
       setBuilding(false);
     }
@@ -342,14 +351,18 @@ export function AiView({
 
       {error && (
         <ErrorState
-          title="The AI desk could not complete its analysis"
-          description={error}
-          onRetry={() => void load()}
-          retryLabel="Retry analysis"
+          title={
+            error.scope === 'generate'
+              ? 'AI accumulator could not be built'
+              : 'AI briefing could not be loaded'
+          }
+          description={error.message}
+          onRetry={() => void (error.scope === 'generate' ? generate() : load())}
+          retryLabel={error.scope === 'generate' ? 'Retry building ticket' : 'Retry analysis'}
         />
       )}
 
-      {loading && !briefing ? (
+      {loading && !briefing && error?.scope !== 'load' ? (
         <LoadingState label="Scoring today's priced markets…" count={5} />
       ) : briefing ? (
         <>

@@ -31,6 +31,8 @@ interface SavedSlipsViewProps {
   fixtureSnapshots: FixtureSnapshots;
   /** CAT calendar date, used to expand only the current matchday. */
   todayDate: string;
+  /** Whether loading a saved ticket would replace picks already in the builder. */
+  hasCurrentTicket: boolean;
   onLoadTicket: (ticket: SavedTicket) => void;
   onDeleteTicket: (ticketId: string) => void;
   onGoToSlate: () => void;
@@ -80,6 +82,7 @@ export function SavedSlipsView({
   fixtures,
   fixtureSnapshots,
   todayDate,
+  hasCurrentTicket,
   onLoadTicket,
   onDeleteTicket,
   onGoToSlate,
@@ -298,7 +301,7 @@ export function SavedSlipsView({
   return (
     <section aria-label="Saved Accumulator Slips" className="space-y-6">
       <PageHeader
-        eyebrow="Local Ticket Archive"
+        eyebrow="Ticket Archive"
         title="Saved Accumulator Slips"
         description="Your personal archive of saved slips. Settlements come from captured price snapshots and the live slate; full performance analytics live in My Activity."
         scope="personal"
@@ -306,7 +309,7 @@ export function SavedSlipsView({
       />
 
       <DataStatus
-        source="Local slip archive"
+        source="Saved slip archive"
         mode="Archived price snapshots"
         note={
           <span className="font-mono tabular-nums">
@@ -397,6 +400,7 @@ export function SavedSlipsView({
             onCopy={handleCopy}
             onLoad={onLoadTicket}
             onDelete={onDeleteTicket}
+            hasCurrentTicket={hasCurrentTicket}
             onSelectMatch={handleSelectMatch}
           />
         </>

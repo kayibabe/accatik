@@ -30,7 +30,7 @@ export const SLATE_FILTER_PRESETS: readonly SlateFilterPreset[] = [
   },
   {
     id: 'safe',
-    label: 'Safe',
+    label: 'High confidence',
     description: 'High-confidence angle and cover with a 70%+ fair chance.',
     filters: {
       ...DEFAULT_SLATE_FILTER_STATE,
@@ -41,7 +41,7 @@ export const SLATE_FILTER_PRESETS: readonly SlateFilterPreset[] = [
   },
   {
     id: 'value',
-    label: 'Value',
+    label: 'Model edge',
     description: 'At least +5 points of model edge over the book.',
     filters: { ...DEFAULT_SLATE_FILTER_STATE, minModelEdge: 5 },
   },

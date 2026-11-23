@@ -7,7 +7,7 @@ import type { FeaturedPickSource } from '../types/analytics.ts';
  * same way, so the mapping lives here instead of inside either component.
  */
 export const FEATURED_SOURCE_LABELS: Record<FeaturedPickSource, string> = {
-  angle: 'Recommended Angle',
-  cover: 'Safer Cover',
-  note: 'Analyst Note',
+  angle: 'Model angle',
+  cover: 'Alternative cover',
+  note: 'Research note',
 };

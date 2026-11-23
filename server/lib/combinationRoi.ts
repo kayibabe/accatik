@@ -439,7 +439,7 @@ export async function computeCombinationRoi(
       'Observed ROI is not proven edge: a combination is only suggestive when its matchday-clustered 95% interval clears zero.',
       `Rows with fewer than ${MIN_SAMPLE} staked picks are flagged as small samples and should be treated as noise.`,
       'Featured picks before frozen snapshots existed are rebuilt from archived markets, so pick identity and price are best-effort on older dates.',
-      'Analyst Note rows settle the note shown on the board, which is often a board-derived line (usually the shortest price) rather than independent advice.',
+      'Research note rows settle the note shown on the board, which is often a board-derived line (usually the shortest price) rather than independent advice.',
       'Draw No Bet prices in the full ladder are miscalibrated in the feed; direct DNB ROI is a price artifact, not an exploitable result.',
       'Voids return the stake and are excluded from stake, win rate and ROI. Flat one-unit staking throughout.',
     ],

@@ -558,9 +558,9 @@ export function CombinationRoiView({
                   className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700"
                 >
                   <option value="all">All sections</option>
-                  <option value="angle">Recommended Angle</option>
-                  <option value="cover">Safer Cover</option>
-                  <option value="note">Analyst Note</option>
+                  <option value="angle">{SECTION_LABELS.angle}</option>
+                  <option value="cover">{SECTION_LABELS.cover}</option>
+                  <option value="note">{SECTION_LABELS.note}</option>
                 </select>
               </label>
               <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-600">

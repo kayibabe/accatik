@@ -21,8 +21,8 @@ import {
  * priced outcome in the selected market type, or across the whole book when the
  * type is `all`. The probability threshold and the price band both read that
  * same market, so the two controls can never disagree. The three insight
- * bands are judged separately, each on its own market: the Recommended Angle
- * on the fixture's pick, the Safer Cover on its cover, and the Analyst Note on
+ * bands are judged separately, each on its own market: the model angle on the
+ * fixture's pick, the alternative cover on its cover, and the research note on
  * the market the note resolves to. A fixture without that insight only passes
  * its `all` chip.
  *
@@ -38,11 +38,11 @@ export type NoteFilter = AngleFilter;
 export type MarketTypeFilter = 'all' | MarketType;
 
 export interface SlateFilters {
-  /** Confidence band of the fixture's Recommended Angle. */
+  /** Confidence band of the fixture's model angle. */
   angle: AngleFilter;
-  /** Confidence band of the fixture's Safer Cover. */
+  /** Confidence band of the fixture's alternative cover. */
   cover: CoverFilter;
-  /** Confidence band of the market behind the fixture's Analyst Note. */
+  /** Confidence band of the market behind the fixture's research note. */
   note: NoteFilter;
   /** Market type the fixture must offer at a usable price. */
   marketType: MarketTypeFilter;

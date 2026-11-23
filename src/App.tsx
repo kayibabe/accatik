@@ -172,6 +172,8 @@ export default function App() {
   const [activeSection, setActiveSection] = useState<string | undefined>(
     initialUrl.section
   );
+  // Deep-linked sections may not exist until async data renders them.
+  const pendingSectionRef = useRef<string | null>(initialUrl.section ?? null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [strategy, setStrategy] = useState<AccaStrategy>('balanced');
   const [minOdds, setMinOdds] = useState<number>(2.8);
@@ -241,6 +243,7 @@ export default function App() {
       scrollPositionsRef.current[activeTab] = window.scrollY;
       writeAppUrl({ tab, date: selectedDate, preset: filterPreset });
       setActiveSection(undefined);
+      pendingSectionRef.current = null;
       setActiveTab(tab);
       const target = scrollPositionsRef.current[tab] ?? 0;
       window.requestAnimationFrame(() => window.scrollTo({ top: target }));
@@ -265,46 +268,99 @@ export default function App() {
         if (state.preset !== 'custom') setFilters(presetFilters(state.preset));
       }
       setActiveSection(state.section);
-      if (state.section) {
-        window.requestAnimationFrame(() => {
-          document.getElementById(state.section ?? '')?.scrollIntoView({
-            block: 'start',
-          });
-        });
-      }
+      pendingSectionRef.current = state.section ?? null;
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [todayDate]);
 
+  // A deep-linked section can appear before the async content above it has
+  // finished loading, so a single scroll lands too high. Keep re-asserting the
+  // scroll while the target moves, then stop once the layout has been quiet.
+  useEffect(() => {
+    const id = pendingSectionRef.current;
+    if (!id) return;
+
+    const startedAt = Date.now();
+    const deadlineMs = 8000;
+    const quietMs = 700;
+    let lastMutationAt = startedAt;
+    let lastTop: number | null = null;
+    let lastTopAt = startedAt;
+    let hasScrolled = false;
+
+    const scrollToTarget = () => {
+      const target = document.getElementById(id);
+      if (!target) return;
+      target.scrollIntoView({ behavior: 'instant', block: 'start' });
+      hasScrolled = true;
+    };
+
+    const observer = new MutationObserver(() => {
+      lastMutationAt = Date.now();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    const interval = window.setInterval(() => {
+      const now = Date.now();
+      if (now - startedAt >= deadlineMs) {
+        scrollToTarget();
+        observer.disconnect();
+        window.clearInterval(interval);
+        pendingSectionRef.current = null;
+        return;
+      }
+      const target = document.getElementById(id);
+      if (!target) return;
+      // Compare absolute document positions so our own scrolling is not
+      // mistaken for the target moving.
+      const top = target.getBoundingClientRect().top + window.scrollY;
+      const moved = lastTop === null || Math.abs(top - lastTop) > 1;
+      if (moved) {
+        lastTop = top;
+        lastTopAt = now;
+        scrollToTarget();
+      } else if (
+        hasScrolled &&
+        now - lastTopAt >= quietMs &&
+        now - lastMutationAt >= quietMs
+      ) {
+        scrollToTarget();
+        observer.disconnect();
+        window.clearInterval(interval);
+        pendingSectionRef.current = null;
+      }
+    }, 100);
+
+    return () => {
+      observer.disconnect();
+      window.clearInterval(interval);
+    };
+  }, [activeTab, activeSection]);
+
   // Section links are deep-linkable without letting the hash fight the query
   // state. The shared SectionNav marks its anchors with `data-section-link`.
   useEffect(() => {
-    if (initialUrl.section) {
-      window.requestAnimationFrame(() => {
-        document.getElementById(initialUrl.section ?? '')?.scrollIntoView({
-          block: 'start',
-        });
-      });
-    }
-
     const handleSectionClick = (event: MouseEvent) => {
       const anchor = (event.target as HTMLElement).closest<HTMLAnchorElement>(
         'a[data-section-link][href^="#"]'
       );
       if (!anchor) return;
       const id = anchor.getAttribute('href')?.slice(1);
-      if (!id || !document.getElementById(id)) return;
+      if (!id) return;
       event.preventDefault();
       setActiveSection(id);
-      document.getElementById(id)?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-      });
+      const target = document.getElementById(id);
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        pendingSectionRef.current = null;
+      } else {
+        pendingSectionRef.current = id;
+      }
     };
     document.addEventListener('click', handleSectionClick);
     return () => document.removeEventListener('click', handleSectionClick);
-  }, [initialUrl.section]);
+  }, []);
 
   const applyFilterPreset = useCallback((id: SlateFilterPresetSelection) => {
     setFilterPreset(id);
@@ -891,8 +947,9 @@ export default function App() {
     return eligible.length;
   }, []);
 
-  const handleSaveTicket = async (ticketStake: number) => {
-    if (selectedLegs.length === 0) return;
+  /** Resolves true only after the slip is actually persisted (or stored locally). */
+  const handleSaveTicket = async (ticketStake: number): Promise<boolean> => {
+    if (selectedLegs.length === 0) return false;
 
     // Never save a slip containing a match that has already started: the
     // price is no longer available and the settlement would be meaningless.
@@ -900,7 +957,7 @@ export default function App() {
       const fixture = slate?.fixtures.find((entry) => entry.id === leg.fixtureId);
       return fixture ? !isPreMatchFixture(fixture) : false;
     });
-    if (hasStartedLeg) return;
+    if (hasStartedLeg) return false;
 
     const totalOdds = calculateTotalOdds(selectedLegs);
     const ticket: SavedTicket = {
@@ -934,11 +991,13 @@ export default function App() {
         setErrorMessage(
           err instanceof Error ? err.message : 'Could not save your slip.'
         );
+        return false;
       }
-      return;
+      return true;
     }
 
     setSavedTickets((prev) => [ticket, ...prev]);
+    return true;
   };
 
   const handleLoadTicket = (ticket: SavedTicket) => {
@@ -1333,6 +1392,45 @@ export default function App() {
             onRetry={() => void fetchPublicMatches()}
             onSignIn={openAuth}
           />
+        ) : activeTab === 'positive-reads' ? (
+          <PositiveReadMatches
+            strategy={strategy}
+            todayDate={todayDate}
+            refreshKey={0}
+            mode="build"
+            selectedDate={selectedDate}
+            onAddPicks={handleAddPositiveReadPicks}
+            onOpenTicket={() => navigate('acca')}
+          />
+        ) : activeTab === 'saved' ? (
+          <SavedSlipsView
+            savedTickets={savedTickets}
+            fixtures={slate?.fixtures ?? []}
+            fixtureSnapshots={fixtureSnapshots}
+            todayDate={todayDate}
+            hasCurrentTicket={selectedLegs.length > 0}
+            onLoadTicket={handleLoadTicket}
+            onDeleteTicket={handleDeleteTicket}
+            onGoToSlate={() => navigate('slate')}
+            onGoToActivity={() => navigate('activity')}
+            onRefreshResults={handleRefreshSavedResults}
+            onLoadMatchDetails={handleLoadMatchDetails}
+          />
+        ) : activeTab === 'activity' ? (
+          <MyActivityView
+            savedTickets={savedTickets}
+            fixtures={slate?.fixtures ?? []}
+            fixtureSnapshots={fixtureSnapshots}
+            signedIn={Boolean(user)}
+            onGoToSlate={() => navigate('slate')}
+          />
+        ) : activeTab === 'sources' ? (
+          <SourcesView
+            sources={allSources}
+            displayDate={slate?.displayDate ?? selectedDate}
+            cachedAt={slate?.cachedAt ?? ''}
+            onGoToSlate={() => navigate('slate')}
+          />
         ) : isLoading && !slate ? (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             <div className="lg:col-span-7 space-y-4">
@@ -1488,51 +1586,6 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'positive-reads' && (
-              <PositiveReadMatches
-                strategy={strategy}
-                todayDate={todayDate}
-                refreshKey={0}
-                mode="build"
-                selectedDate={selectedDate}
-                onAddPicks={handleAddPositiveReadPicks}
-                onOpenTicket={() => navigate('acca')}
-              />
-            )}
-
-            {activeTab === 'saved' && (
-              <SavedSlipsView
-                savedTickets={savedTickets}
-                fixtures={slate.fixtures}
-                fixtureSnapshots={fixtureSnapshots}
-                todayDate={todayDate}
-                onLoadTicket={handleLoadTicket}
-                onDeleteTicket={handleDeleteTicket}
-                onGoToSlate={() => navigate('slate')}
-                onGoToActivity={() => navigate('activity')}
-                onRefreshResults={handleRefreshSavedResults}
-                onLoadMatchDetails={handleLoadMatchDetails}
-              />
-            )}
-
-            {activeTab === 'activity' && (
-              <MyActivityView
-                savedTickets={savedTickets}
-                fixtures={slate.fixtures}
-                fixtureSnapshots={fixtureSnapshots}
-                signedIn={Boolean(user)}
-                onGoToSlate={() => navigate('slate')}
-              />
-            )}
-
-            {activeTab === 'sources' && (
-              <SourcesView
-                sources={allSources}
-                displayDate={slate.displayDate}
-                cachedAt={slate.cachedAt}
-                onGoToSlate={() => navigate('slate')}
-              />
-            )}
           </>
         ) : null}
       </main>

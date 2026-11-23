@@ -19,6 +19,7 @@ interface SlipDateGroupsProps {
   onCopy: (ticket: SavedTicket) => void;
   onLoad: (ticket: SavedTicket) => void;
   onDelete: (ticketId: string) => void;
+  hasCurrentTicket: boolean;
   onSelectMatch: (ticket: SavedTicket, legs: AccaLeg[]) => void;
 }
 
@@ -37,6 +38,7 @@ export function SlipDateGroups({
   onCopy,
   onLoad,
   onDelete,
+  hasCurrentTicket,
   onSelectMatch,
 }: SlipDateGroupsProps) {
   return (
@@ -143,6 +145,7 @@ export function SlipDateGroups({
                                   onCopy={onCopy}
                                   onLoad={onLoad}
                                   onDelete={onDelete}
+                                  hasCurrentTicket={hasCurrentTicket}
                                   onSelectMatch={onSelectMatch}
                                 />
                               );

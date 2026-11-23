@@ -25,6 +25,8 @@ import {
 
 interface FixtureCardProps {
   model: FixtureCardModel;
+  /** Tighter rhythm: secondary insight rows move behind the brief toggle. */
+  compact?: boolean;
   pickLabel: string;
   marketChipsActive: boolean;
   marketSort: SortState;
@@ -117,6 +119,7 @@ function InsightCard({
 /** One match card: context, three insight cards, the brief and the market grid. */
 export function FixtureCard({
   model,
+  compact = false,
   pickLabel,
   marketChipsActive,
   marketSort,
@@ -149,8 +152,11 @@ export function FixtureCard({
   } = model;
 
   return (
-    <article className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-colors">
-      <div className="space-y-3.5 p-4 sm:p-5">
+    <article
+      aria-label={`${fixture.homeTeam} versus ${fixture.awayTeam} · ${fixture.competition}`}
+      className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-colors"
+    >
+      <div className={`${compact ? 'space-y-2 p-3' : 'space-y-3.5 p-4 sm:p-5'}`}>
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono font-semibold tabular-nums text-slate-800">
@@ -210,9 +216,9 @@ export function FixtureCard({
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0 space-y-1">
             <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-              <h2 className="text-base font-semibold tracking-tight text-slate-900 sm:text-lg">
+              <span className="text-base font-semibold tracking-tight text-slate-900 sm:text-lg">
                 {fixture.homeTeam}
-              </h2>
+              </span>
               {hasScore ? (
                 <span className="font-mono text-base font-bold tabular-nums text-slate-900">
                   {fixture.score?.home} - {fixture.score?.away}
@@ -220,9 +226,9 @@ export function FixtureCard({
               ) : (
                 <span className="text-xs font-medium text-slate-400">vs</span>
               )}
-              <h2 className="text-base font-semibold tracking-tight text-slate-900 sm:text-lg">
+              <span className="text-base font-semibold tracking-tight text-slate-900 sm:text-lg">
                 {fixture.awayTeam}
-              </h2>
+              </span>
               {(fixture.status !== 'Scheduled' || fixture.awaitingResult) && (
                 <span
                   className={`font-mono text-xs font-semibold tabular-nums ${
@@ -259,14 +265,18 @@ export function FixtureCard({
           )}
         </div>
 
-        <p className="max-w-3xl text-sm leading-relaxed text-slate-600">
+        <p
+          className={`max-w-3xl text-sm leading-relaxed text-slate-600 ${
+            compact ? 'line-clamp-2' : ''
+          }`}
+        >
           {fixture.tacticalSummary}
         </p>
 
         {angle && (
           <InsightCard
             tone="angle"
-            label="Recommended Angle"
+            label="Model angle"
             action={
               <BriefToggle
                 isExpanded={isExpanded}
@@ -323,8 +333,8 @@ export function FixtureCard({
           </InsightCard>
         )}
 
-        {angle?.cover && (
-          <InsightCard tone="cover" label="Safer cover">
+        {angle?.cover && (!compact || isExpanded) && (
+          <InsightCard tone="cover" label="Alternative cover">
             <span className="font-medium text-slate-900">{angle.cover.label}</span>
             <span className="font-mono font-semibold tabular-nums text-slate-900">
               @ {fmtOdds(angle.cover.odds)}
@@ -336,7 +346,7 @@ export function FixtureCard({
               className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${angleTone(
                 angleConfidence(angle.coverProbability)
               )}`}
-              title="Confidence band used by the Safer Cover filter"
+              title="Confidence band used by the alternative-cover filter"
             >
               {angleConfidence(angle.coverProbability)}
             </span>
@@ -344,10 +354,10 @@ export function FixtureCard({
           </InsightCard>
         )}
 
-        {analystNote && (
+        {analystNote && (!compact || isExpanded) && (
           <InsightCard
             tone="note"
-            label="Analyst note"
+            label="Research note"
             action={<PickResultChip status={noteOutcome} label="Note" />}
           >
             {noteBand && (
@@ -355,7 +365,7 @@ export function FixtureCard({
                 className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${angleTone(
                   noteBand
                 )}`}
-                title="Confidence band used by the Analyst Note filter"
+                title="Confidence band used by the research-note filter"
               >
                 {noteBand}
               </span>

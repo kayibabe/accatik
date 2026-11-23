@@ -18,7 +18,7 @@ import { MIN_SAMPLE, studyPickForFixture } from './combinationRoi.ts';
  *
  * The positive set is taken from the same study the analytics table renders,
  * and each fixture's labels are rebuilt with the study's own pick resolvers.
- * That keeps a label such as "Analyst Note · High · Over 2.5 Goals" identical to
+ * That keeps a label such as "Research note · High · Over 2.5 Goals" identical to
  * the row that earned the positive read; no second confidence calculation.
  */
 

@@ -60,7 +60,7 @@ test('pick records settle archived picks from their frozen prices and final scor
   assert.equal(result.sampleDates, 1);
   assert.equal(result.sampleFixtures, 2);
   const [angle, cover, note] = result.records;
-  assert.equal(angle.label, 'Recommended Angle');
+  assert.equal(angle.label, 'Model angle');
   assert.deepEqual(
     { wins: angle.wins, losses: angle.losses, hitRate: angle.hitRate },
     { wins: 1, losses: 1, hitRate: 50 }

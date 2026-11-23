@@ -52,14 +52,14 @@ export function SourcesView({
       {sources.length === 0 ? (
         <EmptyState
           title="No external grounding URLs attached to this batch"
-          description="Use “Refresh Slate” on the fixture board, or request “Fetch Live Team News” on a fixture, to inspect live search citations here."
+          description="Open the fixture board and use “Refresh Slate”, or request “Fetch Live Team News” on a fixture, to inspect live search citations here."
           action={
             <button
               type="button"
               onClick={onGoToSlate}
               className="px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
             >
-              Back to Slate &amp; Refresh
+              Back to Fixture Board
             </button>
           }
         />

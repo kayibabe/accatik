@@ -101,9 +101,9 @@ export async function computePickRecords(
     sampleDates,
     sampleFixtures,
     records: [
-      toEntry('angle', 'Recommended Angle', angle),
-      toEntry('cover', 'Safer cover', cover),
-      toEntry('note', 'Analyst note', note),
+      toEntry('angle', 'Model angle', angle),
+      toEntry('cover', 'Alternative cover', cover),
+      toEntry('note', 'Research note', note),
     ],
     generatedAt: new Date().toISOString(),
   };

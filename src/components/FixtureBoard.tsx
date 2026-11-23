@@ -142,6 +142,7 @@ export function FixtureBoard({
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [sortMode, setSortMode] = useState<SortMode>('board');
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
+  const [compactCards, setCompactCards] = useState(false);
   const [visibleLimit, setVisibleLimit] = useState<number>(40);
   // Default keeps the previous behaviour: most likely market first.
   const [marketSort, setMarketSort] = useState<SortState>({
@@ -307,6 +308,35 @@ export function FixtureBoard({
 
   // What the sticky summary bar renders, one removable chip per active filter.
   const activeFilterChips: ActiveFilterChip[] = [];
+  if (searchQuery.trim()) {
+    activeFilterChips.push({
+      key: 'search',
+      label: `Search: ${searchQuery.trim()}`,
+      clear: () => setSearchQuery(''),
+    });
+  }
+  if (selectedCompetition !== 'ALL') {
+    activeFilterChips.push({
+      key: 'competition',
+      label: `League: ${selectedCompetition}`,
+      clear: () => setSelectedCompetition('ALL'),
+    });
+  }
+  if (statusFilter !== 'all') {
+    activeFilterChips.push({
+      key: 'status',
+      label: `Status: ${
+        statusFilter === 'odds'
+          ? 'With odds'
+          : statusFilter === 'upcoming'
+          ? 'Upcoming'
+          : statusFilter === 'played'
+          ? 'Live / finished'
+          : 'Void'
+      }`,
+      clear: () => setStatusFilter('all'),
+    });
+  }
   if (angleFilter !== 'all') {
     activeFilterChips.push({
       key: 'angle',
@@ -650,6 +680,17 @@ export function FixtureBoard({
         <PickRecordSummary {...pickRecords} />
       )}
 
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => setCompactCards((value) => !value)}
+          aria-pressed={compactCards}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 cursor-pointer"
+        >
+          {compactCards ? 'Comfortable cards' : 'Compact cards'}
+        </button>
+      </div>
+
       <SectionNav
         label="On this page"
         items={[
@@ -682,7 +723,7 @@ export function FixtureBoard({
         onToggleSelection={toggleSelection}
       />
 
-      <ActiveFilterBar chips={activeFilterChips} onReset={resetSlateFilters} />
+      <ActiveFilterBar chips={activeFilterChips} onReset={resetAllFilters} />
 
       <div id="slate-results" className="scroll-mt-24 space-y-3">
         {isFetchingDate && (
@@ -711,6 +752,7 @@ export function FixtureBoard({
               <FixtureCard
                 key={model.fixture.id}
                 model={model}
+                compact={compactCards}
                 pickLabel={pickLabel}
                 marketChipsActive={marketChipsActive}
                 marketSort={marketSort}

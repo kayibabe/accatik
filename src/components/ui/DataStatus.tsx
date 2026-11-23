@@ -93,7 +93,7 @@ export function SectionNav({
   return (
     <nav
       aria-label={label}
-      className="sticky top-2 z-20 -mx-1 flex flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-white/95 px-2 py-1.5 shadow-sm backdrop-blur"
+      className="sticky top-16 z-20 -mx-1 flex flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-white/95 px-2 py-1.5 shadow-sm backdrop-blur"
     >
       <span className="px-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">
         {label}

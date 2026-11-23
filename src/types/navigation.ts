@@ -64,7 +64,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     description: 'Global aggregates and research.',
     items: [
       { id: 'analytics', label: 'Analytics' },
-      { id: 'roi', label: 'Positive ROI', research: true },
+      { id: 'roi', label: 'ROI Research', research: true },
       { id: 'ai', label: 'AI Desk', research: true },
     ],
   },

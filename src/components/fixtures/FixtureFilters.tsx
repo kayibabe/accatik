@@ -277,8 +277,8 @@ export function FixtureFilters({
           activeCount={activeFilterCount(filters, 'advanced')}
         >
           <FilterChipGroup
-            label="Recommended angle"
-            ariaLabel="Filter by recommended angle confidence"
+            label="Model angle"
+            ariaLabel="Filter by model-angle confidence"
             tone="angle"
             value={angleFilter}
             onChange={(value) => onUpdateFilters({ angle: value })}
@@ -289,8 +289,8 @@ export function FixtureFilters({
             )}
           />
           <FilterChipGroup
-            label="Safer cover"
-            ariaLabel="Filter by safer cover confidence"
+            label="Alternative cover"
+            ariaLabel="Filter by alternative-cover confidence"
             tone="cover"
             value={coverFilter}
             onChange={(value) => onUpdateFilters({ cover: value })}
@@ -301,8 +301,8 @@ export function FixtureFilters({
             )}
           />
           <FilterChipGroup
-            label="Analyst note"
-            ariaLabel="Filter by analyst note confidence"
+            label="Research note"
+            ariaLabel="Filter by research-note confidence"
             tone="note"
             value={noteFilter}
             onChange={(value) => onUpdateFilters({ note: value })}

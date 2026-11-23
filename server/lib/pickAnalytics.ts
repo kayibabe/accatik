@@ -271,9 +271,9 @@ export async function computePickAnalytics(
     slates[i] = await readArchivedSlate(dateIso);
   });
 
-  const angle = newTally('angle', 'Recommended Angle');
-  const cover = newTally('cover', 'Safer cover');
-  const note = newTally('note', 'Analyst note');
+  const angle = newTally('angle', 'Model angle');
+  const cover = newTally('cover', 'Alternative cover');
+  const note = newTally('note', 'Research note');
   const featuredSelections = new Map<string, FeaturedTally>();
   const featuredSamples = new Map<string, FeaturedPickSample[]>();
   const marketsByType = new Map<string, Tally>();

@@ -1,5 +1,13 @@
-import { useState } from 'react';
-import { ArrowRight, Check, Copy, Bookmark, Wand2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  Bookmark,
+  Check,
+  Copy,
+  RefreshCw,
+  Wand2,
+} from 'lucide-react';
 import type { AccaLeg, Fixture } from '../types/fixtures.ts';
 import {
   calculatePotentialReturn,
@@ -30,9 +38,12 @@ interface CuratedAccaViewProps {
   minOdds: number;
   stake: number;
   onGoToSlate: () => void;
-  onSaveTicket: (stake: number) => void;
+  /** Resolves only once the slip has actually been persisted. */
+  onSaveTicket: (stake: number) => Promise<boolean>;
   onAutoComplete: () => void;
 }
+
+type SaveState = 'idle' | 'saving' | 'saved' | 'failed';
 
 /**
  * Read-only review of the currently selected ticket. It never builds a second
@@ -54,7 +65,7 @@ export function CuratedAccaView({
   onAutoComplete,
 }: CuratedAccaViewProps) {
   const [copied, setCopied] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [saveState, setSaveState] = useState<SaveState>('idle');
   // Ticket order is meaningful, so sorting starts switched off.
   const [legSort, setLegSort] = useState<SortState>({
     key: null,
@@ -87,11 +98,25 @@ export function CuratedAccaView({
     }
   };
 
-  const handleSave = () => {
-    if (!canSave) return;
-    onSaveTicket(stake);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  useEffect(() => {
+    setSaveState('idle');
+  }, [legs, stake]);
+
+  useEffect(() => {
+    if (saveState !== 'saved' && saveState !== 'failed') return;
+    const timer = window.setTimeout(() => setSaveState('idle'), 2500);
+    return () => window.clearTimeout(timer);
+  }, [saveState]);
+
+  const handleSave = async () => {
+    if (!canSave || saveState === 'saving') return;
+    setSaveState('saving');
+    try {
+      const saved = await onSaveTicket(stake);
+      setSaveState(saved ? 'saved' : 'failed');
+    } catch {
+      setSaveState('failed');
+    }
   };
 
   const handleSort = (
@@ -261,17 +286,37 @@ export function CuratedAccaView({
 
           <button
             type="button"
-            onClick={handleSave}
-            disabled={!canSave || isFetchingDate}
+            onClick={() => void handleSave()}
+            disabled={!canSave || isFetchingDate || saveState === 'saving'}
             title={
               startedLeg
                 ? 'This slip contains a match that has already started.'
-                : 'Save this slip to the local archive'
+                : 'Save this slip to your archive'
             }
+            aria-live="polite"
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
           >
-            <Bookmark className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>{saved ? 'Saved to Slips' : 'Save Slip'}</span>
+            {saveState === 'saving' ? (
+              <>
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+                <span>Saving…</span>
+              </>
+            ) : saveState === 'saved' ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-700" aria-hidden="true" />
+                <span>Saved to Slips</span>
+              </>
+            ) : saveState === 'failed' ? (
+              <>
+                <AlertTriangle className="w-3.5 h-3.5 text-red-600" aria-hidden="true" />
+                <span>Save failed — retry</span>
+              </>
+            ) : (
+              <>
+                <Bookmark className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>Save Slip</span>
+              </>
+            )}
           </button>
 
           <button

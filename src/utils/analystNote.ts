@@ -14,7 +14,7 @@ const GENERIC_ADVICE = /\bto balance\b|\bvariance\b/i;
  *
  * The note is text, not a bet, so it cannot be settled on its own. Attaching a
  * concrete market is what lets the note carry the same Win/Lost qualifier as
- * the Recommended Angle and Safer cover. When the advice names two different
+ * the model angle and alternative cover. When the advice names two different
  * bets ("Use Double Chance or Over 1.5 Goals...") or nothing at all, we return
  * null rather than inventing a result.
  */

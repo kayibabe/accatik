@@ -40,9 +40,9 @@ export const PICK_FILTER_OPTIONS: ReadonlyArray<{
 ];
 
 export const SOURCE_LABELS: Record<string, string> = {
-  angle: 'Recommended Angle',
-  cover: 'Safer cover',
-  note: 'Analyst note',
+  angle: 'Model angle',
+  cover: 'Alternative cover',
+  note: 'Research note',
 };
 
 export const POSITIVE_ROI_SECTIONS = [
@@ -83,7 +83,7 @@ export function PositiveRoiOverview({
     <section id="overview" className="scroll-mt-16 space-y-4" aria-labelledby="roi-overview-title">
       <PageHeader
         eyebrow={`${displayDate} · Prematch, flat stake`}
-        title={<span id="roi-overview-title">Positive-ROI Qualified Picks</span>}
+        title={<span id="roi-overview-title">Promoted ROI Picks</span>}
         scope="research"
         description={
           <>

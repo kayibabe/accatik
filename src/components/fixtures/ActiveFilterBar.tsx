@@ -19,7 +19,7 @@ export function ActiveFilterBar({
   return (
     <div
       aria-label={label}
-      className="sticky top-12 z-20 flex flex-wrap items-center gap-1.5 rounded-xl border border-slate-200 bg-white/95 px-2.5 py-2 shadow-sm backdrop-blur"
+      className="sticky top-16 z-20 flex flex-wrap items-center gap-1.5 rounded-xl border border-slate-200 bg-white/95 px-2.5 py-2 shadow-sm backdrop-blur"
     >
       <span className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
         Filters

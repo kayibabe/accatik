@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Check, Copy, FolderOpen, Trash2 } from 'lucide-react';
 import type {
   AccaLeg,
@@ -29,6 +30,8 @@ interface SavedTicketCardProps {
   onCopy: (ticket: SavedTicket) => void;
   onLoad: (ticket: SavedTicket) => void;
   onDelete: (ticketId: string) => void;
+  /** Whether loading this slip would replace picks already in the builder. */
+  hasCurrentTicket: boolean;
   /** Opens the archived day-of-pick detail for every pick on one match. */
   onSelectMatch: (ticket: SavedTicket, legs: AccaLeg[]) => void;
 }
@@ -62,8 +65,11 @@ export function SavedTicketCard({
   onCopy,
   onLoad,
   onDelete,
+  hasCurrentTicket,
   onSelectMatch,
 }: SavedTicketCardProps) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmLoad, setConfirmLoad] = useState(false);
   const fixtureMap = new Map(pool.map((fixture) => [fixture.id, fixture]));
   const isSettled =
     settlement.status === 'Win' ||
@@ -105,7 +111,11 @@ export function SavedTicketCard({
         >
           <button
             type="button"
-            onClick={() => onLoad(ticket)}
+            onClick={() => {
+              setConfirmDelete(false);
+              if (hasCurrentTicket) setConfirmLoad(true);
+              else onLoad(ticket);
+            }}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
           >
             <FolderOpen className="w-3.5 h-3.5" aria-hidden="true" />
@@ -132,7 +142,10 @@ export function SavedTicketCard({
 
           <button
             type="button"
-            onClick={() => onDelete(ticket.id)}
+            onClick={() => {
+              setConfirmLoad(false);
+              setConfirmDelete(true);
+            }}
             aria-label={`Delete ${ticket.name}`}
             className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
           >
@@ -141,6 +154,49 @@ export function SavedTicketCard({
           </button>
         </div>
       </div>
+
+      {(confirmDelete || confirmLoad) && (
+        <div
+          role="alertdialog"
+          aria-label={confirmDelete ? 'Confirm deletion' : 'Confirm replacement'}
+          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+        >
+          <span>
+            {confirmDelete
+              ? 'Delete this saved slip permanently? This cannot be undone.'
+              : 'Replace the ticket currently in the builder with this saved slip?'}
+          </span>
+          <span className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setConfirmDelete(false);
+                setConfirmLoad(false);
+              }}
+              className="rounded-md px-2.5 py-1 font-semibold hover:bg-amber-100 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              autoFocus
+              onClick={() => {
+                if (confirmDelete) onDelete(ticket.id);
+                else onLoad(ticket);
+                setConfirmDelete(false);
+                setConfirmLoad(false);
+              }}
+              className={`rounded-md px-2.5 py-1 font-semibold text-white cursor-pointer ${
+                confirmDelete
+                  ? 'bg-red-700 hover:bg-red-800'
+                  : 'bg-emerald-700 hover:bg-emerald-800'
+              }`}
+            >
+              {confirmDelete ? 'Delete slip' : 'Replace ticket'}
+            </button>
+          </span>
+        </div>
+      )}
 
       {/* Figures and result counts stay in one neutral band. */}
       <div

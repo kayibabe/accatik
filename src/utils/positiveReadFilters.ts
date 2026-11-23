@@ -348,9 +348,9 @@ export function derivePositiveReadOptions(
 }
 
 function sectionLabel(section: FeaturedPickSource): string {
-  if (section === 'angle') return 'Recommended Angle';
-  if (section === 'cover') return 'Safer Cover';
-  return 'Analyst Note';
+  if (section === 'angle') return 'Model angle';
+  if (section === 'cover') return 'Alternative cover';
+  return 'Research note';
 }
 
 /**

@@ -168,12 +168,12 @@ test('positiveCombosFromStudy mirrors the table Positive toggle and labels each 
   assert.deepEqual(
     combos.map((item) => item.label),
     [
-      'Analyst Note · High · Over 2.5 Goals',
-      'Recommended Angle · High · Over 2.5 Goals',
-      'Analyst Note · Solid · BTTS Yes',
+      'Model angle · High · Over 2.5 Goals',
+      'Research note · High · Over 2.5 Goals',
+      'Research note · Solid · BTTS Yes',
     ]
   );
-  assert.equal(combos[0].key, 'note:High:GOALS-O2.5');
+  assert.equal(combos[0].key, 'angle:High:GOALS-O2.5');
   assert.equal(combos[2].smallSample, true);
   assert.equal(combos[2].roiCiLow, -4);
 });

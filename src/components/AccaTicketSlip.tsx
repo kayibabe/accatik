@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   AlertTriangle,
   Bookmark,
   Check,
   Copy,
   Lock,
+  RefreshCw,
   Shuffle,
+  Target,
   Unlock,
   Wand2,
   X,
@@ -54,8 +56,11 @@ interface AccaTicketSlipProps {
   onResetRecommended: () => void;
   onTrimToRecommended: () => void;
   onClearAll: () => void;
-  onSaveTicket: (stake: number) => void;
+  /** Resolves only once the slip has actually been persisted. */
+  onSaveTicket: (stake: number) => Promise<boolean>;
 }
+
+type SaveState = 'idle' | 'saving' | 'saved' | 'failed';
 
 const STRATEGIES = TICKET_STRATEGY_OPTIONS;
 const TARGET_ODDS_OPTIONS = TICKET_TARGET_ODDS_OPTIONS;
@@ -86,7 +91,7 @@ export function AccaTicketSlip({
   onSaveTicket,
 }: AccaTicketSlipProps) {
   const [copied, setCopied] = useState(false);
-  const [savedFeedback, setSavedFeedback] = useState(false);
+  const [saveState, setSaveState] = useState<SaveState>('idle');
 
   const totalOdds = calculateTotalOdds(legs);
   const guard = guardTicket(legs);
@@ -123,11 +128,26 @@ export function AccaTicketSlip({
     }
   };
 
-  const handleSave = () => {
-    if (!canSave) return;
-    onSaveTicket(stake);
-    setSavedFeedback(true);
-    setTimeout(() => setSavedFeedback(false), 2000);
+  // Any change to the ticket invalidates a previous save confirmation.
+  useEffect(() => {
+    setSaveState('idle');
+  }, [legs, stake]);
+
+  useEffect(() => {
+    if (saveState !== 'saved' && saveState !== 'failed') return;
+    const timer = window.setTimeout(() => setSaveState('idle'), 2500);
+    return () => window.clearTimeout(timer);
+  }, [saveState]);
+
+  const handleSave = async () => {
+    if (!canSave || saveState === 'saving') return;
+    setSaveState('saving');
+    try {
+      const saved = await onSaveTicket(stake);
+      setSaveState(saved ? 'saved' : 'failed');
+    } catch {
+      setSaveState('failed');
+    }
   };
 
   return (
@@ -363,9 +383,16 @@ export function AccaTicketSlip({
           <div className="mt-2.5 space-y-1.5">
             <div className="flex items-center justify-between gap-2">
               {meetsTarget ? (
-                <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
-                  <Check className="w-4 h-4 shrink-0" aria-hidden="true" />
-                  <span>Qualifies ({minOdds.toFixed(2)}+ target met)</span>
+                <div className="space-y-0.5">
+                  <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                    <Target className="w-4 h-4 shrink-0 text-slate-500" aria-hidden="true" />
+                    <span>Odds target met ({minOdds.toFixed(2)}+)</span>
+                  </div>
+                  {!guard.recommended && (
+                    <p className="text-[11px] text-slate-500">
+                      Price target only — see the economics note above.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="flex items-center justify-between gap-2 w-full">
@@ -609,19 +636,30 @@ export function AccaTicketSlip({
 
           <button
             type="button"
-            onClick={handleSave}
-            disabled={!canSave}
+            onClick={() => void handleSave()}
+            disabled={!canSave || saveState === 'saving'}
             title={
               startedLeg
                 ? 'This slip contains a match that has already started.'
-                : 'Save this slip to the local archive'
+                : 'Save this slip to your archive'
             }
+            aria-live="polite"
             className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold text-slate-800 bg-white border border-slate-200 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors whitespace-nowrap cursor-pointer"
           >
-            {savedFeedback ? (
+            {saveState === 'saving' ? (
+              <>
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+                <span>Saving…</span>
+              </>
+            ) : saveState === 'saved' ? (
               <>
                 <Check className="w-3.5 h-3.5 text-emerald-700" aria-hidden="true" />
                 <span>Saved</span>
+              </>
+            ) : saveState === 'failed' ? (
+              <>
+                <AlertTriangle className="w-3.5 h-3.5 text-red-600" aria-hidden="true" />
+                <span>Save failed — retry</span>
               </>
             ) : (
               <>

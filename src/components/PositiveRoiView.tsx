@@ -41,7 +41,10 @@ export function PositiveRoiView({
   const [ticket, setTicket] = useState<RoiAccaResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [building, setBuilding] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{
+    scope: 'load' | 'generate';
+    message: string;
+  } | null>(null);
   const [pickFilter, setPickFilter] = useState<PickFilter>('all');
   const [sort, setSort] = useState<SortState>({ key: null, direction: SORT_ASC });
   const onSort = makeSortHandler(setSort);
@@ -66,7 +69,10 @@ export function PositiveRoiView({
       setRegistry(reg.entries);
       setTicket(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load ROI research data.');
+      setError({
+        scope: 'load',
+        message: err instanceof Error ? err.message : 'Could not load ROI research data.',
+      });
     } finally {
       setLoading(false);
     }
@@ -93,7 +99,10 @@ export function PositiveRoiView({
         })
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not build the ROI accumulator.');
+      setError({
+        scope: 'generate',
+        message: err instanceof Error ? err.message : 'Could not build the ROI accumulator.',
+      });
     } finally {
       setBuilding(false);
     }
@@ -148,14 +157,20 @@ export function PositiveRoiView({
 
       {error && (
         <ErrorState
-          title="ROI research data could not be loaded"
-          description={error}
-          onRetry={() => void load()}
-          retryLabel="Retry research load"
+          title={
+            error.scope === 'generate'
+              ? 'Study accumulator could not be built'
+              : 'ROI research data could not be loaded'
+          }
+          description={error.message}
+          onRetry={() => void (error.scope === 'generate' ? generate() : load())}
+          retryLabel={
+            error.scope === 'generate' ? 'Retry building ticket' : 'Retry research load'
+          }
         />
       )}
 
-      {loading && !qualified ? (
+      {loading && !qualified && error?.scope !== 'load' ? (
         <LoadingState label="Loading ROI research cards…" count={4} />
       ) : (
         <>

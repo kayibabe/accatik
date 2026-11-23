@@ -253,8 +253,8 @@ export function FeaturedPicksTable({
             Featured picks
           </h2>
           <p className="mt-0.5 text-[11px] text-slate-400">
-            Recommended Angle, Safer cover and Analyst note, each split into
-            the selections they backed with the {strategyName} strategy.
+            Model angles, alternative covers and research notes, each split
+            into the selections they backed with the {strategyName} strategy.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-4">
