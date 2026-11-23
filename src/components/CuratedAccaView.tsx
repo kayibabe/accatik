@@ -9,7 +9,7 @@ import {
 } from '../utils/accaMath.ts';
 import { fmtCount, fmtMwk, fmtOdds, fmtPercent } from '../utils/format.ts';
 import { isPreMatchFixture } from '../utils/priceQuality.ts';
-import { guardTicket } from '../utils/ticketGuard.ts';
+import { MAX_RECOMMENDED_LEGS, guardTicket } from '../utils/ticketGuard.ts';
 import type { SortDirection, SortState } from '../utils/tableSort.ts';
 import { SORT_ASC, toggleSort } from '../utils/tableSort.ts';
 import { SettlementLabel } from './SettlementLabel.tsx';
@@ -71,7 +71,8 @@ export function CuratedAccaView({
       return fixture ? !isPreMatchFixture(fixture) : false;
     }) ?? null;
   const canSave = legs.length > 0 && startedLeg === null;
-  const guard = guardTicket(legs);
+  const isWideSlip = legs.length > MAX_RECOMMENDED_LEGS;
+  const guard = guardTicket(legs, { wideResearchSlip: isWideSlip });
 
   const handleCopy = async () => {
     if (legs.length === 0) return;
@@ -125,6 +126,20 @@ export function CuratedAccaView({
           Save disabled — {startedLeg.homeTeam} vs {startedLeg.awayTeam} has
           already kicked off. Remove the started selection to save a pre-match
           slip.
+        </div>
+      )}
+
+      {isWideSlip && (
+        <div
+          role="status"
+          className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs leading-relaxed text-emerald-900"
+        >
+          <span className="font-semibold">
+            Positive Reads wide slip — shown in full.
+          </span>{' '}
+          All {fmtCount(legs.length)} eligible picks were kept. This is a research
+          basket, not a recommended accumulator; bookmaker margin compounds with
+          each added leg.
         </div>
       )}
 

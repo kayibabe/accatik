@@ -45,7 +45,6 @@ interface PositiveReadMatchesProps {
   /** Returns the number of picks sent to the slip. */
   onAddPicks?: (picks: PositiveReadPick[]) => number;
   onOpenTicket?: () => void;
-  maxLegs?: number;
 }
 
 const TIER_STYLES: Record<PositiveReadTier, { label: string; className: string }> = {
@@ -140,7 +139,6 @@ export function PositiveReadMatches({
   selectedDate,
   onAddPicks,
   onOpenTicket,
-  maxLegs,
 }: PositiveReadMatchesProps) {
   const isBuild = mode === 'build';
   const [data, setData] = useState<PositiveReadMatchesResponse | null>(null);
@@ -245,7 +243,7 @@ export function PositiveReadMatches({
         <div className="min-w-0">
           <p className="text-xs font-medium text-slate-500">
             Daily feed · {strategy} strategy · {data?.source === 'live' ? 'live prices' : 'archived matchday'}
-            {isBuild && maxLegs ? ` · slip holds up to ${maxLegs} legs` : ''}
+            {isBuild ? ' · all eligible picks are kept' : ''}
           </p>
           <h2 className="mt-1 flex items-center gap-2 text-xl font-bold tracking-tight text-slate-900">
             <CalendarDays className="h-5 w-5 text-emerald-700" aria-hidden="true" />
@@ -326,8 +324,8 @@ export function PositiveReadMatches({
           className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"
         >
           {fmtCount(lastAdded)} {lastAdded === 1 ? 'pick' : 'picks'} sent to your slip. Open the
-          ticket to check the final shape — the slip keeps at most {maxLegs ?? 5} legs and one per
-          match.
+          ticket to check the final shape — Positive Reads keeps every eligible pick, one per match.
+          Wide slips are research only and are not marked as recommended.
         </p>
       )}
 
@@ -419,6 +417,7 @@ export function PositiveReadMatches({
                   <button
                     type="button"
                     onClick={() => addPicks(eligiblePicks)}
+                    title="Add every currently filtered, pending pick without the five-leg cut"
                     className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-800 hover:bg-emerald-100 cursor-pointer"
                   >
                     Add all eligible

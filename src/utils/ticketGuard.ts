@@ -24,6 +24,9 @@ import { combinedFairProbability } from './probability.ts';
  *
  * It does not pretend a ticket is positive-EV. It only stops the product from
  * presenting a structurally losing ticket as a recommendation.
+ *
+ * Wide research slips use a separate mode: every leg is retained for review,
+ * with the recommendation label withheld and full-ticket economics shown.
  */
 export const MAX_RECOMMENDED_LEGS = 5;
 
@@ -54,6 +57,12 @@ export interface TicketGuardOptions {
    * large target is left short rather than padded with extra legs.
    */
   researchMode?: boolean;
+  /**
+   * Positive Reads wide slips. Keeps every leg for review, never grants the
+   * "recommended" label and grades economics on the full slip. Unlike
+   * `researchMode`, this deliberately has no 2–5 leg cap.
+   */
+  wideResearchSlip?: boolean;
 }
 
 export interface TicketGuardResult extends TicketGuardSummary {
@@ -151,6 +160,41 @@ export function guardTicket(
     };
   }
 
+  const minEdge = options.minEdgePts ?? MIN_RECOMMENDED_EDGE_PTS;
+
+  if (options.wideResearchSlip) {
+    const economics = ticketEconomics(legs);
+    const legNoun = legs.length === 1 ? 'leg' : 'legs';
+    const reasons = [
+      `Wide research slip: all ${legs.length} ${legNoun} are retained for review. This ticket is not a recommendation because bookmaker margin compounds with each added leg.`,
+    ];
+    if (economics.basis === 'implied') {
+      reasons.push(
+        'No de-vigged price is available for every leg, so the chance shown still includes the bookmaker margin.'
+      );
+    } else if (economics.edgePts <= minEdge) {
+      reasons.push(
+        `Fair chance ${economics.fairChance.toFixed(1)}% is ${Math.abs(
+          economics.edgePts
+        ).toFixed(1)} points below the ${economics.breakEvenChance.toFixed(
+          1
+        )}% this price needs, so the ticket is negative-EV.`
+      );
+    } else {
+      reasons.push(
+        'A positive leg-level edge does not grant the recommended label to a wide slip.'
+      );
+    }
+    return {
+      legs,
+      economics,
+      recommended: false,
+      reason: reasons.join(' '),
+      originalLegCount: legs.length,
+      trimmedCount: 0,
+    };
+  }
+
   // Locks choose *which* legs survive the trim, never whether the cap applies.
   const ordered = options.preserveLocked
     ? [...legs.filter((leg) => leg.locked), ...legs.filter((leg) => !leg.locked)]
@@ -169,7 +213,6 @@ export function guardTicket(
   const kept = legs.filter((leg) => keptSet.has(leg));
 
   const economics = ticketEconomics(kept);
-  const minEdge = options.minEdgePts ?? MIN_RECOMMENDED_EDGE_PTS;
   const trimmedCount = legs.length - kept.length;
   // A ticket priced from implied probabilities can never clear the gate: the
   // margin is already baked into those numbers, so an "edge" there is just a

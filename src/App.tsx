@@ -38,6 +38,10 @@ import {
   calculateTotalOdds,
 } from './utils/accaMath.ts';
 import { completeAccaToTargetOdds } from './utils/accaEngine.ts';
+import {
+  eligiblePositiveReadPicks,
+  mergePositiveReadPicks,
+} from './utils/positiveReadSlip.ts';
 import { MAX_RECOMMENDED_LEGS, guardTicket } from './utils/ticketGuard.ts';
 import { apiFetch } from './utils/api.ts';
 import { describeStrategy } from './utils/strategy.ts';
@@ -120,26 +124,6 @@ function getClientLocalIsoDate(): string {
 /** Trim engine output to the structural guard, preserving explicit locks. */
 function guardLegs(legs: AccaLeg[]): AccaLeg[] {
   return guardTicket(legs, { preserveLocked: true }).legs;
-}
-
-/** A positive-read card is already a fully priced pick; no board lookup needed. */
-function legFromPositiveReadPick(pick: PositiveReadPick): AccaLeg {
-  return {
-    fixtureId: pick.fixtureId,
-    homeTeam: pick.homeTeam,
-    awayTeam: pick.awayTeam,
-    competition: pick.competition,
-    matchDate: pick.matchDate,
-    kickoffTime: pick.kickoffTime,
-    marketId: pick.marketId,
-    marketLabel: pick.marketLabel,
-    marketType: pick.marketType,
-    odds: pick.odds,
-    impliedProbability: pick.impliedProbability,
-    fairProbability: pick.fairProbability ?? undefined,
-    rationale: pick.rationale || pick.label,
-    bookmaker: pick.bookmaker,
-  };
 }
 
 export default function App() {
@@ -863,26 +847,13 @@ export default function App() {
    * Positive-read cards carry their own market and price, so they go straight
    * into the slip. One pick per fixture: a later selection replaces the leg
    * already held for that match rather than creating a same-match combination.
+   * Unlike the recommendation builders, this research path keeps every leg.
    */
   const handleAddPositiveReadPicks = useCallback((picks: PositiveReadPick[]): number => {
-    const byFixture = new Map<string, PositiveReadPick>();
-    for (const pick of picks) {
-      if (pick.status !== 'Pending') continue;
-      if (!byFixture.has(pick.fixtureId)) byFixture.set(pick.fixtureId, pick);
-    }
-    if (byFixture.size === 0) return 0;
-
-    const additions = [...byFixture.values()].map(legFromPositiveReadPick);
-    setSelectedLegs((prev) => {
-      const next = [...prev];
-      for (const leg of additions) {
-        const index = next.findIndex((item) => item.fixtureId === leg.fixtureId);
-        if (index >= 0) next[index] = leg;
-        else next.push(leg);
-      }
-      return guardLegs(next);
-    });
-    return additions.length;
+    const eligible = eligiblePositiveReadPicks(picks);
+    if (eligible.length === 0) return 0;
+    setSelectedLegs((prev) => mergePositiveReadPicks(prev, eligible));
+    return eligible.length;
   }, []);
 
   const handleSaveTicket = async (ticketStake: number) => {
@@ -1482,7 +1453,6 @@ export default function App() {
                 selectedDate={selectedDate}
                 onAddPicks={handleAddPositiveReadPicks}
                 onOpenTicket={() => navigate('acca')}
-                maxLegs={maxLegs}
               />
             )}
 

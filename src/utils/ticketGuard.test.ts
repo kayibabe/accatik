@@ -26,6 +26,19 @@ test('research mode allows short prices but still applies the five-leg cap', () 
   assert.equal(research.economics.legCount, 5);
 });
 
+test('a wide research slip keeps every leg and never claims a recommendation', () => {
+  const wideLegs = legs(8, 1.5, 66);
+  const result = guardTicket(wideLegs, { wideResearchSlip: true });
+
+  assert.equal(result.originalLegCount, 8);
+  assert.equal(result.legs.length, 8);
+  assert.equal(result.trimmedCount, 0);
+  assert.equal(result.economics.legCount, 8);
+  assert.equal(result.recommended, false);
+  assert.match(result.reason, /Wide research slip/);
+  assert.doesNotMatch(result.reason, /Capped/);
+});
+
 test('ticket economics removes the margin and reports the compounded overround', () => {
   const economics = ticketEconomics(legs(2, 1.5, 60));
 
