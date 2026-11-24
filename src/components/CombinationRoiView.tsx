@@ -66,9 +66,7 @@ const ACCESSORS: SortAccessors<CombinationRoiRow> = {
 };
 
 function SignalCell({ row, minSample }: { row: CombinationRoiRow; minSample: number }) {
-  if (row.staked === 0) {
-    return <span className="text-[10px] text-slate-400">No picks</span>;
-  }
+  if (row.staked === 0) return null;
   if (row.staked < minSample) {
     return (
       <span className="px-1.5 py-0.5 rounded bg-amber-50 text-[10px] font-semibold text-amber-700 border border-amber-200">
@@ -117,7 +115,10 @@ function RoiTable({
 }) {
   const [sort, setSort] = useState<SortState>({ key: 'roi', direction: SORT_DESC });
   const onSort = makeSortHandler(setSort, SORT_DESC);
-  const sorted = useMemo(() => sortRows(rows, sort, ACCESSORS), [rows, sort]);
+  // The study is a fixed universe, but cells nobody staked are not evidence.
+  // Keep them out of the tables instead of filling them with "No picks" rows.
+  const stakedRows = useMemo(() => rows.filter((row) => row.staked > 0), [rows]);
+  const sorted = useMemo(() => sortRows(stakedRows, sort, ACCESSORS), [stakedRows, sort]);
   const sortable = (
     label: string,
     key: string,

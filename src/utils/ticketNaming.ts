@@ -13,7 +13,7 @@ export type SlipOrigin =
 
 export const SLIP_ORIGIN_LABELS: Record<SlipOrigin, string> = {
   slate: 'Slate',
-  'positive-reads': 'Positive Reads',
+  'positive-reads': 'Positive Reads and Analytics',
   'ai-desk': 'AI Desk',
   research: 'Research',
   manual: 'Manual',
@@ -50,10 +50,17 @@ export function ticketName({
   )} Acca (${totalOdds.toFixed(2)} Odds)`;
 }
 
+const LEGACY_ORIGIN_PREFIXES: Partial<Record<SlipOrigin, readonly string[]>> = {
+  'positive-reads': ['Positive Reads · '],
+};
+
 /** Read the origin back from a saved ticket's name when no field carries it. */
 export function originFromTicketName(name: string): SlipOrigin | null {
   for (const origin of Object.keys(SLIP_ORIGIN_LABELS) as SlipOrigin[]) {
     if (name.startsWith(`${SLIP_ORIGIN_LABELS[origin]} · `)) return origin;
+    if (LEGACY_ORIGIN_PREFIXES[origin]?.some((prefix) => name.startsWith(prefix))) {
+      return origin;
+    }
   }
   return null;
 }

@@ -8,7 +8,8 @@ import {
   RefreshCw,
   Wand2,
 } from 'lucide-react';
-import type { AccaLeg, Fixture } from '../types/fixtures.ts';
+import type { AccaLeg, Fixture, SavedTicket } from '../types/fixtures.ts';
+import type { FixtureSnapshots } from '../utils/fixtureSnapshots.ts';
 import {
   calculatePotentialReturn,
   calculateTotalOdds,
@@ -22,6 +23,7 @@ import type { SortDirection, SortState } from '../utils/tableSort.ts';
 import { SORT_ASC, toggleSort } from '../utils/tableSort.ts';
 import { SettlementLabel } from './SettlementLabel.tsx';
 import { RationalePanel } from './tickets/RationalePanel.tsx';
+import { TicketHistoryPanel } from './tickets/TicketHistoryPanel.tsx';
 import { TicketReviewLegTable } from './tickets/TicketReviewLegTable.tsx';
 import { InfoHint } from './ui/DataCard.tsx';
 import { PageHeader } from './ui/PageHeader.tsx';
@@ -35,9 +37,14 @@ interface CuratedAccaViewProps {
   isFetchingDate: boolean;
   legs: AccaLeg[];
   fixtures: Fixture[];
+  savedTickets: SavedTicket[];
+  fixtureSnapshots: FixtureSnapshots;
+  todayDate: string;
   minOdds: number;
   stake: number;
   onGoToSlate: () => void;
+  onOpenArchive: () => void;
+  onRefreshResults: (fixtureIds: string[]) => Promise<Fixture[]>;
   /** Resolves only once the slip has actually been persisted. */
   onSaveTicket: (stake: number) => Promise<boolean>;
   onAutoComplete: () => void;
@@ -58,14 +65,20 @@ export function CuratedAccaView({
   isFetchingDate,
   legs,
   fixtures,
+  savedTickets,
+  fixtureSnapshots,
+  todayDate,
   minOdds,
   stake,
   onGoToSlate,
+  onOpenArchive,
+  onRefreshResults,
   onSaveTicket,
   onAutoComplete,
 }: CuratedAccaViewProps) {
   const [copied, setCopied] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [saveError, setSaveError] = useState<string | null>(null);
   // Ticket order is meaningful, so sorting starts switched off.
   const [legSort, setLegSort] = useState<SortState>({
     key: null,
@@ -100,6 +113,7 @@ export function CuratedAccaView({
 
   useEffect(() => {
     setSaveState('idle');
+    setSaveError(null);
   }, [legs, stake]);
 
   useEffect(() => {
@@ -111,10 +125,17 @@ export function CuratedAccaView({
   const handleSave = async () => {
     if (!canSave || saveState === 'saving') return;
     setSaveState('saving');
+    setSaveError(null);
     try {
       const saved = await onSaveTicket(stake);
+      if (!saved) {
+        setSaveError('The slip could not be saved. Check your sign-in and try again.');
+      }
       setSaveState(saved ? 'saved' : 'failed');
-    } catch {
+    } catch (err) {
+      setSaveError(
+        err instanceof Error ? err.message : 'Could not save your slip.'
+      );
       setSaveState('failed');
     }
   };
@@ -132,16 +153,18 @@ export function CuratedAccaView({
         eyebrow={`Read-only ticket review · ${displayDate}`}
         title="Ticket Review"
         description={`A read-only review of the selected ${strategyName} ticket — odds, settlement and rationale only, not a second builder. Change the selection on the fixture board. ${strategySummary}`}
+        descriptionClassName="w-full max-w-none"
         scope="personal"
         meta={`${fmtCount(legs.length)} ${legs.length === 1 ? 'leg' : 'legs'} · minimum ${fmtOdds(minOdds)} odds qualification`}
       />
 
-      {isFetchingDate && (
+      {isFetchingDate ? (
         <LoadingState
           label={`Loading matches and building accumulator ticket for ${selectedDate}…`}
           count={2}
         />
-      )}
+      ) : (
+        <>
 
       {startedLeg && (
         <div
@@ -224,6 +247,7 @@ export function CuratedAccaView({
       <RationalePanel
         guard={guard}
         legs={legs}
+        fixtures={fixtures}
         strategyName={strategyName}
         minOdds={minOdds}
       />
@@ -240,7 +264,7 @@ export function CuratedAccaView({
               className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
             >
               <Wand2 className="w-3.5 h-3.5" aria-hidden="true" />
-              <span>Generate {fmtOdds(minOdds)}+ Acca</span>
+              <span>Auto-complete from slate</span>
             </button>
           }
         />
@@ -256,6 +280,14 @@ export function CuratedAccaView({
       )}
 
       {/* Single primary action; copy/save stay available but demoted. */}
+      {saveError && saveState === 'failed' && (
+        <p
+          role="alert"
+          className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700"
+        >
+          {saveError}
+        </p>
+      )}
       <footer className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-[11px] text-slate-500">
           Review only — edits happen on the fixture board.
@@ -329,6 +361,17 @@ export function CuratedAccaView({
           </button>
         </div>
       </footer>
+
+      <TicketHistoryPanel
+        savedTickets={savedTickets}
+        liveFixtures={fixtures}
+        fixtureSnapshots={fixtureSnapshots}
+        todayDate={todayDate}
+        onOpenArchive={onOpenArchive}
+        onRefreshResults={onRefreshResults}
+      />
+        </>
+      )}
     </section>
   );
 }

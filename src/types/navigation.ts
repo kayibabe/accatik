@@ -1,6 +1,7 @@
 /** Every top-level workbench screen, shared by the nav and URL state. */
 export type ActiveTab =
   | 'slate'
+  | 'pick-guide'
   | 'acca'
   | 'positive-reads'
   | 'saved'
@@ -12,6 +13,7 @@ export type ActiveTab =
 
 export const ACTIVE_TABS: readonly ActiveTab[] = [
   'slate',
+  'pick-guide',
   'acca',
   'positive-reads',
   'saved',
@@ -45,8 +47,8 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     description: 'Assemble and review a ticket.',
     items: [
       { id: 'slate', label: 'Matchday Slate' },
+      { id: 'pick-guide', label: 'Pick Selection' },
       { id: 'acca', label: 'Ticket Review' },
-      { id: 'positive-reads', label: 'Positive Reads' },
     ],
   },
   {
@@ -64,7 +66,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     description: 'Global aggregates and research.',
     items: [
       { id: 'analytics', label: 'Analytics' },
-      { id: 'roi', label: 'ROI Research', research: true },
+      { id: 'positive-reads', label: 'Positive Reads and Analytics', research: true },
       { id: 'ai', label: 'AI Desk', research: true },
     ],
   },

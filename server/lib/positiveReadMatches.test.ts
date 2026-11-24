@@ -121,7 +121,7 @@ function snapshotFixture(): Fixture {
   });
 }
 
-test('positiveCombosFromStudy mirrors the table Positive toggle and labels each row', () => {
+test('positiveCombosFromStudy keeps only qualifying section and section-band rows with ROI >= 5.0', () => {
   const combos = positiveCombosFromStudy(
     study([
       row({
@@ -156,9 +156,12 @@ test('positiveCombosFromStudy mirrors the table Positive toggle and labels each 
       row({ key: 'note:All:GOALS-O2.5', section: 'note', band: 'All', roi: 9 }),
       row({ key: 'null:High:GOALS-O2.5', section: null, roi: 9 }),
       row({
-        key: 'note:High:GOALS-O2.5',
+        key: 'note:All:GOALS-O2.5:section',
         scope: 'section',
+        section: 'note',
         band: 'All',
+        marketKey: 'GOALS-O2.5',
+        marketLabel: 'Over 2.5 Goals',
         roi: 9,
       }),
       row({ key: 'market:GOALS-O2.5', scope: 'market', section: null, band: 'All', roi: 9 }),
@@ -168,14 +171,15 @@ test('positiveCombosFromStudy mirrors the table Positive toggle and labels each 
   assert.deepEqual(
     combos.map((item) => item.label),
     [
-      'Model angle · High · Over 2.5 Goals',
       'Research note · High · Over 2.5 Goals',
       'Research note · Solid · BTTS Yes',
+      'Research note · All bands · Over 2.5 Goals',
     ]
   );
-  assert.equal(combos[0].key, 'angle:High:GOALS-O2.5');
-  assert.equal(combos[2].smallSample, true);
-  assert.equal(combos[2].roiCiLow, -4);
+  assert.equal(combos[0].key, 'note:High:GOALS-O2.5');
+  assert.equal(combos[1].smallSample, true);
+  assert.equal(combos[1].roiCiLow, -4);
+  assert.equal(combos[2].band, 'All');
 });
 
 test('studyPickForFixture reuses the study resolver, band and selection key', () => {
@@ -327,7 +331,7 @@ test('two cards hitting the same combo collapse to one chip', () => {
   assert.equal(response.matches[0].score, '2–1');
 });
 
-test('quality flags require sample, interval and a prior-cutoff study', () => {
+test('quality flags require sample, interval and a prior-cutoff qualifying study', () => {
   const display = study([
     row({ key: 'note:High:GOALS-O2.5', roi: 12 }),
     row({
@@ -341,7 +345,7 @@ test('quality flags require sample, interval and a prior-cutoff study', () => {
     row({ key: 'angle:High:GOALS-O2.5', roi: 9 }),
   ]);
   const prior = study([
-    row({ key: 'note:High:GOALS-O2.5', roi: 3 }),
+    row({ key: 'note:High:GOALS-O2.5', roi: 6 }),
     row({ key: 'cover:High:1X2-H', roi: 2 }),
   ]);
 
@@ -368,8 +372,7 @@ test('quality flags require sample, interval and a prior-cutoff study', () => {
     }
   );
 
-  // A small sample is never qualified, even when it is positive and appears in
-  // the prior study.
+  // A small sample is never qualified, even when it clears the ROI threshold.
   const small = byKey.get('note:Solid:BTTS-YES')!;
   assert.equal(small.qualified, false);
   assert.equal(small.confirmed, false);
@@ -380,7 +383,7 @@ test('quality flags require sample, interval and a prior-cutoff study', () => {
   assert.equal(observed.qualified, false);
   assert.equal(observed.confirmed, false);
 
-  // Qualified but missing from the prior study: no confirmation.
+  // Qualified but missing from the prior qualifying study: no confirmation.
   const unconfirmed = byKey.get('angle:High:GOALS-O2.5')!;
   assert.equal(unconfirmed.qualified, true);
   assert.equal(unconfirmed.confirmed, false);
@@ -468,7 +471,7 @@ test('response discloses the study cut, fixed universe and quality counts', () =
   assert.equal(response.studyExcludedDateIso, '2026-11-22');
   assert.equal(response.minSample, 20);
   assert.equal(response.universe.sections.length, 3);
-  assert.equal(response.universe.bands.length, 4);
+  assert.equal(response.universe.bands.length, 5);
   assert.equal(response.universe.markets.length, 18);
   assert.equal(response.universe.marketLabels['GOALS-O2.5'], 'Over 2.5 Goals');
   assert.equal(response.qualifiedCount, 2);

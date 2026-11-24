@@ -23,18 +23,23 @@ import { MIN_SAMPLE, studyPickForFixture } from './combinationRoi.ts';
  */
 
 const SECTION_SOURCES = Object.keys(FEATURED_SOURCE_LABELS) as FeaturedPickSource[];
-const BAND_ORDER: Record<RoiBand, number> = {
+const BAND_ORDER: Record<string, number> = {
   High: 0,
   Solid: 1,
   Moderate: 2,
   Speculative: 3,
+  All: 4,
 };
 
+/** Minimum inception-to-date ROI (%) for a study cell to qualify as a positive read. */
+export const POSITIVE_READ_MIN_ROI = 5;
+
 export const POSITIVE_READ_CAVEATS: readonly string[] = [
-  'A positive read is descriptive, not proven edge: Qualified needs the matchday-clustered 95% interval to clear zero, and Confirmed means it stayed positive in a study that stops before this one’s latest matchday.',
+  `A qualifying positive read requires inception-to-date ROI of ${POSITIVE_READ_MIN_ROI.toFixed(1)}% or more in the combination study. It is descriptive, not proven edge.`,
+  'Qualified needs the matchday-clustered 95% interval to clear zero, and Confirmed means it also cleared the qualifying ROI threshold in a study that stops before this one’s latest matchday.',
   'Stable means a qualified cell was also positive on at least half the matchdays it appeared on, with a minimum of two, so one large win cannot carry the read.',
-  'Rows below the study’s minimum sample are still included, matching the table’s Positive toggle, and are badged as small samples; they can never be Qualified or Confirmed.',
-  'Archive reviews leave the reviewed matchday out of the study, so the labels are out-of-sample for that day. The study is the fixed 3-section × 4-band × 18-market universe, not a per-market promotion.',
+  'Rows below the study’s minimum sample are still included when they clear the qualifying ROI threshold, and are badged as small samples; they can never be Qualified or Confirmed.',
+  'Archive reviews leave the reviewed matchday out of the study, so the labels are out-of-sample for that day. The study is the fixed 3-section × 5-band × 18-market universe, not a per-market promotion.',
   'Bands are the engine’s confidence label for the fair probability of the frozen pre-match price, not a guarantee of the outcome.',
   'Live mode prices a card from the current book, so its band can differ from the archived price that produced the study. A Band drift badge marks a match made by section and market instead of the exact band.',
   'Adding a pick copies the price shown here into your slip. Archive uses the frozen pre-match price; switch to Live for the current book.',
@@ -48,8 +53,9 @@ function compareCombos(a: PositiveReadCombo, b: PositiveReadCombo): number {
   );
 }
 
-function bandDistance(a: RoiBand, b: RoiBand): number {
-  return Math.abs(BAND_ORDER[a] - BAND_ORDER[b]);
+function bandDistance(a: RoiBand | 'All', b: RoiBand | 'All'): number {
+  if (a === 'All' || b === 'All') return 0;
+  return Math.abs((BAND_ORDER[a] ?? 99) - (BAND_ORDER[b] ?? 99));
 }
 
 const POSITIVE_READ_UNIVERSE: PositiveReadUniverse = (() => {
@@ -66,11 +72,12 @@ const POSITIVE_READ_UNIVERSE: PositiveReadUniverse = (() => {
 })();
 
 /**
- * The study rows that the table's Positive toggle would show.
+ * The study rows that qualify as positive reads.
  *
- * `priorStudy` is the same study cut one matchday earlier. A cell is confirmed
- * only when it is Qualified here and still positive there, so a single lucky
- * matchday cannot earn the strongest badge.
+ * A qualifying cell must clear `POSITIVE_READ_MIN_ROI`. `priorStudy` is the same
+ * study cut one matchday earlier. A cell is confirmed only when it is Qualified
+ * here and still clears the ROI threshold there, so a single lucky matchday
+ * cannot earn the strongest badge.
  */
 export function positiveCombosFromStudy(
   study: CombinationRoiResponse,
@@ -79,17 +86,21 @@ export function positiveCombosFromStudy(
   const priorPositive = new Set<string>();
   if (priorStudy) {
     for (const row of priorStudy.rows) {
-      if (row.scope !== 'section-band' || !row.section || row.band === 'All') continue;
-      if (row.roi === null || row.roi <= 0) continue;
+      if (!row.section || row.roi === null || row.roi < POSITIVE_READ_MIN_ROI) continue;
+      if (row.scope !== 'section-band' && row.scope !== 'section') continue;
+      if (row.scope === 'section-band' && row.band === 'All') continue;
       priorPositive.add(row.key);
     }
   }
 
   const combos: PositiveReadCombo[] = [];
   for (const row of study.rows) {
-    if (row.scope !== 'section-band' || !row.section || row.band === 'All') continue;
-    if (row.roi === null || row.roi <= 0) continue;
+    if (!row.section || row.roi === null || row.roi < POSITIVE_READ_MIN_ROI) continue;
+    if (row.scope !== 'section-band' && row.scope !== 'section') continue;
+    if (row.scope === 'section-band' && row.band === 'All') continue;
+
     const sectionLabel = FEATURED_SOURCE_LABELS[row.section];
+    const bandLabel = row.band === 'All' ? 'All bands' : row.band;
     const qualified = !row.smallSample && row.roiCiLow !== null && row.roiCiLow > 0;
     combos.push({
       key: row.key,
@@ -98,7 +109,7 @@ export function positiveCombosFromStudy(
       band: row.band,
       marketKey: row.marketKey,
       marketLabel: row.marketLabel,
-      label: `${sectionLabel} · ${row.band} · ${row.marketLabel}`,
+      label: `${sectionLabel} · ${bandLabel} · ${row.marketLabel}`,
       roi: row.roi,
       staked: row.staked,
       smallSample: row.smallSample,
@@ -166,17 +177,23 @@ export function buildPositiveReadMatchesResponse({
 
       let combo = byKey.get(`${section}:${pick.band}:${pick.selectionKey}`);
       // A live price can drift a band away from the cell the study measured.
-      // Fall back to the nearest positive band for the same section and market,
-      // and flag the drift so the label stays honest about its provenance.
-      if (!combo && source === 'live') {
+      // Fall back to the nearest qualifying band for the same section and market,
+      // including an all-bands-combined row, and flag the drift so the label stays
+      // honest about its provenance.
+      if (!combo) {
         const candidates = bySectionMarket.get(`${section}:${pick.selectionKey}`);
         if (candidates && candidates.length > 0) {
-          combo = candidates.reduce((best, candidate) =>
-            bandDistance(candidate.band, pick.band) <
-            bandDistance(best.band, pick.band)
-              ? candidate
-              : best
-          );
+          const exactAll = candidates.find((candidate) => candidate.band === 'All');
+          if (exactAll) {
+            combo = exactAll;
+          } else if (source === 'live') {
+            combo = candidates.reduce((best, candidate) =>
+              bandDistance(candidate.band, pick.band) <
+              bandDistance(best.band, pick.band)
+                ? candidate
+                : best
+            );
+          }
         }
       }
       if (!combo || matched.some((item) => item.key === combo.key)) continue;
@@ -201,7 +218,7 @@ export function buildPositiveReadMatchesResponse({
         bookmaker: pick.market.bookmaker,
         band: pick.band,
         studyBand: combo.band,
-        bandDrift: combo.band !== pick.band,
+        bandDrift: combo.band !== 'All' && combo.band !== pick.band,
         status: pick.status,
       });
     }

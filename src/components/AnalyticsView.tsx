@@ -417,7 +417,7 @@ export function AnalyticsView({
           <section
             id="positive-reads"
             className="scroll-mt-16"
-            aria-label="Daily positive-read matches"
+            aria-label="Daily qualifying positive-read matches"
           >
             <PositiveReadMatches
               strategy={strategy}

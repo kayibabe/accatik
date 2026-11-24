@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
   CalendarDays,
+  ChevronDown,
   Plus,
   Radio,
   RefreshCw,
@@ -66,11 +67,20 @@ function ComboChip({
   combo,
   pick,
   onAdd,
+  matchCount,
+  onJump,
+  block = false,
 }: {
   combo: PositiveReadCombo;
   pick?: PositiveReadPick;
   onAdd?: (pick: PositiveReadPick) => number;
+  /** Fixtures on this matchday that matched this parameter. */
+  matchCount?: number;
+  onJump?: () => void;
+  /** Equal-width columns for the Active parameters grid. */
+  block?: boolean;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const addable = Boolean(pick && pick?.status === 'Pending' && onAdd);
   const tier = TIER_STYLES[positiveReadTier(combo)];
   const title = [
@@ -78,20 +88,72 @@ function ComboChip({
     `Inception ROI ${fmtSignedPercent(combo.roi)} from ${fmtCount(combo.staked)} staked picks`,
     `95% interval ${fmtSignedPercent(combo.roiCiLow)} to ${fmtSignedPercent(combo.roiCiHigh)}`,
     `${combo.positiveDates} of ${combo.totalDates} matchdays positive`,
+    matchCount === undefined
+      ? null
+      : `${fmtCount(matchCount)} matched ${matchCount === 1 ? 'fixture' : 'fixtures'} on this matchday`,
     tier.label,
     combo.stable ? 'Stable' : null,
     pick?.bandDrift ? `Live band ${pick.band} drifted from study band ${combo.band}` : null,
   ]
     .filter(Boolean)
     .join(' · ');
-  return (
-    <span
-      className="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] text-emerald-900"
-      title={title}
-    >
-      <Target className="h-3 w-3 shrink-0 text-emerald-700" aria-hidden="true" />
-      <span className="min-w-0 truncate font-semibold">{combo.label}</span>
-      <span className="shrink-0 font-mono tabular-nums text-emerald-700">
+
+  const detailRows: Array<[string, string]> = [
+    ['Parameter', combo.label],
+    ['ROI', fmtSignedPercent(combo.roi)],
+    ['95% interval', `${fmtSignedPercent(combo.roiCiLow)} to ${fmtSignedPercent(combo.roiCiHigh)}`],
+    ['Staked picks', fmtCount(combo.staked)],
+    ['Positive matchdays', `${fmtCount(combo.positiveDates)} / ${fmtCount(combo.totalDates)}`],
+    ['Evidence', tier.label + (combo.stable ? ' · Stable' : '')],
+  ];
+  if (matchCount !== undefined) {
+    detailRows.push(['Matches on this day', fmtCount(matchCount)]);
+  }
+  if (pick) {
+    detailRows.push(['Market', pick.marketLabel]);
+    detailRows.push(['Odds', fmtOdds(pick.odds)]);
+    if (pick.fairProbability != null) {
+      detailRows.push(['Fair probability', `${pick.fairProbability.toFixed(1)}%`]);
+    }
+    detailRows.push(['Implied probability', `${pick.impliedProbability.toFixed(1)}%`]);
+    if (pick.bookmaker) detailRows.push(['Bookmaker', pick.bookmaker]);
+    if (pick.bandDrift) detailRows.push(['Band drift', `Live ${pick.band} vs study ${pick.studyBand}`]);
+    detailRows.push(['Status', pick.status]);
+  }
+
+  const hasMatches = (matchCount ?? 0) > 0;
+  const accent = hasMatches
+    ? {
+        container: 'border-sky-400 bg-sky-100 text-sky-900',
+        icon: 'text-sky-700',
+        roi: 'text-sky-700',
+        badge: 'text-sky-700',
+        expand: 'text-sky-700 hover:bg-sky-100',
+        detailBorder: 'border-sky-200/70',
+      }
+    : {
+        container: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+        icon: 'text-emerald-700',
+        roi: 'text-emerald-700',
+        badge: 'text-emerald-700',
+        expand: 'text-emerald-700 hover:bg-emerald-100',
+        detailBorder: 'border-emerald-200/70',
+      };
+  const containerClass = `max-w-full rounded-lg border px-2.5 py-1.5 text-[11px] ${accent.container} ${
+    block ? 'w-full' : 'inline-flex flex-col'
+  }`;
+
+  const summary = (
+    <>
+      <Target className={`h-3 w-3 shrink-0 ${accent.icon}`} aria-hidden="true" />
+      <span className={`min-w-0 truncate font-semibold ${block ? 'flex-1 text-left' : ''}`}>
+        {combo.label}
+      </span>
+      <span
+        className={`shrink-0 font-mono tabular-nums ${accent.roi} ${
+          block ? 'w-[54px] text-right' : ''
+        }`}
+      >
         {fmtSignedPercent(combo.roi)}
       </span>
       {pick && (
@@ -99,8 +161,19 @@ function ComboChip({
           {fmtOdds(pick.odds)}
         </span>
       )}
+      {matchCount !== undefined && (
+        <span
+          className={`shrink-0 rounded bg-white/80 px-1 py-0.5 font-mono tabular-nums ${accent.badge} ${
+            block ? 'w-[68px] text-center' : ''
+          }`}
+        >
+          {fmtCount(matchCount)} {matchCount === 1 ? 'match' : 'matches'}
+        </span>
+      )}
       <span
-        className={`shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold uppercase ${tier.className}`}
+        className={`shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold uppercase ${
+          tier.className
+        } ${block ? 'w-[84px] text-center' : ''}`}
       >
         {tier.label}
       </span>
@@ -119,17 +192,79 @@ function ComboChip({
           {pick.status}
         </span>
       )}
-      {addable && (
-        <button
-          type="button"
-          onClick={() => onAdd?.(pick!)}
-          className="inline-flex shrink-0 items-center gap-0.5 rounded bg-emerald-700 px-1.5 py-0.5 text-[10px] font-semibold text-white hover:bg-emerald-800 cursor-pointer"
-        >
-          <Plus className="h-3 w-3" aria-hidden="true" />
-          Add
-        </button>
+    </>
+  );
+
+  const expandButton = (
+    <button
+      type="button"
+      onClick={() => setExpanded((v) => !v)}
+      aria-expanded={expanded}
+      aria-label={`${expanded ? 'Hide' : 'Show'} details for ${combo.label}`}
+      className={`inline-flex shrink-0 items-center rounded p-0.5 ${accent.expand} cursor-pointer`}
+      title={expanded ? 'Hide details' : 'Show details'}
+    >
+      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} aria-hidden="true" />
+    </button>
+  );
+
+  const details = expanded ? (
+    <div className={`mt-2 w-full border-t ${accent.detailBorder} pt-2 text-[11px] text-slate-700 whitespace-normal`}>
+      <dl className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
+        {detailRows.map(([label, value]) => (
+          <div key={label} className="flex gap-2">
+            <dt className="shrink-0 text-slate-500">{label}</dt>
+            <dd className="min-w-0 font-medium text-slate-800">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      {pick?.rationale && (
+        <p className="mt-2 leading-relaxed text-slate-600">
+          <span className="font-semibold text-slate-700">Explanation: </span>
+          {pick.rationale}
+        </p>
       )}
-    </span>
+    </div>
+  ) : null;
+
+  if (onJump) {
+    return (
+      <div className={containerClass} title={title}>
+        <div className={`flex items-center gap-1.5 ${block ? 'w-full' : ''}`}>
+          <button
+            type="button"
+            onClick={onJump}
+            className={`min-w-0 flex-1 inline-flex items-center gap-1.5 text-left cursor-pointer hover:underline focus-visible:outline-2 focus-visible:outline-emerald-700 rounded`}
+          >
+            {summary}
+          </button>
+          {expandButton}
+        </div>
+        {details}
+      </div>
+    );
+  }
+
+  return (
+    <div className={containerClass} title={title}>
+      <div className={`flex items-center gap-1.5 ${block ? 'w-full' : ''}`}>
+        <div className={`min-w-0 flex-1 ${block ? 'flex items-center gap-1.5' : 'inline-flex items-center gap-1.5'}`}>
+          {summary}
+        </div>
+        {addable && (
+          <button
+            type="button"
+            onClick={() => onAdd?.(pick!)}
+            className="inline-flex shrink-0 items-center gap-0.5 rounded bg-emerald-700 px-1.5 py-0.5 text-[10px] font-semibold text-white hover:bg-emerald-800 cursor-pointer"
+          >
+            <Plus className="h-3 w-3" aria-hidden="true" />
+            Add
+          </button>
+        )}
+        {expandButton}
+      </div>
+      {details}
+    </div>
   );
 }
 
@@ -227,6 +362,49 @@ export function PositiveReadMatches({
     [filtered]
   );
 
+  // Match counts and jump targets come from the same filtered feed shown below,
+  // so a chip never promises a fixture the current filters have hidden.
+  const matchIdsByCombo = useMemo(() => {
+    const ids = new Map<string, string[]>();
+    for (const match of filtered?.matches ?? []) {
+      for (const combo of match.combos) {
+        const list = ids.get(combo.key);
+        if (list) list.push(match.fixtureId);
+        else ids.set(combo.key, [match.fixtureId]);
+      }
+    }
+    return ids;
+  }, [filtered]);
+
+  const matchIdsBySection = useMemo(() => {
+    const ids = new Map<string, string[]>();
+    for (const match of filtered?.matches ?? []) {
+      for (const section of new Set(match.combos.map((combo) => combo.section))) {
+        const list = ids.get(section);
+        if (list) list.push(match.fixtureId);
+        else ids.set(section, [match.fixtureId]);
+      }
+    }
+    return ids;
+  }, [filtered]);
+
+  const [focusedFixtureId, setFocusedFixtureId] = useState<string | null>(null);
+  const [jumpCursor, setJumpCursor] = useState<Record<string, number>>({});
+
+  /** Repeated clicks walk through every fixture behind a parameter. */
+  const jumpToMatches = (cursorKey: string, fixtureIds: string[]) => {
+    if (fixtureIds.length === 0) return;
+    const next = ((jumpCursor[cursorKey] ?? -1) + 1) % fixtureIds.length;
+    setJumpCursor((prev) => ({ ...prev, [cursorKey]: next }));
+    const fixtureId = fixtureIds[next];
+    setFocusedFixtureId(fixtureId);
+    // Scroll synchronously: the target is already rendered, and this matches
+    // the app's deep-link settling instead of depending on animation frames.
+    document
+      .getElementById(`positive-read-match-${fixtureId}`)
+      ?.scrollIntoView({ behavior: 'instant', block: 'start' });
+  };
+
   const reload = () => setLocalReload((value) => value + 1);
 
   const updateFilters = (patch: Partial<PositiveReadFilterState>) => {
@@ -245,10 +423,10 @@ export function PositiveReadMatches({
   const universe = data?.universe;
   const universeLabel = universe
     ? `${universe.sections.length} sections × ${universe.bands.length} bands × ${universe.markets.length} markets`
-    : '3 sections × 4 bands × 18 markets';
+    : '3 sections × 5 bands × 18 markets';
 
   return (
-    <section aria-label="Daily positive-read matches" className="space-y-3">
+    <section aria-label="Daily qualifying positive-read matches" className="space-y-3">
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs font-medium text-slate-500">
@@ -257,20 +435,21 @@ export function PositiveReadMatches({
           </p>
           <h2 className="mt-1 flex items-center gap-2 text-xl font-bold tracking-tight text-slate-900">
             <CalendarDays className="h-5 w-5 text-emerald-700" aria-hidden="true" />
-            Positive-read matches
+            Qualifying positive-read matches
           </h2>
           <p className="mt-1 max-w-3xl text-xs leading-relaxed text-slate-600">
             {isBuild ? (
               <>
-                Fixtures whose cards hit a <strong>section × band × market</strong> combination with a
-                positive inception-to-date ROI. Add a labelled card to your slip; the market and price
-                are copied from the same frozen pick the study measured.
+                Fixtures whose cards hit a <strong>section × band × market</strong> combination with
+                inception-to-date ROI of <strong>5.0% or more</strong>. Add a labelled card to your
+                slip; the market and price are copied from the same frozen pick the study measured.
               </>
             ) : (
               <>
-                Fixtures whose cards hit a <strong>section × band × market</strong> combination with a
-                positive inception-to-date ROI in the study below. Each match is labelled with the
-                exact parameter that fired. Archive is the default; switch to Live for upcoming games.
+                Fixtures whose cards hit a <strong>section × band × market</strong> combination with
+                inception-to-date ROI of <strong>5.0% or more</strong> in the study below. Each
+                match is labelled with the exact qualifying parameter that fired. Archive is the
+                default; switch to Live for upcoming games.
               </>
             )}
           </p>
@@ -334,8 +513,8 @@ export function PositiveReadMatches({
           className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"
         >
           {fmtCount(lastAdded)} {lastAdded === 1 ? 'pick' : 'picks'} sent to your slip. Open the
-          ticket to check the final shape — Positive Reads keeps every eligible pick, one per match.
-          Wide slips are research only and are not marked as recommended.
+          ticket to check the final shape — qualifying positive reads keep every eligible pick, one
+          per match. Wide slips are research only and are not marked as recommended.
         </p>
       )}
 
@@ -362,11 +541,11 @@ export function PositiveReadMatches({
         <ErrorState title="Could not load matches" description={error} onRetry={reload} />
       ) : !data || data.combos.length === 0 ? (
         <EmptyState
-          title="No positive reads yet"
+          title="No qualifying positive reads yet"
           description={
             isBuild
-              ? 'The section × band × market study has no row with a positive inception-to-date ROI, so there is no parameter to pick from yet.'
-              : 'The section × band × market study has no row with a positive inception-to-date ROI, so there is no parameter to match yet. Check the study below.'
+              ? 'The section × band × market study has no row with inception-to-date ROI of 5.0% or more, so there is no qualifying parameter to pick from yet.'
+              : 'The section × band × market study has no row with inception-to-date ROI of 5.0% or more, so there is no qualifying parameter to match yet. Check the study below.'
           }
         />
       ) : (
@@ -379,6 +558,10 @@ export function PositiveReadMatches({
             <span>
               Universe: <strong className="font-semibold">{universeLabel}</strong>, fixed for every
               read
+            </span>
+            <span aria-hidden="true">·</span>
+            <span>
+              Qualifying ROI <strong className="font-semibold">≥ 5.0%</strong>
             </span>
             <span aria-hidden="true">·</span>
             <span>
@@ -419,8 +602,8 @@ export function PositiveReadMatches({
           )}
 
           <DataCard
-            title="Active parameters"
-            subtitle={`${fmtCount(filtered?.combos.length ?? 0)} of ${fmtCount(data.combos.length)} positive ${data.combos.length === 1 ? 'combination' : 'combinations'} from the study`}
+            title="Qualifying parameters"
+            subtitle={`${fmtCount(filtered?.combos.length ?? 0)} of ${fmtCount(data.combos.length)} qualifying ${data.combos.length === 1 ? 'combination' : 'combinations'} with ROI ≥ 5.0%`}
             actions={
               <div className="flex items-center gap-2">
                 {isBuild && eligiblePicks.length > 0 && (
@@ -454,19 +637,57 @@ export function PositiveReadMatches({
                 />
               </div>
             ) : (
-              <div className="space-y-3 p-4">
-                {groups.map((group) => (
-                  <div key={group.sectionLabel}>
-                    <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                      {group.sectionLabel} · {fmtCount(group.combos.length)}
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {group.combos.map((combo) => (
-                        <ComboChip key={combo.key} combo={combo} />
-                      ))}
+              <div className="space-y-4 p-4">
+                <p className="text-[11px] text-slate-400">
+                  Counts are fixtures on this matchday that hit the parameter. Select a section or
+                  parameter to jump to its match.
+                </p>
+                {groups.map((group) => {
+                  const sectionFixtureIds = matchIdsBySection.get(group.combos[0]?.section ?? '') ?? [];
+                  return (
+                    <div key={group.sectionLabel}>
+                      <button
+                        type="button"
+                        disabled={sectionFixtureIds.length === 0}
+                        onClick={() =>
+                          jumpToMatches(`section:${group.sectionLabel}`, sectionFixtureIds)
+                        }
+                        title={`Jump to a fixture matched by ${group.sectionLabel}`}
+                        className="mb-2 flex w-full items-center gap-2 rounded-lg px-1 py-1 text-left transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-emerald-700 disabled:cursor-default disabled:hover:bg-transparent cursor-pointer"
+                      >
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                          {group.sectionLabel}
+                        </span>
+                        <span className="h-px flex-1 bg-slate-200" aria-hidden="true" />
+                        <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-slate-600">
+                          {fmtCount(group.combos.length)} params
+                        </span>
+                        <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-emerald-700">
+                          {fmtCount(sectionFixtureIds.length)} matches
+                        </span>
+                        <ArrowRight className="h-3 w-3 shrink-0 text-emerald-700" aria-hidden="true" />
+                      </button>
+                      <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3 items-start">
+                        {group.combos.map((combo) => {
+                          const fixtureIds = matchIdsByCombo.get(combo.key) ?? [];
+                          return (
+                            <ComboChip
+                              key={combo.key}
+                              combo={combo}
+                              block
+                              matchCount={fixtureIds.length}
+                              onJump={
+                                fixtureIds.length > 0
+                                  ? () => jumpToMatches(combo.key, fixtureIds)
+                                  : undefined
+                              }
+                            />
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </DataCard>
@@ -477,8 +698,8 @@ export function PositiveReadMatches({
                 title={`No matches on ${data.dateIso}`}
                 description={
                   data.source === 'archive'
-                    ? 'No fixture on this matchday produced one of the positive parameters. Try another date or switch to Live for upcoming games.'
-                    : 'No upcoming fixture currently produces one of the positive parameters. Try another date or switch back to Archive.'
+                    ? 'No fixture on this matchday produced one of the qualifying positive parameters. Try another date or switch to Live for upcoming games.'
+                    : 'No upcoming fixture currently produces one of the qualifying positive parameters. Try another date or switch back to Archive.'
                 }
                 action={
                   <button
@@ -510,31 +731,45 @@ export function PositiveReadMatches({
               {(filtered?.matches ?? []).map((match) => {
                 const picksByCombo = new Map(match.picks.map((pick) => [pick.comboKey, pick]));
                 return (
-                  <DataCard
+                  <div
                     key={match.fixtureId}
-                    title={
-                      <span className="text-sm font-semibold normal-case tracking-normal text-slate-900">
-                        {match.homeTeam} <span className="text-slate-400">vs</span> {match.awayTeam}
-                      </span>
-                    }
-                    subtitle={
-                      <span className="text-[11px] font-normal text-slate-500">
-                        {match.competition} · {match.country} · {match.kickoffTime}
-                        {match.score ? ` · ${match.score}` : ` · ${match.status}`}
-                      </span>
-                    }
+                    id={`positive-read-match-${match.fixtureId}`}
+                    className={`scroll-mt-20 rounded-xl ${
+                      focusedFixtureId === match.fixtureId
+                        ? 'ring-2 ring-emerald-400 ring-offset-2'
+                        : ''
+                    }`}
                   >
-                    <div className="flex flex-wrap gap-2 p-4">
-                      {match.combos.map((combo) => (
-                        <ComboChip
-                          key={combo.key}
-                          combo={combo}
-                          pick={picksByCombo.get(combo.key)}
-                          onAdd={isBuild ? (pick) => addPicks([pick]) : undefined}
-                        />
-                      ))}
-                    </div>
-                  </DataCard>
+                    <DataCard
+                      className="[&>div:first-child]:border-b-0"
+                      bodyClassName="hidden"
+                      title={
+                        <span className="text-sm font-semibold normal-case tracking-normal text-slate-900">
+                          {match.homeTeam} <span className="text-slate-400">vs</span> {match.awayTeam}
+                        </span>
+                      }
+                      subtitle={
+                        <span className="text-[11px] font-normal text-slate-500">
+                          {match.competition} · {match.country} · {match.kickoffTime}
+                          {match.score ? ` · ${match.score}` : ` · ${match.status}`}
+                        </span>
+                      }
+                      actions={
+                        <div className="flex flex-wrap items-center gap-2">
+                          {match.combos.map((combo) => (
+                            <ComboChip
+                              key={combo.key}
+                              combo={combo}
+                              pick={picksByCombo.get(combo.key)}
+                              onAdd={isBuild ? (pick) => addPicks([pick]) : undefined}
+                            />
+                          ))}
+                        </div>
+                      }
+                    >
+                      {null}
+                    </DataCard>
+                  </div>
                 );
               })}
             </div>

@@ -5,7 +5,7 @@ export const ANALYTICS_SECTIONS = [
   { id: 'featured', label: 'Featured' },
   { id: 'markets', label: 'Markets' },
   { id: 'replay', label: 'Replay' },
-  { id: 'positive-reads', label: 'Positive reads' },
+  { id: 'positive-reads', label: 'Qualifying reads' },
   { id: 'research', label: 'Research' },
 ] as const;
 

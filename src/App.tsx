@@ -7,6 +7,7 @@ import { DateNavigator } from './components/DateNavigator.tsx';
 import { FixtureBoard } from './components/FixtureBoard.tsx';
 import { AccaTicketSlip } from './components/AccaTicketSlip.tsx';
 import { CuratedAccaView } from './components/CuratedAccaView.tsx';
+import { PickGuideView } from './components/PickGuideView.tsx';
 import { SavedSlipsView } from './components/SavedSlipsView.tsx';
 import { MyActivityView } from './components/MyActivityView.tsx';
 import { AnalyticsView } from './components/AnalyticsView.tsx';
@@ -168,7 +169,9 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState<string>(
     initialUrl.date ?? todayDate
   );
-  const [activeTab, setActiveTab] = useState<ActiveTab>(initialUrl.tab);
+  const [activeTab, setActiveTab] = useState<ActiveTab>(
+    initialUrl.tab === 'roi' ? 'positive-reads' : initialUrl.tab
+  );
   const [activeSection, setActiveSection] = useState<string | undefined>(
     initialUrl.section
   );
@@ -261,7 +264,7 @@ export default function App() {
   useEffect(() => {
     const handlePopState = () => {
       const state = parseAppUrlState(window.location.search, todayDate);
-      setActiveTab(state.tab);
+      setActiveTab(state.tab === 'roi' ? 'positive-reads' : state.tab);
       if (state.date) setSelectedDate(state.date);
       if (state.preset) {
         setFilterPreset(state.preset);
@@ -914,6 +917,14 @@ export default function App() {
     setSelectedLegs((prev) => guardLegs(prev));
   };
 
+  /** Pick Selection's audited shortlist enters the same slip as slate picks. */
+  const handleApplyPickGuideLegs = (legs: AccaLeg[]) => {
+    if (legs.length === 0) return;
+    setSlipOrigin('slate');
+    setSelectedLegs(guardLegs(legs));
+    navigate('acca');
+  };
+
   /**
    * AI-desk picks are research selections, like Positive Reads. They fold into
    * the slip without the recommendation cap; one leg per fixture still holds.
@@ -1315,11 +1326,11 @@ export default function App() {
 
       {/* Universal Matchday Date Bar across all views (signed-in only) */}
       <div
-        className={`bg-white border-b border-slate-200 ${
-          isGuest ? 'hidden' : ''
+        className={`sticky top-16 z-30 bg-white border-b border-slate-200 ${
+          isGuest ? 'hidden' : 'sm:ml-[var(--page-menu-width)] lg:ml-[var(--page-menu-width-lg)]'
         }`}
       >
-        <div className={`${contentInset} py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5`}>
+        <div className={`${isGuest ? 'page-inset-guest' : 'page-inset-guest'} py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5`}>
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
             <span className="font-semibold text-slate-900">
               Matchday Schedule
@@ -1362,13 +1373,6 @@ export default function App() {
             todayDate={todayDate}
             onGoToSlate={() => navigate('slate')}
           />
-        ) : !isGuest && activeTab === 'roi' ? (
-          <PositiveRoiView
-            strategy={strategy}
-            selectedDate={selectedDate}
-            displayDate={slate?.displayDate || selectedDate}
-            onGoToSlate={() => navigate('slate')}
-          />
         ) : !isGuest && activeTab === 'ai' ? (
           <AiView
             selectedDate={selectedDate}
@@ -1392,16 +1396,26 @@ export default function App() {
             onRetry={() => void fetchPublicMatches()}
             onSignIn={openAuth}
           />
-        ) : activeTab === 'positive-reads' ? (
-          <PositiveReadMatches
-            strategy={strategy}
-            todayDate={todayDate}
-            refreshKey={0}
-            mode="build"
-            selectedDate={selectedDate}
-            onAddPicks={handleAddPositiveReadPicks}
-            onOpenTicket={() => navigate('acca')}
-          />
+        ) : activeTab === 'positive-reads' || activeTab === 'roi' ? (
+          <div className="space-y-10">
+            <PositiveReadMatches
+              strategy={strategy}
+              todayDate={todayDate}
+              refreshKey={0}
+              mode="build"
+              selectedDate={selectedDate}
+              onAddPicks={handleAddPositiveReadPicks}
+              onOpenTicket={() => navigate('acca')}
+            />
+            <div className="border-t border-slate-200 pt-10">
+              <PositiveRoiView
+                strategy={strategy}
+                selectedDate={selectedDate}
+                displayDate={slate?.displayDate || selectedDate}
+                onGoToSlate={() => navigate('slate')}
+              />
+            </div>
+          </div>
         ) : activeTab === 'saved' ? (
           <SavedSlipsView
             savedTickets={savedTickets}
@@ -1430,6 +1444,16 @@ export default function App() {
             displayDate={slate?.displayDate ?? selectedDate}
             cachedAt={slate?.cachedAt ?? ''}
             onGoToSlate={() => navigate('slate')}
+          />
+        ) : activeTab === 'pick-guide' ? (
+          <PickGuideView
+            fixtures={slate?.fixtures ?? []}
+            strategy={strategy}
+            displayDate={slate?.displayDate ?? selectedDate}
+            cachedAt={slate?.cachedAt ?? ''}
+            slateGuard={slate?.ticketGuard}
+            onGoToSlate={() => navigate('slate')}
+            onApplyLegs={handleApplyPickGuideLegs}
           />
         ) : isLoading && !slate ? (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -1578,9 +1602,14 @@ export default function App() {
                 isFetchingDate={isLoading}
                 legs={selectedLegs}
                 fixtures={slate.fixtures}
+                savedTickets={savedTickets}
+                fixtureSnapshots={fixtureSnapshots}
+                todayDate={todayDate}
                 minOdds={minOdds}
                 stake={stake}
                 onGoToSlate={() => navigate('slate')}
+                onOpenArchive={() => navigate('saved')}
+                onRefreshResults={handleRefreshSavedResults}
                 onSaveTicket={handleSaveTicket}
                 onAutoComplete={handleAutoCompleteToTarget}
               />

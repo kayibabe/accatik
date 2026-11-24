@@ -187,7 +187,8 @@ export interface PositiveReadCombo {
   key: string;
   section: FeaturedPickSource;
   sectionLabel: string;
-  band: RoiBand;
+  /** `All` means the section×market row pooled across bands. */
+  band: CombinationRoiBand;
   marketKey: string;
   marketLabel: string;
   /** `Analyst Note · High · Over 2.5 Goals`. */
@@ -244,7 +245,7 @@ export interface PositiveReadPick {
    */
   band: RoiBand;
   /** The band of the study cell that matched this pick. */
-  studyBand: RoiBand;
+  studyBand: RoiBand | 'All';
   /**
    * True when a live price drifted out of the study's band and the pick was
    * matched by section and market instead of the exact triple.
@@ -275,7 +276,7 @@ export interface PositiveReadMatch {
 /** The fixed parameter space the study evaluates, positive or not. */
 export interface PositiveReadUniverse {
   sections: FeaturedPickSource[];
-  bands: RoiBand[];
+  bands: CombinationRoiBand[];
   markets: Array<{ key: string; label: string }>;
   marketLabels: Record<string, string>;
 }

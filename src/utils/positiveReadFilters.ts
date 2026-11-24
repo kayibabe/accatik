@@ -26,7 +26,7 @@ export type PositiveReadQualityMode = 'all' | 'qualified' | 'confirmed';
 
 export interface PositiveReadFilterState {
   section: 'all' | FeaturedPickSource;
-  band: 'all' | RoiBand;
+  band: 'all' | RoiBand | 'All';
   marketKey: 'all' | string;
   smallSample: PositiveReadSmallSampleMode;
   quality: PositiveReadQualityMode;
@@ -57,7 +57,7 @@ export const POSITIVE_READ_BAND_VALUES: readonly RoiBand[] = [
 ];
 
 const SECTION_VALUES: readonly string[] = ['all', 'angle', 'cover', 'note'];
-const BAND_VALUES: readonly string[] = ['all', ...POSITIVE_READ_BAND_VALUES];
+const BAND_VALUES: readonly string[] = ['all', ...POSITIVE_READ_BAND_VALUES, 'All'];
 const SAMPLE_VALUES: readonly string[] = ['all', 'exclude', 'only'];
 const QUALITY_VALUES: readonly string[] = ['all', 'qualified', 'confirmed'];
 
@@ -254,7 +254,7 @@ export interface PositiveReadOption<Id extends string = string> {
 
 export interface PositiveReadOptions {
   sections: PositiveReadOption<'all' | FeaturedPickSource>[];
-  bands: PositiveReadOption<'all' | RoiBand>[];
+  bands: PositiveReadOption<'all' | RoiBand | 'All'>[];
   markets: PositiveReadOption<string>[];
   quality: PositiveReadOption<PositiveReadQualityMode>[];
 }
@@ -269,7 +269,7 @@ export function derivePositiveReadOptions(
   state: PositiveReadFilterState
 ): PositiveReadOptions {
   const sections = new Map<FeaturedPickSource, { label: string; count: number }>();
-  const bands = new Map<RoiBand, number>();
+  const bands = new Map<RoiBand | 'All', number>();
   const markets = new Map<string, { label: string; count: number }>();
   let allSections = 0;
   let allBands = 0;
@@ -329,9 +329,12 @@ export function derivePositiveReadOptions(
       ...POSITIVE_READ_BAND_VALUES.filter((band) => bands.has(band)).map(
         (band) => ({ id: band, label: band, count: bands.get(band) ?? 0 })
       ),
+      ...(bands.has('All')
+        ? [{ id: 'All' as const, label: 'All bands combined', count: bands.get('All') ?? 0 }]
+        : []),
       ...[...bands.keys()]
-        .filter((band) => !POSITIVE_READ_BAND_VALUES.includes(band))
-        .map((band) => ({ id: band, label: band, count: bands.get(band) ?? 0 })),
+        .filter((band) => band !== 'All' && !POSITIVE_READ_BAND_VALUES.includes(band as RoiBand))
+        .map((band) => ({ id: band as RoiBand, label: band, count: bands.get(band) ?? 0 })),
     ],
     markets: [
       { id: 'all', label: 'All markets', count: allMarkets },
@@ -442,18 +445,37 @@ export interface PositiveReadComboGroup {
   combos: PositiveReadCombo[];
 }
 
-/** Section headings for the flat parameter chips, in study order. */
+/**
+ * Group qualifying combos for display.
+ * Matches the requested structure: Alternative cover (cover all-bands-combined),
+ * Section × band × market (section-band scope), and Section × market · all bands combined.
+ */
 export function groupPositiveReadCombos(
   combos: readonly PositiveReadCombo[]
 ): PositiveReadComboGroup[] {
   const groups: PositiveReadComboGroup[] = [];
+  const groupFor = (combo: PositiveReadCombo): string => {
+    if (combo.band !== 'All') return 'Section × band × market';
+    if (combo.section === 'cover') return 'Alternative cover';
+    return 'Section × market · all bands combined';
+  };
+  const order = [
+    'Alternative cover',
+    'Section × band × market',
+    'Section × market · all bands combined',
+  ];
+
   for (const combo of combos) {
-    let group = groups.find((item) => item.sectionLabel === combo.sectionLabel);
+    const label = groupFor(combo);
+    let group = groups.find((item) => item.sectionLabel === label);
     if (!group) {
-      group = { sectionLabel: combo.sectionLabel, combos: [] };
+      group = { sectionLabel: label, combos: [] };
       groups.push(group);
     }
     group.combos.push(combo);
   }
-  return groups;
+
+  return groups.sort(
+    (a, b) => order.indexOf(a.sectionLabel) - order.indexOf(b.sectionLabel)
+  );
 }

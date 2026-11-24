@@ -5,6 +5,7 @@ import {
   Bookmark,
   CalendarDays,
   ClipboardList,
+  ListChecks,
   LogOut,
   ShieldCheck,
   Sparkles,
@@ -32,6 +33,7 @@ interface SideMenuProps {
 
 const TAB_ICONS: Record<ActiveTab, typeof CalendarDays> = {
   slate: CalendarDays,
+  'pick-guide': ListChecks,
   acca: ClipboardList,
   'positive-reads': Target,
   saved: Bookmark,

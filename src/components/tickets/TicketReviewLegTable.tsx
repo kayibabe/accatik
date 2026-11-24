@@ -22,6 +22,8 @@ interface TicketReviewLegTableProps {
 /**
  * Read-only leg ledger for Ticket Review. Sorting changes only the view order;
  * the original ticket position is carried through and never renumbered.
+ * Wide screens get the full ledger table; narrower screens get stacked cards
+ * so the review never needs horizontal scrolling.
  */
 export function TicketReviewLegTable({
   legs,
@@ -62,102 +64,191 @@ export function TicketReviewLegTable({
     }
   );
 
+  const rows = sortedRows.map(({ leg, index }) => {
+    const matched = fixtureMap.get(leg.fixtureId);
+    return {
+      leg,
+      index,
+      status: settlementFor(leg),
+      matchDate: leg.matchDate || matched?.matchDate || displayDate,
+      resultText: matched
+        ? getFixtureMatchResultSummary(matched)
+        : 'Scheduled',
+    };
+  });
+
   return (
     <DataCard
       labelledBy="ticket-review-leg-title"
       title="Leg-by-leg review"
       subtitle="Ticket order is preserved; sort only changes how the legs are displayed."
       actions={
-        legSort.key ? (
-          <button
-            type="button"
-            onClick={onRestoreOrder}
-            className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 cursor-pointer"
-          >
-            Restore ticket order
-          </button>
-        ) : (
-          <span className="text-[11px] text-slate-400">
-            Click a column header to sort
-          </span>
-        )
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-1.5 text-[11px] text-slate-500 xl:hidden">
+            Sort
+            <select
+              aria-label="Sort legs"
+              value={legSort.key ?? 'index'}
+              onChange={(event) =>
+                event.target.value === 'index'
+                  ? onRestoreOrder()
+                  : onSort(event.target.value)
+              }
+              className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 cursor-pointer"
+            >
+              <option value="index">Ticket order</option>
+              <option value="fixture">Fixture</option>
+              <option value="date">Kickoff</option>
+              <option value="result">Result</option>
+              <option value="selection">Selection</option>
+              <option value="odds">Odds</option>
+              <option value="status">Status</option>
+              <option value="rationale">Justification</option>
+            </select>
+          </label>
+          {legSort.key ? (
+            <button
+              type="button"
+              onClick={onRestoreOrder}
+              className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 cursor-pointer"
+            >
+              Restore ticket order
+            </button>
+          ) : (
+            <span className="hidden text-[11px] text-slate-400 xl:inline">
+              Click a column header to sort
+            </span>
+          )}
+        </div>
       }
-      bodyClassName="overflow-x-auto"
+      bodyClassName="px-4 py-4"
     >
-      <table className="w-full min-w-[920px] border-collapse text-left text-xs">
-        <caption className="sr-only">Selected accumulator legs</caption>
-        <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
-          <tr>
-            <SortableTh
-              label="#"
-              columnKey="index"
-              sort={legSort}
-              onSort={onSort}
-              className="py-3 px-4 w-12"
-            />
-            <SortableTh
-              label="Fixture & Competition"
-              columnKey="fixture"
-              sort={legSort}
-              onSort={onSort}
-              className="py-3 px-4"
-            />
-            <SortableTh
-              label="Date & Kickoff"
-              columnKey="date"
-              sort={legSort}
-              onSort={onSort}
-              className="py-3 px-4"
-            />
-            <SortableTh
-              label="Match Result"
-              columnKey="result"
-              sort={legSort}
-              onSort={onSort}
-              className="py-3 px-4"
-            />
-            <SortableTh
-              label="Selection"
-              columnKey="selection"
-              sort={legSort}
-              onSort={onSort}
-              className="py-3 px-4"
-            />
-            <SortableTh
-              label="Odds / Prob"
-              columnKey="odds"
-              sort={legSort}
-              onSort={onSort}
-              defaultDirection="desc"
-              align="right"
-              className="py-3 px-4"
-            />
-            <SortableTh
-              label="Status"
-              columnKey="status"
-              sort={legSort}
-              onSort={onSort}
-              className="py-3 px-4"
-            />
-            <SortableTh
-              label="Tactical Justification"
-              columnKey="rationale"
-              sort={legSort}
-              onSort={onSort}
-              className="py-3 px-4"
-            />
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-200">
-          {sortedRows.map(({ leg, index }) => {
-            const matched = fixtureMap.get(leg.fixtureId);
-            const status = settlementFor(leg);
-            const matchDate = leg.matchDate || matched?.matchDate || displayDate;
-            const resultText = matched
-              ? getFixtureMatchResultSummary(matched)
-              : 'Scheduled';
+      {/* Narrow screens: one card per leg, no sideways scrolling. */}
+      <div className="space-y-3 xl:hidden">
+        {rows.map(({ leg, index, status, matchDate, resultText }) => (
+          <article
+            key={leg.fixtureId}
+            className="space-y-2 rounded-lg border border-slate-200 p-3"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-mono text-[11px] text-slate-400">
+                #{String(index + 1).padStart(2, '0')}
+              </span>
+              <SettlementLabel status={status} />
+            </div>
+            <div>
+              <p className="font-semibold text-slate-900">
+                {leg.homeTeam} vs {leg.awayTeam}
+              </p>
+              <p className="text-[11px] text-slate-500">{leg.competition}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-[11px]">
+              <div>
+                <span className="block text-slate-500">Selection</span>
+                <span className="font-semibold text-emerald-800">
+                  {leg.marketLabel}
+                </span>
+              </div>
+              <div>
+                <span className="block text-slate-500">Odds / Prob</span>
+                <span className="font-mono font-bold text-slate-900">
+                  {fmtOdds(leg.odds)}
+                </span>
+                <span className="block font-mono text-slate-400">
+                  {leg.fairProbability
+                    ? fmtPercent(leg.fairProbability)
+                    : '—'}
+                </span>
+              </div>
+              <div>
+                <span className="block text-slate-500">Date & Kickoff</span>
+                <span className="font-mono text-slate-700">{matchDate}</span>
+                <span className="block font-mono text-slate-500">
+                  {leg.kickoffTime}
+                </span>
+              </div>
+              <div>
+                <span className="block text-slate-500">Match Result</span>
+                <span className="font-mono text-slate-700">{resultText}</span>
+              </div>
+            </div>
+            {leg.rationale && (
+              <p className="border-t border-slate-100 pt-2 text-[11px] text-slate-600">
+                {leg.rationale}
+              </p>
+            )}
+          </article>
+        ))}
+      </div>
 
-            return (
+      {/* Wide screens: the full sortable ledger. */}
+      <div className="hidden xl:block">
+        <table className="w-full min-w-[920px] border-collapse text-left text-xs">
+          <caption className="sr-only">Selected accumulator legs</caption>
+          <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
+            <tr>
+              <SortableTh
+                label="#"
+                columnKey="index"
+                sort={legSort}
+                onSort={onSort}
+                className="py-3 px-4 w-12"
+              />
+              <SortableTh
+                label="Fixture & Competition"
+                columnKey="fixture"
+                sort={legSort}
+                onSort={onSort}
+                className="py-3 px-4"
+              />
+              <SortableTh
+                label="Date & Kickoff"
+                columnKey="date"
+                sort={legSort}
+                onSort={onSort}
+                className="py-3 px-4"
+              />
+              <SortableTh
+                label="Match Result"
+                columnKey="result"
+                sort={legSort}
+                onSort={onSort}
+                className="py-3 px-4"
+              />
+              <SortableTh
+                label="Selection"
+                columnKey="selection"
+                sort={legSort}
+                onSort={onSort}
+                className="py-3 px-4"
+              />
+              <SortableTh
+                label="Odds / Prob"
+                columnKey="odds"
+                sort={legSort}
+                onSort={onSort}
+                defaultDirection="desc"
+                align="right"
+                className="py-3 px-4"
+              />
+              <SortableTh
+                label="Status"
+                columnKey="status"
+                sort={legSort}
+                onSort={onSort}
+                className="py-3 px-4"
+              />
+              <SortableTh
+                label="Tactical Justification"
+                columnKey="rationale"
+                sort={legSort}
+                onSort={onSort}
+                className="py-3 px-4"
+              />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200">
+            {rows.map(({ leg, index, status, matchDate, resultText }) => (
               <tr key={leg.fixtureId} className="hover:bg-slate-50/70">
                 <td className="py-3.5 px-4 font-mono text-xs text-slate-400 tabular-nums">
                   {String(index + 1).padStart(2, '0')}
@@ -199,10 +290,10 @@ export function TicketReviewLegTable({
                   {leg.rationale}
                 </td>
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </DataCard>
   );
 }

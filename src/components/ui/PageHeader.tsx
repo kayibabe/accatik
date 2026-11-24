@@ -51,6 +51,8 @@ interface PageHeaderProps {
   scope?: PageScope;
   /** Extra small meta shown under the title, e.g. strategy and date. */
   meta?: ReactNode;
+  /** Optional override for the description wrapper. */
+  descriptionClassName?: string;
 }
 
 /**
@@ -66,6 +68,7 @@ export function PageHeader({
   backLabel,
   scope,
   meta,
+  descriptionClassName = 'max-w-3xl',
 }: PageHeaderProps) {
   return (
     <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -83,7 +86,9 @@ export function PageHeader({
         </h1>
         {meta && <div className="text-xs text-slate-500">{meta}</div>}
         {description && (
-          <p className="max-w-3xl text-xs leading-relaxed text-slate-600">
+          <p
+            className={`text-xs leading-relaxed text-slate-600 ${descriptionClassName}`}
+          >
             {description}
           </p>
         )}

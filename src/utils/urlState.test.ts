@@ -5,6 +5,7 @@ import { buildAppSearch, parseAppUrlState } from './urlState.ts';
 test('unknown tabs fall back to the slate', () => {
   assert.equal(parseAppUrlState('?tab=nope').tab, 'slate');
   assert.equal(parseAppUrlState('?tab=analytics').tab, 'analytics');
+  assert.equal(parseAppUrlState('?tab=pick-guide').tab, 'pick-guide');
 });
 
 test('dates are validated and fall back to the supplied default', () => {

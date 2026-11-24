@@ -197,7 +197,7 @@ test('parsePositiveReadFilters rejects junk and keeps only valid values', () => 
 
   const invalid = parsePositiveReadFilters({
     section: 'unknown',
-    band: 'All',
+    band: 'Everything',
     marketKey: 42,
     smallSample: 'sometimes',
     quality: 'probably',
@@ -205,6 +205,11 @@ test('parsePositiveReadFilters rejects junk and keeps only valid values', () => 
     query: 'x'.repeat(121),
   });
   assert.deepEqual(invalid, DEFAULT_POSITIVE_READ_FILTERS);
+
+  assert.deepEqual(
+    parsePositiveReadFilters({ ...DEFAULT_POSITIVE_READ_FILTERS, band: 'All' }).band,
+    'All'
+  );
 });
 
 test('filter state round-trips through storage and degrades safely', () => {
@@ -462,13 +467,21 @@ test('reconcile drops saved dimensions no longer present in the feed', () => {
   });
 });
 
-test('groupPositiveReadCombos keeps study order and counts per section', () => {
-  const groups = groupPositiveReadCombos([combos[2], combos[0], combos[4]]);
+test('groupPositiveReadCombos groups by scope as requested', () => {
+  const allBandsCover = combo('cover:All:DC-12', 'cover', 'All', 'DC-12', 30);
+  const allBandsNote = combo('note:All:GOALS-O2.5', 'note', 'All', 'GOALS-O2.5', 6.9);
+  const groups = groupPositiveReadCombos([
+    allBandsCover,
+    combos[0],
+    combos[4],
+    allBandsNote,
+  ]);
   assert.deepEqual(
     groups.map((group) => [group.sectionLabel, group.combos.length]),
     [
-      ['Safer Cover', 1],
-      ['Analyst Note', 2],
+      ['Alternative cover', 1],
+      ['Section × band × market', 2],
+      ['Section × market · all bands combined', 1],
     ]
   );
   assert.equal(activePositiveReadFilterCount(DEFAULT_POSITIVE_READ_FILTERS), 0);

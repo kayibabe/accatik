@@ -14,7 +14,7 @@ test('new ticket names lead with their origin', () => {
       strategy: 'balanced',
       totalOdds: 1112.03,
     }),
-    'Positive Reads · 17-Leg Balanced Acca (1112.03 Odds)'
+    'Positive Reads and Analytics · 17-Leg Balanced Acca (1112.03 Odds)'
   );
   assert.equal(
     ticketName({
@@ -37,6 +37,10 @@ test('new ticket names lead with their origin', () => {
 });
 
 test('origin is read back from an origin-prefixed ticket name', () => {
+  assert.equal(
+    originFromTicketName('Positive Reads and Analytics · 17-Leg Balanced Acca (1112.03 Odds)'),
+    'positive-reads'
+  );
   assert.equal(
     originFromTicketName('Positive Reads · 17-Leg Balanced Acca (1112.03 Odds)'),
     'positive-reads'
@@ -70,7 +74,7 @@ test('the five legacy tickets are renamed from their known origins', () => {
   );
   assert.equal(
     renameLegacyTicketName('17-Leg Balanced Acca (1112.03 Odds)'),
-    'Positive Reads · 17-Leg Balanced Acca (1112.03 Odds)'
+    'Positive Reads and Analytics · 17-Leg Balanced Acca (1112.03 Odds)'
   );
   assert.equal(renameLegacyTicketName('Some other ticket'), null);
 });

@@ -1,4 +1,8 @@
-import type { AccaLeg } from '../../types/fixtures.ts';
+import type { AccaLeg, Fixture } from '../../types/fixtures.ts';
+import {
+  evaluateMarketSettlement,
+  getFixtureMatchResultSummary,
+} from '../../utils/accaMath.ts';
 import {
   fmtCount,
   fmtFixed,
@@ -7,12 +11,14 @@ import {
   fmtSignedPercent,
 } from '../../utils/format.ts';
 import type { TicketGuardResult } from '../../utils/ticketGuard.ts';
+import { SettlementLabel } from '../SettlementLabel.tsx';
 import { DataCard, InfoHint } from '../ui/DataCard.tsx';
 
 interface RationalePanelProps {
   /** Existing guard output; no economics are recomputed or invented here. */
   guard: TicketGuardResult;
   legs: AccaLeg[];
+  fixtures: Fixture[];
   strategyName: string;
   minOdds: number;
 }
@@ -21,12 +27,13 @@ interface RationalePanelProps {
 export function RationalePanel({
   guard,
   legs,
+  fixtures,
   strategyName,
   minOdds,
 }: RationalePanelProps) {
   const { economics } = guard;
   const isFair = economics.basis === 'fair';
-  const annotated = legs.filter((leg) => leg.rationale?.trim());
+  const fixtureMap = new Map(fixtures.map((fixture) => [fixture.id, fixture]));
 
   return (
     <DataCard
@@ -91,21 +98,42 @@ export function RationalePanel({
           </div>
         </dl>
 
-        {annotated.length > 0 ? (
-          <ul className="space-y-1.5 border-t border-slate-200 pt-3 text-xs text-slate-600">
-            {annotated.map((leg) => (
-              <li key={`${leg.fixtureId}-${leg.marketId}`}>
-                <span className="font-semibold text-slate-800">
-                  {leg.homeTeam} vs {leg.awayTeam} · {leg.marketLabel}:
-                </span>{' '}
-                {leg.rationale}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="border-t border-slate-200 pt-3 text-xs text-slate-500">
-            No tactical notes were captured for these legs.
-          </p>
+        {legs.length > 0 && (
+          <ol className="list-decimal space-y-1.5 border-t border-slate-200 pt-3 pl-5 text-xs text-slate-600 marker:font-semibold marker:text-slate-400">
+            {legs.map((leg, index) => {
+              const fixture = fixtureMap.get(leg.fixtureId);
+              const status = fixture
+                ? evaluateMarketSettlement(fixture, {
+                    id: leg.marketId,
+                    label: leg.marketLabel,
+                    marketType: leg.marketType,
+                  })
+                : 'Pending';
+              const result = fixture
+                ? getFixtureMatchResultSummary(fixture)
+                : 'Scheduled';
+              const note = leg.rationale?.trim();
+
+              return (
+                <li key={`${leg.fixtureId}-${leg.marketId}`} value={index + 1}>
+                  <span className="font-semibold text-slate-800">
+                    {leg.homeTeam} vs {leg.awayTeam} · {leg.marketLabel}:
+                  </span>{' '}
+                  {note || (
+                    <span className="italic text-slate-400">
+                      No tactical note captured.
+                    </span>
+                  )}{' '}
+                  <span className="inline-flex items-center gap-2 whitespace-nowrap">
+                    <SettlementLabel status={status} />
+                    <span className="font-mono text-[11px] text-slate-500">
+                      {result}
+                    </span>
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
         )}
       </div>
     </DataCard>
