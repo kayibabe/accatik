@@ -641,9 +641,8 @@ export function PositiveReadMatches({
             ) : (
               <div className="space-y-4 p-4">
                 <p className="text-[11px] text-slate-400">
-                  A qualifying parameter is one section × band × market combination from the fixed
-                  study. Counts are fixtures on {fmtShortDate(displayedDate)} that hit it. Select a
-                  section or parameter to jump to its fixture.
+                  Select a section or parameter to jump to its fixtures on{' '}
+                  {fmtShortDate(displayedDate)}.
                 </p>
                 {groups.map((group) => {
                   const sectionFixtureIds = matchIdsBySection.get(group.combos[0]?.section ?? '') ?? [];

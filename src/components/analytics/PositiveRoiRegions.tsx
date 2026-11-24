@@ -183,7 +183,6 @@ export function PositiveRoiOverview({
         source="ROI promotion registry · daily snapshot"
         mode="Research · shadow only"
         capturedAt={registrySnapshot}
-        note="Read-only; generated tickets stay in the shadow ledger"
       />
 
       <MetricGrid>

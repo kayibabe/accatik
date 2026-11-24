@@ -1257,8 +1257,8 @@ export default function App() {
         <div className={`${contentInset} py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500`}>
           <span>MatchSlip · Built on evidence, not hunches.</span>
           <span>
-            18+ only · Bet responsibly · Odds and match schedules should be
-            verified with your sportsbook prior to placement.
+            18+ only · Bet responsibly · Verify odds and kickoff times with your
+            sportsbook.
           </span>
         </div>
       </footer>

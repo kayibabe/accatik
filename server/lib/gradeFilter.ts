@@ -246,7 +246,7 @@ export async function computeGradeFilter(
   const caveats = [
     'Prematch-priced archived cards only; live and backfilled prices are excluded.',
     'High and Solid are book-probability grades, not an independent edge signal.',
-    'One hypothetical ticket per matchday at a flat one-unit stake; research only, not a proven ROI strategy.',
+    'One hypothetical ticket per matchday at a flat one-unit stake. Treat the returns as research, not a proven strategy.',
   ];
   if (tickets.length > 0 && tickets.length < 20) {
     caveats.push(

@@ -131,8 +131,8 @@ export function TicketReplayPanel({
       <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-3 text-xs text-slate-500">
         <p className="font-semibold text-slate-700">Accumulator ticket replay unavailable</p>
         <p className="mt-1">
-          The API Function needs a redeploy to expose the inception-to-date
-          ticket analysis. Pick analytics above are unaffected.
+          Inception-to-date ticket replay is not available on the connected API
+          yet. Pick analytics above are unaffected.
         </p>
         <button
           type="button"
@@ -340,10 +340,10 @@ export function TicketReplayPanel({
 
       <DataStatus
         source="Pre-match archive"
+        mode="Research reconstruction"
         note={
           <span className="text-slate-500">
-            Flat {data.stakePerTicket}-unit replay · research only · generated{' '}
-            {fmtShortDate(data.generatedAt)}
+            Generated {fmtShortDate(data.generatedAt)}
           </span>
         }
       />

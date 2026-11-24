@@ -156,8 +156,8 @@ export function GradeFilterPanel({
       <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-3 text-xs text-slate-500">
         <p className="font-semibold text-slate-700">Grade filter unavailable</p>
         <p className="mt-1">
-          The API Function needs a redeploy to expose the archived High + Solid
-          filter. The rest of the analytics tab is unaffected.
+          The archived High + Solid filter is not available on the connected API
+          yet. The rest of analytics is unaffected.
         </p>
         <button
           type="button"
@@ -494,7 +494,7 @@ export function GradeFilterPanel({
         <p className="mt-3 flex items-start gap-1 text-[11px] leading-relaxed text-slate-400">
           <InfoHint
             label="Research-only simulation"
-            definition="These are hypothetical tickets rebuilt from archived prematch prices, not saved slips. Grade is derived from the book's de-vigged probability, so a positive hit rate is not evidence of betting edge."
+            definition="These are hypothetical tickets rebuilt from archived prematch prices, not saved slips. Grade comes from the book's de-vigged probability, not an independent edge model."
             source="High + Solid archive filter"
           />
           <span>

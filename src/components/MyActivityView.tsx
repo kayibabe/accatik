@@ -57,7 +57,7 @@ export function MyActivityView({
       <PageHeader
         eyebrow="This Browser’s Record"
         title="My Activity"
-        description="Your personal settlement record and performance from the slips you saved. The engine’s global Shadow Ticket Ledger is a separate, append-only record."
+        description="Your saved slips, settlements and full performance breakdown. The engine’s global Shadow Ticket Ledger is a separate, append-only record."
         scope="personal"
         onBack={onGoToSlate}
       />
@@ -68,9 +68,8 @@ export function MyActivityView({
           aria-hidden="true"
         />
         <p className="leading-relaxed">
-          Your saved slips and preferences stay in this browser while the app is
-          local-only. The full breakdown below is the authoritative version of
-          the compact snapshot shown under Saved Slips.
+          Saved slips and preferences stay in this browser. The breakdown below
+          is the full version of the snapshot on Saved Slips.
         </p>
       </div>
 

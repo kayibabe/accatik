@@ -283,7 +283,7 @@ export function SavedSlipsView({
       <PageHeader
         eyebrow="Ticket Archive"
         title="Saved Accumulator Slips"
-        description="Your personal archive of saved slips. Settlements come from captured price snapshots and the live slate; full performance analytics live in My Activity."
+        description="Your personal archive of saved slips. Settlements come from captured price snapshots and the live slate."
         scope="personal"
         onBack={onGoToSlate}
       />

@@ -56,14 +56,7 @@ export function SlipPerformancePanel({
         </p>
       </div>
 
-      <DataStatus
-        source="Settled archive"
-        note={
-          <span className="text-slate-500">
-            Flat-stake model · void stakes excluded from ROI
-          </span>
-        }
-      />
+      <DataStatus source="Settled archive" mode="Saved slips" />
 
       <PerformanceMetrics analytics={analytics} />
       <PerformanceDetail analytics={analytics} />

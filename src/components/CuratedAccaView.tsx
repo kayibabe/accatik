@@ -288,9 +288,7 @@ export function CuratedAccaView({
         </p>
       )}
       <footer className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-[11px] text-slate-500">
-          Review only — edits happen on the fixture board.
-        </p>
+        <p className="text-[11px] text-slate-500">Review only.</p>
         <div
           role="group"
           aria-label="Ticket review actions"

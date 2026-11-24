@@ -202,9 +202,10 @@ function RoiTable({
           {row.marketKey.startsWith('DNB-') && (
             <span
               className="ml-1.5 text-[10px] font-medium text-amber-600"
-              title="Feed prices for DNB are miscalibrated"
+              title="Draw No Bet archive prices are unreliable; direct DNB ROI is a price artifact, not an edge."
+              aria-label="Draw No Bet price warning"
             >
-              feed ⚠
+              Price warning
             </span>
           )}
         </span>

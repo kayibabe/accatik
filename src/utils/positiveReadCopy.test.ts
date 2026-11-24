@@ -35,17 +35,19 @@ test('only the slip workflow adds the pending-pick rule', () => {
     'Daily feed · balanced strategy · archived matchday · pending picks are kept'
   );
   assert.match(positiveReadModeNote('build'), /Add all pending picks/);
+  assert.match(positiveReadModeNote('build'), /Band drift/);
   assert.match(positiveReadModeNote('build'), /every pending pick is kept/i);
   assert.match(positiveReadModeNote('analytics'), /Research tab/);
 });
 
-test('caveats describe parameters, badges and pending picks consistently', () => {
+test('caveats explain evidence and pricing without repeating the strip', () => {
   const caveats = positiveReadCaveats();
+  const text = caveats.join(' ');
 
-  assert.match(caveats[0], /A qualifying read is a section × band × market parameter/);
-  assert.match(caveats[1], /Qualified parameters.*Confirmed parameters/);
-  assert.match(caveats[2], /qualified parameter/);
-  assert.match(caveats[3], /Parameters below the study’s minimum sample/);
-  assert.match(caveats[6], /fixture made by section and market/);
-  assert.match(caveats[7], /Adding a pending pick/);
+  assert.ok(caveats.length <= 5);
+  assert.match(text, /descriptive, not proven edge/);
+  assert.match(text, /Qualified.*Confirmed.*Stable/);
+  assert.match(text, /Small-sample/);
+  assert.match(text, /out-of-sample/);
+  assert.match(text, /fair probability.*not a guarantee/);
 });

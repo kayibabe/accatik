@@ -82,7 +82,7 @@ function inferMarketType(key: string): MarketType | null {
 
 /**
  * Older Functions published average odds but not fair probability. Derive a
- * usable fallback so the probability filter still works before redeployment.
+ * usable fallback when an older API response omits fair probability.
  * (1 / average odds is the raw implied probability, so it runs a little above
  * the margin-adjusted value.)
  */

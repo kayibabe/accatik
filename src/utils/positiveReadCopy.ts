@@ -57,8 +57,9 @@ export function positiveReadIntroduction(dateLabel: string): string {
 export function positiveReadModeNote(mode: 'analytics' | 'build'): string {
   if (mode === 'build') {
     return (
-      'Add a labelled card, or use Add all pending picks. Archive uses the frozen ' +
-      'pre-match price; Live uses the current book and may drift a band. Every ' +
+      'Add a labelled card, or use Add all pending picks. Adding a pick copies ' +
+      'the displayed price into your slip: Archive uses the frozen pre-match ' +
+      'price, Live uses the current book and may drift a band (Band drift). Every ' +
       'pending pick is kept, one per fixture. Wide slips are research only, not ' +
       'recommendations.'
     );
@@ -70,16 +71,16 @@ export function positiveReadModeNote(mode: 'analytics' | 'build'): string {
   );
 }
 
-/** Caveats sent with every response, so both surfaces disclose the same rules. */
+/**
+ * Caveats sent with every response. They explain study interpretation only:
+ * the threshold, price source and slip rules already appear in the context
+ * strip and mode note, so they are not repeated here.
+ */
 export function positiveReadCaveats(): string[] {
   return [
-    `A qualifying read is a section × band × market parameter whose inception-to-date ROI is ${POSITIVE_READ_ROI_LABEL} or more in the combination study. It is descriptive, not proven edge.`,
-    `Qualified parameters need the matchday-clustered 95% interval to clear zero; Confirmed parameters also cleared the ${POSITIVE_READ_ROI_LABEL} threshold in a study that stops before this one’s latest matchday.`,
-    'Stable means a qualified parameter was also positive on at least half the matchdays it appeared on, with a minimum of two, so one large win cannot carry the read.',
-    'Parameters below the study’s minimum sample are still shown when they clear the qualifying ROI threshold, and are badged as small samples; they can never be Qualified or Confirmed.',
-    `Archive reviews leave the reviewed matchday out of the study, so labels are out-of-sample for that day. The study is the fixed ${POSITIVE_READ_UNIVERSE_LABEL} universe, not a per-market promotion.`,
-    'Bands are the engine’s confidence label for the fair probability of the frozen pre-match price, not a guarantee of the outcome.',
-    'Live mode prices a card from the current book, so its band can differ from the archived price that produced the study. A Band drift badge marks a fixture made by section and market instead of the exact band.',
-    'Adding a pending pick copies the price shown here into your slip. Archive uses the frozen pre-match price; switch to Live for the current book.',
+    `A qualifying read is a section × band × market parameter with inception-to-date ROI of ${POSITIVE_READ_ROI_LABEL} or more in the fixed study. It is descriptive, not proven edge.`,
+    `Evidence labels: Qualified needs the matchday-clustered 95% interval to clear zero; Confirmed also cleared ${POSITIVE_READ_ROI_LABEL} in a study ending before this matchday; Stable stayed positive on at least half its matchdays, with at least two matchdays.`,
+    'Small-sample parameters can clear the ROI threshold but never earn Qualified or Confirmed status; treat their returns as noise.',
+    'Archive labels are out-of-sample for the reviewed matchday. Bands describe the fair probability of the frozen pre-match price, not a guarantee.',
   ];
 }
