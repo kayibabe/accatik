@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AnalyticsRefreshResult,
   MarketAnalyticsRow,
@@ -106,12 +106,8 @@ export function AnalyticsView({
       [key]: !current[key],
     }));
 
-  /**
-   * Merge freshly published results into the archive, then reload every table.
-   * The endpoint is time-gated server-side, so polling while this tab is open
-   * cannot turn into a stream of upstream feed calls.
-   */
-  const refreshTables = useCallback(async (force = false) => {
+  /** Merge freshly published results into the archive, then reload every table. */
+  const runRefresh = useCallback(async (force: boolean) => {
     setRefreshingTables(true);
     setRefreshError(null);
     try {
@@ -142,6 +138,34 @@ export function AnalyticsView({
       setRefreshingTables(false);
     }
   }, []);
+
+  const refreshFlightRef = useRef<Promise<void> | null>(null);
+  const pendingForceRef = useRef(false);
+
+  /**
+   * One refresh at a time: mount, the five-minute poll and tab visibility can
+   * all fire together. The endpoint is time-gated server-side, but coalescing
+   * here stops duplicate client requests. A forced click during an in-flight
+   * check is queued rather than dropped, so an explicit Reload still lands.
+   */
+  const refreshTables = useCallback(
+    (force = false): Promise<void> => {
+      if (refreshFlightRef.current) {
+        if (force) pendingForceRef.current = true;
+        return refreshFlightRef.current;
+      }
+      const flight = runRefresh(force).finally(() => {
+        refreshFlightRef.current = null;
+        if (pendingForceRef.current) {
+          pendingForceRef.current = false;
+          void refreshTables(true);
+        }
+      });
+      refreshFlightRef.current = flight;
+      return flight;
+    },
+    [runRefresh]
+  );
 
   // A finished match changes the archive without this tab visiting a slate, so
   // check on load, while open, and as soon as the tab becomes visible again.

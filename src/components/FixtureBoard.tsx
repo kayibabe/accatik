@@ -48,7 +48,6 @@ import {
 import {
   DEFAULT_SLATE_FILTER_STATE,
   loadSlateFilterState,
-  saveSlateFilterState,
 } from '../utils/slateFilterState.ts';
 import type { SlateFilterState } from '../utils/slateFilterState.ts';
 import {
@@ -220,12 +219,8 @@ export function FixtureBoard({
   const minOdds = parseOddsInput(filters.minOddsInput);
   const maxOdds = parseOddsInput(filters.maxOddsInput);
 
-  // Mirrored to localStorage so a reload or a tab switch keeps the slate
-  // narrowed. Search, status and competition stay session-only.
-  useEffect(() => {
-    saveSlateFilterState(filters);
-  }, [filters]);
-
+  // Filters are owned and persisted by App; search, status and competition
+  // stay session-only. A filter change only resets this board's visible slice.
   useEffect(() => {
     setVisibleLimit(40);
   }, [

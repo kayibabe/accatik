@@ -328,7 +328,10 @@ export function PositiveReadMatches({
         );
         if (cancelled) return;
         setData(result);
-        if (!isBuild && !dateIso) setDateIso(result.dateIso);
+        // The server resolves the default matchday when no date is supplied.
+        // Keep `dateIso` as the user's choice only: writing the resolved date
+        // back here would change this effect's dependency and refetch the same
+        // report. The navigator reads data.dateIso instead.
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Could not load qualifying reads.');
@@ -456,7 +459,7 @@ export function PositiveReadMatches({
         <div className="flex flex-wrap items-center gap-2">
           {!isBuild && (
             <DateNavigator
-              selectedDate={dateIso || todayDate}
+              selectedDate={dateIso || data?.dateIso || todayDate}
               todayDate={todayDate}
               onChangeDate={setDateIso}
             />

@@ -382,7 +382,6 @@ export function CombinationRoiView({
   const [data, setData] = useState<CombinationRoiResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [localReload, setLocalReload] = useState(0);
   const [band, setBand] = useState<CombinationRoiBand>('All');
   const [section, setSection] = useState<'all' | FeaturedPickSource>('all');
   const [market, setMarket] = useState('all');
@@ -399,7 +398,7 @@ export function CombinationRoiView({
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ strategy, force: force || localReload > 0 }),
+            body: JSON.stringify({ strategy, force }),
           }
         );
         if (!cancelled) setData(result);
@@ -414,7 +413,7 @@ export function CombinationRoiView({
     return () => {
       cancelled = true;
     };
-  }, [strategy, refreshKey, force, localReload]);
+  }, [strategy, refreshKey, force]);
 
   const bandCounts = useMemo(() => {
     const counts = new Map<CombinationRoiBand, number>();
@@ -497,10 +496,7 @@ export function CombinationRoiView({
           {loading && <InlineLoading label="Updating…" />}
           <button
             type="button"
-            onClick={() => {
-              setLocalReload((key) => key + 1);
-              onReload();
-            }}
+            onClick={onReload}
             disabled={loading}
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 cursor-pointer"
           >
