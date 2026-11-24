@@ -1,39 +1,28 @@
-import type { AccaLeg, Fixture } from '../../types/fixtures.ts';
-import {
-  evaluateMarketSettlement,
-  getFixtureMatchResultSummary,
-} from '../../utils/accaMath.ts';
-import {
-  fmtCount,
-  fmtFixed,
-  fmtOdds,
-  fmtPercent,
-  fmtSignedPercent,
-} from '../../utils/format.ts';
+import type { AccaLeg } from '../../types/fixtures.ts';
+import { fmtCount, fmtOdds, fmtPercent } from '../../utils/format.ts';
 import type { TicketGuardResult } from '../../utils/ticketGuard.ts';
-import { SettlementLabel } from '../SettlementLabel.tsx';
-import { DataCard, InfoHint } from '../ui/DataCard.tsx';
+import { DataCard } from '../ui/DataCard.tsx';
 
 interface RationalePanelProps {
   /** Existing guard output; no economics are recomputed or invented here. */
   guard: TicketGuardResult;
   legs: AccaLeg[];
-  fixtures: Fixture[];
   strategyName: string;
   minOdds: number;
 }
 
-/** "Why this ticket" — derived entirely from guard economics and leg notes. */
+/**
+ * Explains the guard verdict. Headline odds, chance and settlement live in the
+ * summary strip; per-leg prices, notes and results live in the leg ledger, so
+ * this card only answers "why".
+ */
 export function RationalePanel({
   guard,
   legs,
-  fixtures,
   strategyName,
   minOdds,
 }: RationalePanelProps) {
-  const { economics } = guard;
-  const isFair = economics.basis === 'fair';
-  const fixtureMap = new Map(fixtures.map((fixture) => [fixture.id, fixture]));
+  const isFair = guard.economics.basis === 'fair';
 
   return (
     <DataCard
@@ -53,88 +42,22 @@ export function RationalePanel({
             {guard.recommended
               ? 'Passes the structural guard.'
               : 'Not a recommended ticket.'}
-          </span>{' '}
-          {guard.reason}
+          </span>
         </div>
 
-        <dl className="grid gap-3 text-xs sm:grid-cols-3">
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-            <dt className="font-medium text-slate-500">Price basis</dt>
-            <dd className="mt-1 font-semibold text-slate-800">
-              {isFair ? 'De-vigged prices' : 'Quoted prices (margin included)'}
-            </dd>
-            <dd className="mt-0.5 text-[11px] text-slate-500">
-              Combined margin {fmtPercent((economics.combinedOverround - 1) * 100)}
-            </dd>
-          </div>
-
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-            <dt className="flex items-center font-medium text-slate-500">
-              Chance vs break-even
-              <InfoHint infoKey="fairProbability" />
-            </dt>
-            <dd className="mt-1 font-mono font-semibold text-slate-800 tabular-nums">
-              {fmtPercent(economics.fairChance)} vs{' '}
-              {fmtPercent(economics.breakEvenChance)}
-            </dd>
-            <dd className="mt-0.5 font-mono text-[11px] text-slate-500 tabular-nums">
-              Ticket edge {fmtFixed(economics.edgePts, 1, { sign: true, suffix: ' pp' })}
-            </dd>
-          </div>
-
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-            <dt className="flex items-center font-medium text-slate-500">
-              EV %
-              <InfoHint infoKey="ticketEv" />
-            </dt>
-            <dd className="mt-1 font-mono font-semibold text-slate-800 tabular-nums">
-              {isFair ? fmtSignedPercent(economics.expectedRoi) : '—'}
-            </dd>
-            <dd className="mt-0.5 text-[11px] text-slate-500">
-              {isFair
-                ? `At ${fmtOdds(economics.totalOdds)} combined odds`
-                : 'No de-vigged price on every leg'}
-            </dd>
-          </div>
-        </dl>
-
-        {legs.length > 0 && (
-          <ol className="list-decimal space-y-1.5 border-t border-slate-200 pt-3 pl-5 text-xs text-slate-600 marker:font-semibold marker:text-slate-400">
-            {legs.map((leg, index) => {
-              const fixture = fixtureMap.get(leg.fixtureId);
-              const status = fixture
-                ? evaluateMarketSettlement(fixture, {
-                    id: leg.marketId,
-                    label: leg.marketLabel,
-                    marketType: leg.marketType,
-                  })
-                : 'Pending';
-              const result = fixture
-                ? getFixtureMatchResultSummary(fixture)
-                : 'Scheduled';
-              const note = leg.rationale?.trim();
-
-              return (
-                <li key={`${leg.fixtureId}-${leg.marketId}`} value={index + 1}>
-                  <span className="font-semibold text-slate-800">
-                    {leg.homeTeam} vs {leg.awayTeam} · {leg.marketLabel}:
-                  </span>{' '}
-                  {note || (
-                    <span className="italic text-slate-400">
-                      No tactical note captured.
-                    </span>
-                  )}{' '}
-                  <span className="inline-flex items-center gap-2 whitespace-nowrap">
-                    <SettlementLabel status={status} />
-                    <span className="font-mono text-[11px] text-slate-500">
-                      {result}
-                    </span>
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
-        )}
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs leading-relaxed text-slate-600">
+          <p className="font-semibold text-slate-800">Why this verdict</p>
+          <p className="mt-1">{guard.reason}</p>
+          <p className="mt-1 text-[11px] text-slate-500">
+            {isFair
+              ? `De-vigged prices, with ${fmtPercent(
+                  (guard.economics.combinedOverround - 1) * 100
+                )} combined bookmaker margin.`
+              : 'No de-vigged price on every leg, so the chance figure still includes the bookmaker margin.'}{' '}
+            Bookmaker margin compounds with every added leg, so the structural
+            cap and the price are judged together.
+          </p>
+        </div>
       </div>
     </DataCard>
   );

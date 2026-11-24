@@ -247,7 +247,6 @@ export function CuratedAccaView({
       <RationalePanel
         guard={guard}
         legs={legs}
-        fixtures={fixtures}
         strategyName={strategyName}
         minOdds={minOdds}
       />

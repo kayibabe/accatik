@@ -285,10 +285,9 @@ export function AiView({
   );
 
   const metrics = useMemo(() => {
-    if (picks.length === 0) return { positiveEv: 0, bestEv: 0, avgEdge: 0, strong: 0 };
+    if (picks.length === 0) return { positiveEv: 0, avgEdge: 0, strong: 0 };
     return {
       positiveEv: picks.filter((pick) => pick.evStress > 0).length,
-      bestEv: Math.max(...picks.map((pick) => pick.evStress)),
       avgEdge:
         picks.reduce((sum, pick) => sum + pick.edge, 0) / picks.length,
       strong: picks.filter((pick) => pick.band === 'High' || pick.band === 'Solid').length,
@@ -323,11 +322,7 @@ export function AiView({
         title="AI Desk"
         scope="research"
         description="A free local ensemble reads the slate, analytics, ROI research, shadow ledger and provenance, then ranks today's priced selections by stressed expected value. An optional free-tier language model adds plain-English notes only."
-        meta={
-          <span className="font-mono">
-            {displayDate} · {briefing?.modelVersion ?? 'model loading'} · {strategy} strategy
-          </span>
-        }
+        meta={<span className="font-mono">{displayDate} · {strategy} strategy</span>}
         actions={
           <>
             <button
@@ -484,13 +479,6 @@ export function AiView({
               value={String(metrics.positiveEv)}
               detail={`${pct(picks.length > 0 ? metrics.positiveEv / picks.length : 0, 0)} of above-bar picks`}
               tone={metrics.positiveEv > 0 ? 'text-emerald-700' : 'text-slate-600'}
-              infoKey="ev"
-            />
-            <MetricCard
-              label="Top EV %"
-              value={pct(metrics.bestEv)}
-              detail="after uncertainty haircut"
-              tone={metrics.bestEv > 0 ? 'text-emerald-700' : 'text-slate-600'}
               infoKey="ev"
             />
             <MetricCard

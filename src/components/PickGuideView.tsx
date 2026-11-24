@@ -105,72 +105,90 @@ function decisionFor(
   return { kind: 'idle', rank: 2, label: 'Not in this shape' };
 }
 
-function EconomicsPanel({
-  title,
-  subtitle,
-  guard,
+/**
+ * One economics summary for the view: the candidate shortlist leads, and the
+ * slate's live ticket is a comparison line rather than a second four-cell panel
+ * repeating the same four metrics.
+ */
+function EconomicsSummary({
+  shortlist,
+  slate,
 }: {
-  title: string;
-  subtitle: string;
-  guard: TicketGuardSummary;
+  shortlist: TicketGuardSummary;
+  slate?: TicketGuardSummary;
 }) {
-  const economics = guardEconomics(guard);
-  const cells = [
+  const economics = guardEconomics(shortlist);
+  const rows = [
     {
       key: 'fair',
       label: 'Fair chance',
-      value: fmtPercent(economics.fairChance),
       infoKey: 'fairProbability',
+      value: (guard: TicketGuardSummary) =>
+        fmtPercent(guardEconomics(guard).fairChance),
     },
     {
       key: 'breakEven',
       label: 'Break-even chance',
-      value: fmtPercent(economics.breakEvenChance),
       infoKey: undefined,
+      value: (guard: TicketGuardSummary) =>
+        fmtPercent(guardEconomics(guard).breakEvenChance),
     },
     {
       key: 'edge',
       label: 'Ticket edge (pp)',
-      value: fmtFixed(economics.edgePts, 1, { sign: true }),
       infoKey: 'ticketEdge',
+      value: (guard: TicketGuardSummary) =>
+        fmtFixed(guardEconomics(guard).edgePts, 1, { sign: true }),
     },
     {
       key: 'ev',
       label: 'EV %',
-      value: fmtSignedPercent(economics.expectedRoi, 1),
       infoKey: 'ticketEv',
+      value: (guard: TicketGuardSummary) =>
+        fmtSignedPercent(guardEconomics(guard).expectedRoi, 1),
     },
   ];
 
   return (
-    <DataCard title={title} subtitle={subtitle}>
+    <DataCard
+      title="Ticket guard economics"
+      subtitle="Candidate shortlist · slate ticket shown below each measure where available"
+    >
       <div className="grid grid-cols-2 gap-3">
-        {cells.map((cell) => (
-          <div key={cell.key} className="rounded-lg bg-slate-50 px-3 py-2">
+        {rows.map((row) => (
+          <div key={row.key} className="rounded-lg bg-slate-50 px-3 py-2">
             <p className="flex items-center text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-              {cell.label}
-              {cell.infoKey && <InfoHint infoKey={cell.infoKey} />}
+              {row.label}
+              {row.infoKey && <InfoHint infoKey={row.infoKey} />}
             </p>
             <p
               className={`mt-1 font-mono text-lg font-bold tabular-nums ${
-                cell.key === 'edge'
+                row.key === 'edge'
                   ? economics.edgePts > 0
                     ? 'text-emerald-700'
                     : 'text-red-600'
                   : 'text-slate-900'
               }`}
             >
-              {cell.value}
+              {row.value(shortlist)}
             </p>
+            {slate && (
+              <p className="mt-1 border-t border-slate-200 pt-1 text-[11px] text-slate-600">
+                Live ticket:{' '}
+                <span className="font-mono font-semibold tabular-nums">
+                  {row.value(slate)}
+                </span>
+              </p>
+            )}
           </div>
         ))}
       </div>
       <p className="mt-3 text-[11px] leading-relaxed text-slate-600">
         Basis: <span className="font-semibold">{economics.basis}</span>.{' '}
         {economics.recommended
-          ? 'The guard allows the “recommended” label on this shape.'
-          : 'Recommendation withheld.'}{' '}
-        {guard.reason}
+          ? 'The guard allows the “recommended” label on the shortlist.'
+          : 'Recommendation withheld on the shortlist.'}{' '}
+        {shortlist.reason}
       </p>
     </DataCard>
   );
@@ -340,24 +358,33 @@ function CandidateTable({
       rowKey={(candidate) => candidate.fixtureId}
       caption="Recommended Angle cards graded against the pick-selection filters"
       minWidth="min-w-[940px]"
-      details={(candidate) => (
-        <div className="space-y-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-            Hard filters
-          </p>
-          <ul className="grid gap-1 sm:grid-cols-2">
-            {candidate.checks.map((check) => (
-              <li key={check.id} className="flex items-start gap-2 text-[11px]">
-                <FilterMark passed={check.passed} />
-                <span className="text-slate-700">
-                  <span className="font-medium">{check.label}</span>
-                  <span className="ml-1 text-slate-500">— {check.detail}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      details={(candidate) => {
+        const failed = candidate.checks.filter((check) => !check.passed);
+        return (
+          <div className="space-y-2">
+            {/* The full five-check legend lives in the Hard filters card above;
+                a row only needs to show why it was rejected. */}
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              {failed.length === 0
+                ? 'All five hard filters pass'
+                : `${failed.length} hard filter${failed.length === 1 ? '' : 's'} failed`}
+            </p>
+            {failed.length > 0 && (
+              <ul className="grid gap-1 sm:grid-cols-2">
+                {failed.map((check) => (
+                  <li key={check.id} className="flex items-start gap-2 text-[11px]">
+                    <FilterMark passed={false} />
+                    <span className="text-slate-700">
+                      <span className="font-medium">{check.label}</span>
+                      <span className="ml-1 text-slate-500">— {check.detail}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      }}
     />
   );
 }
@@ -481,20 +508,7 @@ export function PickGuideView({
         </DataCard>
 
         <div className="space-y-4">
-          <EconomicsPanel
-            title="Ticket guard · candidate shortlist"
-            subtitle={`${selection.legs.length} leg${
-              selection.legs.length === 1 ? '' : 's'
-            } after the structural cap`}
-            guard={shortlistGuard}
-          />
-          {slateGuard && (
-            <EconomicsPanel
-              title="Ticket guard · live recommended ticket"
-              subtitle="The slate's own headline ticket, unchanged"
-              guard={slateGuard}
-            />
-          )}
+          <EconomicsSummary shortlist={shortlistGuard} slate={slateGuard} />
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5">
             <p className="flex items-start gap-2 text-xs leading-relaxed text-amber-900">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
