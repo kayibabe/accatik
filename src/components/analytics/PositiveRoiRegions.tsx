@@ -7,6 +7,7 @@ import {
   fmtShortDate,
   fmtSignedPercent,
 } from '../../utils/format.ts';
+import { frameworkStatusLabel } from '../../utils/frameworkCopy.ts';
 import { frameworkTone } from '../../utils/uiTone.ts';
 import {
   SORT_ASC,
@@ -44,6 +45,14 @@ export const SOURCE_LABELS: Record<string, string> = {
   angle: 'Model angle',
   cover: 'Alternative cover',
   note: 'Research note',
+};
+
+const ROI_STATUS_LABEL: Record<string, string> = {
+  promoted: 'Promoted',
+  watch: 'Monitoring',
+  demoted: 'Demoted',
+  retired: 'Retired',
+  untracked: 'Untracked',
 };
 
 export const POSITIVE_ROI_SECTIONS = [
@@ -454,19 +463,14 @@ export function QualifiedPicksTable({
               : 'bg-slate-100 text-slate-600'
           }`}
         >
-          {row.status}
+          {ROI_STATUS_LABEL[row.status] ?? 'Untracked'}
         </span>
       ),
       priority: 'secondary',
     },
     {
       key: 'framework',
-      header: (
-        <>
-          {sortHeader('Framework', 'framework')}
-          <InfoHint infoKey="modelEdge" />
-        </>
-      ),
+      header: sortHeader('Framework', 'framework'),
       cell: (row) => <FrameworkCell row={row} />,
       priority: 'tertiary',
     },
@@ -605,7 +609,7 @@ function FrameworkCell({ row }: { row: QualifiedPickRow }): ReactNode {
           row.frameworkStatus
         )}`}
       >
-        {row.frameworkStatus.replace(/_/g, ' ')}
+        {frameworkStatusLabel(row.frameworkStatus)}
       </span>
       <span className="block text-[10px] text-slate-500 mt-0.5">
         {row.frameworkConfidence ?? '—'}

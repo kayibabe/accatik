@@ -272,11 +272,10 @@ export function ShadowLedgerPanel() {
             Shadow Ticket Ledger
           </h2>
           <p className="mt-0.5 max-w-2xl text-xs text-slate-500">
-            Every ticket the engine would have built, recorded automatically at
-            one-unit stakes. Only prices captured before kickoff enter ROI; the
-            ledger is never edited by hand. Tickets the EV gate would not
-            recommend are still recorded, so the gate itself can be graded. The
-            positive-ROI shortlist below is applied automatically.
+            Every ticket the engine would have built, at flat one-unit stakes
+            and never placed with a bookmaker, using only prices captured before
+            kickoff. Tickets the EV gate would not recommend stay in the ledger
+            so the gate itself can be graded.
           </p>
         </div>
         <button
@@ -413,14 +412,7 @@ export function ShadowLedgerPanel() {
           </div>
 
           <div className="px-4 py-3">
-            <DataStatus
-              source="Settled archive"
-              note={
-                <span className="text-slate-500">
-                  Flat one-unit shadow stakes · never placed with a bookmaker
-                </span>
-              }
-            />
+            <DataStatus source="Settled archive" />
           </div>
 
           <div className="px-3 pb-3">
@@ -514,12 +506,8 @@ export function ShadowLedgerPanel() {
           </div>
 
           <div className="border-t border-amber-100 bg-amber-50/60 px-4 py-2 text-[11px] leading-relaxed text-amber-800">
-            Research/shadow only.{' '}
-            {shortlistOnly
-              ? 'The shortlist is a monitoring aid, not a betting signal — small samples make these rankings noisy. '
-              : ''}
-            Tickets are recorded at flat one-unit stakes and are never placed
-            with a bookmaker.
+            Research only — these rankings are a monitoring aid, not betting
+            signals.{shortlistOnly ? ' Small samples make the shortlist noisy.' : ''}
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50/70 px-4 py-2.5 text-[11px] text-slate-500">

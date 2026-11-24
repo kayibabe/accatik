@@ -12,6 +12,10 @@ import {
 import type { MarketOption } from '../../types/fixtures.ts';
 import type { SortDirection, SortState } from '../../utils/tableSort.ts';
 import { fmtOdds, fmtPercent } from '../../utils/format.ts';
+import {
+  frameworkDecisionCopy,
+  frameworkStatusLabel,
+} from '../../utils/frameworkCopy.ts';
 import { angleConfidence } from '../../utils/recommendedAngle.ts';
 import { angleTone, frameworkTone } from '../../utils/uiTone.ts';
 import { SettlementLabel } from '../SettlementLabel.tsx';
@@ -310,11 +314,12 @@ export function FixtureCard({
                 className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${frameworkTone(
                   fixture.framework.status
                 )}`}
-                title={`Framework ${fixture.framework.status}: ${
-                  fixture.framework.reasonCodes.join(', ') || 'no reason codes'
-                } — ${fixture.framework.summary}`}
+                title={`${frameworkDecisionCopy(
+                  fixture.framework.status,
+                  fixture.framework.reasonCodes
+                )}. ${fixture.framework.summary}`}
               >
-                Framework: {fixture.framework.status.replace(/_/g, ' ')}
+                {frameworkStatusLabel(fixture.framework.status)}
               </span>
             )}
             <PickResultChip status={angleOutcome} label="Angle" />
@@ -339,16 +344,10 @@ export function FixtureCard({
             <span className="font-mono font-semibold tabular-nums text-slate-900">
               @ {fmtOdds(angle.cover.odds)}
             </span>
-            <span className="font-mono tabular-nums text-slate-600">
-              {fmtPercent(angle.coverProbability, 0)} fair
-            </span>
-            <span
-              className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${angleTone(
-                angleConfidence(angle.coverProbability)
-              )}`}
-              title="Confidence band used by the alternative-cover filter"
-            >
-              {angleConfidence(angle.coverProbability)}
+            {/* The angle row above owns the price/fair/confidence numbers. The
+                cover is here to explain the safer alternative, not repeat them. */}
+            <span className="text-slate-600">
+              Safer side from a different market
             </span>
             <PickResultChip status={coverOutcome} label="Cover" />
           </InsightCard>

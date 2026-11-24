@@ -1176,8 +1176,6 @@ export default function App() {
                     fixtures={slate.fixtures}
                     selectedDate={selectedDate}
                     todayDate={todayDate}
-                    displayDate={slate.displayDate}
-                    timezoneLabel={slate.timezoneLabel}
                     dataProvider={slate.dataProvider || 'API-Football Pro'}
                     slateSource={slate.slateSource}
                     capturedAt={slate.capturedAt}

@@ -78,8 +78,6 @@ interface FixtureBoardProps {
   fixtures: Fixture[];
   selectedDate: string;
   todayDate: string;
-  displayDate: string;
-  timezoneLabel: string;
   dataProvider: string;
   /** `archive` means the slate was served from disk without an API call. */
   slateSource?: 'live' | 'archive';
@@ -108,8 +106,6 @@ export function FixtureBoard({
   fixtures,
   selectedDate,
   todayDate,
-  displayDate,
-  timezoneLabel,
   dataProvider,
   slateSource,
   capturedAt,
@@ -671,8 +667,6 @@ export function FixtureBoard({
       <SlateHeader
         selectedDate={selectedDate}
         todayDate={todayDate}
-        displayDate={displayDate}
-        timezoneLabel={timezoneLabel}
         dataProvider={dataProvider}
         slateSource={slateSource}
         capturedAt={capturedAt}
@@ -703,7 +697,7 @@ export function FixtureBoard({
         label="On this page"
         items={[
           { id: 'slate-filters', label: 'Filters' },
-          { id: 'slate-results', label: `Results (${filteredFixtures.length})` },
+          { id: 'slate-results', label: 'Results' },
         ]}
       />
 
@@ -787,7 +781,7 @@ export function FixtureBoard({
             {filteredFixtures.length > visibleLimit && (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs">
                 <span className="font-mono tabular-nums text-slate-600">
-                  Showing {Math.min(visibleLimit, filteredFixtures.length)} of{' '}
+                  Viewing first {Math.min(visibleLimit, filteredFixtures.length)} of{' '}
                   {filteredFixtures.length} matches
                 </span>
                 <div className="flex items-center gap-2">

@@ -8,6 +8,7 @@ import type {
   TicketGuardSummary,
 } from '../types/fixtures.ts';
 import { fmtFixed, fmtPercent } from './format.ts';
+import { frameworkDecisionCopy } from './frameworkCopy.ts';
 import { isPreMatchFixture } from './priceQuality.ts';
 import {
   angleConfidence,
@@ -176,11 +177,7 @@ export function evaluatePickCandidate(
       label: 'Framework status is QUALIFIED',
       passed: framework?.status === 'QUALIFIED',
       detail: framework
-        ? `Framework: ${framework.status}${
-            framework.reasonCodes.length
-              ? ` · ${framework.reasonCodes.join(', ')}`
-              : ''
-          }`
+        ? frameworkDecisionCopy(framework.status, framework.reasonCodes)
         : 'No framework decision attached to this market',
     },
     {

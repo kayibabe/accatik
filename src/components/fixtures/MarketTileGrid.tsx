@@ -3,6 +3,10 @@ import type { MarketOption } from '../../types/fixtures.ts';
 import { evaluateMarketSettlement } from '../../utils/accaMath.ts';
 import { marketProbability } from '../../utils/probability.ts';
 import { fmtOdds, fmtPercent } from '../../utils/format.ts';
+import {
+  frameworkDecisionCopy,
+  frameworkStatusLabel,
+} from '../../utils/frameworkCopy.ts';
 import { frameworkDot } from '../../utils/uiTone.ts';
 import { SettlementLabel } from '../SettlementLabel.tsx';
 import {
@@ -109,11 +113,10 @@ export function MarketTileGrid({
                   : null,
                 market.bookmaker,
                 market.framework
-                  ? `Framework: ${market.framework.status}${
-                      market.framework.reasonCodes.length > 0
-                        ? ` (${market.framework.reasonCodes.join(', ')})`
-                        : ''
-                    }`
+                  ? frameworkDecisionCopy(
+                      market.framework.status,
+                      market.framework.reasonCodes
+                    )
                   : null,
               ]
                 .filter(Boolean)
@@ -141,7 +144,7 @@ export function MarketTileGrid({
                       className={`h-1.5 w-1.5 shrink-0 rounded-full ${frameworkDot(
                         market.framework.status
                       )}`}
-                      title={`Framework: ${market.framework.status}`}
+                      title={frameworkStatusLabel(market.framework.status)}
                       aria-hidden="true"
                     />
                   )}

@@ -7,8 +7,6 @@ import { fmtCount } from '../../utils/format.ts';
 interface SlateHeaderProps {
   selectedDate: string;
   todayDate: string;
-  displayDate: string;
-  timezoneLabel: string;
   dataProvider: string;
   slateSource?: 'live' | 'archive';
   capturedAt?: string;
@@ -24,8 +22,6 @@ interface SlateHeaderProps {
 export function SlateHeader({
   selectedDate,
   todayDate,
-  displayDate,
-  timezoneLabel,
   dataProvider,
   slateSource,
   capturedAt,
@@ -105,11 +101,6 @@ export function SlateHeader({
         source={dataProvider}
         mode={slateSource === 'archive' ? 'Archived slate' : 'Live slate'}
         capturedAt={capturedAt}
-        note={
-          <span>
-            {displayDate} · {timezoneLabel}
-          </span>
-        }
       />
     </div>
   );
