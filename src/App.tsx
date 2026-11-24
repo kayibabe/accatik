@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { TopBar } from './components/TopBar.tsx';
 import type { ActiveTab } from './types/navigation.ts';
@@ -6,16 +6,37 @@ import { SideMenu } from './components/SideMenu.tsx';
 import { DateNavigator } from './components/DateNavigator.tsx';
 import { FixtureBoard } from './components/FixtureBoard.tsx';
 import { AccaTicketSlip } from './components/AccaTicketSlip.tsx';
-import { CuratedAccaView } from './components/CuratedAccaView.tsx';
-import { PickGuideView } from './components/PickGuideView.tsx';
-import { SavedSlipsView } from './components/SavedSlipsView.tsx';
-import { MyActivityView } from './components/MyActivityView.tsx';
-import { AnalyticsView } from './components/AnalyticsView.tsx';
-import { PositiveRoiView } from './components/PositiveRoiView.tsx';
-import { PositiveReadMatches } from './components/analytics/PositiveReadMatches.tsx';
-import { SourcesView } from './components/SourcesView.tsx';
-import { AiView } from './components/AiView.tsx';
-import { ErrorState } from './components/ui/States.tsx';
+import { ErrorState, LoadingState } from './components/ui/States.tsx';
+
+// Secondary views are loaded on demand so the matchday slate stays the small,
+// immediate entry point. Shared types and slate helpers remain in the shell.
+const CuratedAccaView = lazy(() =>
+  import('./components/CuratedAccaView.tsx').then((m) => ({ default: m.CuratedAccaView }))
+);
+const PickGuideView = lazy(() =>
+  import('./components/PickGuideView.tsx').then((m) => ({ default: m.PickGuideView }))
+);
+const SavedSlipsView = lazy(() =>
+  import('./components/SavedSlipsView.tsx').then((m) => ({ default: m.SavedSlipsView }))
+);
+const MyActivityView = lazy(() =>
+  import('./components/MyActivityView.tsx').then((m) => ({ default: m.MyActivityView }))
+);
+const AnalyticsView = lazy(() =>
+  import('./components/AnalyticsView.tsx').then((m) => ({ default: m.AnalyticsView }))
+);
+const PositiveRoiView = lazy(() =>
+  import('./components/PositiveRoiView.tsx').then((m) => ({ default: m.PositiveRoiView }))
+);
+const PositiveReadMatches = lazy(() =>
+  import('./components/analytics/PositiveReadMatches.tsx').then((m) => ({ default: m.PositiveReadMatches }))
+);
+const SourcesView = lazy(() =>
+  import('./components/SourcesView.tsx').then((m) => ({ default: m.SourcesView }))
+);
+const AiView = lazy(() =>
+  import('./components/AiView.tsx').then((m) => ({ default: m.AiView }))
+);
 import type { AiTicketLeg } from './types/ai.ts';
 import type { PositiveReadPick } from './types/analytics.ts';
 import type {
@@ -1010,6 +1031,7 @@ export default function App() {
       </div>
 
       <main className={`flex-1 w-full ${contentInset} py-6 sm:py-8`}>
+        <Suspense fallback={<LoadingState label="Loading view…" count={5} />}>
         {activeTab === 'analytics' ? (
           <AnalyticsView
             strategy={strategy}
@@ -1251,6 +1273,7 @@ export default function App() {
 
           </>
         ) : null}
+        </Suspense>
       </main>
 
       <footer className="border-t border-slate-200 bg-white mt-12">
