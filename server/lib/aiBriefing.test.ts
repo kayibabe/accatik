@@ -283,6 +283,50 @@ test('briefing scores only eligible pre-match selections and keeps provenance', 
   assert.match(briefing.disclaimer, /Research and decision support only/);
 });
 
+test('historical ROI is read as percentage points and reported without rescaling', () => {
+  const withHistory = analytics();
+  withHistory.marketsBySelection = [
+    {
+      key: '1X2-H',
+      label: 'Home Win',
+      marketType: '1X2',
+      settled: 100,
+      wins: 55,
+      losses: 45,
+      voids: 0,
+      hitRate: 55,
+      stake: 100,
+      returns: 120,
+      netPnl: 20,
+      roi: 20,
+      avgOdds: 2.1,
+      avgProbability: 45,
+    },
+  ];
+
+  const briefing = buildBriefing({
+    fixtures: [assessedFixture('history')],
+    dateIso: '2026-11-22',
+    displayDate: '22 Nov 2026',
+    strategy: 'balanced',
+    marketFilter: 'all',
+    competitionFilter: 'all',
+    analytics: withHistory,
+    combination: null,
+    registry: [],
+    qualified: null,
+    ledger: null,
+    sources: [],
+  });
+
+  const pick = briefing.picks[0];
+  assert.ok(pick);
+  assert.equal(pick.signals.historyRoi, 20);
+  assert.ok(pick.reasons.some((reason) => reason.includes('20.0% historical ROI')));
+  assert.ok(!pick.reasons.some((reason) => reason.includes('2000')));
+  assert.ok(pick.evStress > 0);
+});
+
 test('value-only framework rejections are re-evaluated with an explicit risk flag', () => {
   const briefing = buildBriefing({
     fixtures: [

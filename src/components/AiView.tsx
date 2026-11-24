@@ -172,9 +172,9 @@ export function AiView({
   );
 
   const metrics = useMemo(() => {
-    if (picks.length === 0) return { bestScore: 0, bestEv: 0, avgEdge: 0, strong: 0 };
+    if (picks.length === 0) return { positiveEv: 0, bestEv: 0, avgEdge: 0, strong: 0 };
     return {
-      bestScore: Math.max(...picks.map((pick) => pick.aiScore)),
+      positiveEv: picks.filter((pick) => pick.evStress > 0).length,
       bestEv: Math.max(...picks.map((pick) => pick.evStress)),
       avgEdge:
         picks.reduce((sum, pick) => sum + pick.edge, 0) / picks.length,
@@ -192,7 +192,7 @@ export function AiView({
         (leg, index) =>
           `${index + 1}. ${leg.homeTeam} v ${leg.awayTeam} — ${leg.label} @ ${leg.odds.toFixed(2)}`
       ),
-      'Research/shadow ticket. Verify every price with your bookmaker. 18+.',
+      'Research/shadow ticket. Verify prices with your bookmaker.',
     ];
     try {
       await navigator.clipboard.writeText(lines.join('\n'));
@@ -240,11 +240,9 @@ export function AiView({
       <div className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-relaxed text-amber-900">
         <ShieldAlert className="h-5 w-5 shrink-0 text-amber-600" aria-hidden="true" />
         <p>
-          <strong>Research, not certainty.</strong> No model can know the result of a match. These
-          picks are probability estimates with uncertainty attached; the accumulator assumes
-          independent outcomes, which is optimistic. Selections added to the slip keep every leg,
-          with wide slips labelled as research rather than recommended. Verify prices with your
-          bookmaker, 18+, bet responsibly.
+          <strong>Estimates, not certainty.</strong> No model can know a result. Each pick carries
+          uncertainty, and the accumulator assumes independent outcomes, which is optimistic.
+          Wide slips stay labelled research rather than recommended.
         </p>
       </div>
 
@@ -324,7 +322,7 @@ export function AiView({
           </label>
           <label className="block">
             <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-              Min AI score · {minScore}
+              Min model score · {minScore}
             </span>
             <input
               type="range"
@@ -368,10 +366,27 @@ export function AiView({
         <>
           <MetricGrid>
             <MetricCard label="Picks above bar" value={String(picks.length)} detail={`of ${briefing.picks.length} eligible`} />
-            <MetricCard label="Best AI score" value={String(metrics.bestScore)} detail="out of 100 · not a win rate" tone="text-emerald-700" />
-            <MetricCard label="Best stressed EV" value={pct(metrics.bestEv)} detail="after uncertainty haircut" tone={metrics.bestEv > 0 ? 'text-emerald-700' : 'text-slate-600'} />
-            <MetricCard label="Avg model edge" value={`${(metrics.avgEdge * 100).toFixed(1)} pts`} detail="vs de-vigged price" />
-            <MetricCard label="High / solid" value={String(metrics.strong)} detail="confidence-banded estimates" />
+            <MetricCard
+              label="Positive EV picks"
+              value={String(metrics.positiveEv)}
+              detail={`${pct(picks.length > 0 ? metrics.positiveEv / picks.length : 0, 0)} of above-bar picks`}
+              tone={metrics.positiveEv > 0 ? 'text-emerald-700' : 'text-slate-600'}
+              infoKey="ev"
+            />
+            <MetricCard
+              label="Top EV %"
+              value={pct(metrics.bestEv)}
+              detail="after uncertainty haircut"
+              tone={metrics.bestEv > 0 ? 'text-emerald-700' : 'text-slate-600'}
+              infoKey="ev"
+            />
+            <MetricCard
+              label="Avg edge (pp)"
+              value={`${(metrics.avgEdge * 100).toFixed(1)} pp`}
+              detail="vs de-vigged price"
+              infoKey="modelEdge"
+            />
+            <MetricCard label="Quality bands" value={String(metrics.strong)} detail="high / solid estimates" />
           </MetricGrid>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 items-start">
@@ -401,7 +416,7 @@ export function AiView({
                 {picks.length === 0 ? (
                   <EmptyState
                     title="No picks clear this bar"
-                    description="Lower the AI score threshold or widen the market filter. An empty shortlist is a legitimate model result."
+                    description="Lower the model score threshold or widen the market filter. An empty shortlist is a legitimate no-bet result."
                     action={
                       <button
                         type="button"
@@ -451,13 +466,14 @@ export function AiView({
                             <p className="font-mono text-sm font-bold text-slate-900">{pct(pick.pFair)}</p>
                           </div>
                           <div className="rounded-lg bg-emerald-50 px-2.5 py-2">
-                            <p className="text-[10px] text-emerald-700">Edge</p>
+                            <p className="text-[10px] text-emerald-700">Model edge (pp)</p>
                             <p className="font-mono text-sm font-bold text-emerald-800">
-                              +{(pick.edge * 100).toFixed(1)} pts
+                              {pick.edge >= 0 ? '+' : ''}
+                              {(pick.edge * 100).toFixed(1)} pp
                             </p>
                           </div>
                           <div className="rounded-lg bg-emerald-50 px-2.5 py-2">
-                            <p className="text-[10px] text-emerald-700">Stressed EV</p>
+                            <p className="text-[10px] text-emerald-700">EV %</p>
                             <p className="font-mono text-sm font-bold text-emerald-800">{pct(pick.evStress)}</p>
                           </div>
                         </div>

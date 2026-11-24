@@ -2004,18 +2004,18 @@ export function getAiBriefing(body: unknown): Promise<ApiResult<AiBriefingRespon
         sources: SOURCE_LINKS(request.dateIso),
       };
 
-      const local = buildBriefing(shared);
+      const result = buildBriefing(shared);
       const narrative = await buildNarratives(
         request.dateIso,
         request.marketFilter,
-        local.picks
+        result.picks
       );
-      const result = buildBriefing({
-        ...shared,
-        narratives: narrative.narratives,
-        narrativeProvider: narrative.provider,
-        narrativeNote: narrative.note,
-      });
+      for (const pick of result.picks) {
+        const text = narrative.narratives[`${pick.fixtureId}:${pick.marketId}`];
+        if (text) pick.narrative = text;
+      }
+      result.narrativeProvider = narrative.provider;
+      result.narrativeNote = narrative.note;
       aiBriefingCache.set(key, result);
       return ok(result);
     } catch (error) {

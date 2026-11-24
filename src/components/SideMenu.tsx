@@ -9,11 +9,8 @@ import {
   ListChecks,
   Sparkles,
   Target,
-  TrendingUp,
-  UserRound,
   X,
 } from 'lucide-react';
-import { LOCAL_PROFILE, LOCAL_USER } from '../lib/localIdentity.ts';
 import { NAV_GROUPS, type ActiveTab } from '../types/navigation.ts';
 
 interface SideMenuProps {
@@ -32,7 +29,6 @@ const TAB_ICONS: Record<ActiveTab, typeof CalendarDays> = {
   saved: Bookmark,
   activity: Activity,
   analytics: ChartColumn,
-  roi: TrendingUp,
   ai: Sparkles,
   sources: BookOpen,
 };
@@ -91,14 +87,6 @@ export function SideMenu({
                     aria-hidden="true"
                   />
                   <span className="min-w-0 truncate">{item.label}</span>
-                  {item.research && (
-                    <span
-                      title="Read-only research — never a live betting recommendation"
-                      className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-800"
-                    >
-                      Lab
-                    </span>
-                  )}
                   {item.id === 'saved' && savedCount > 0 && (
                     <span
                       className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums ${
@@ -116,26 +104,6 @@ export function SideMenu({
           </nav>
         </div>
       ))}
-
-      <div className="mt-auto pt-3">
-        <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-          Local workspace
-        </p>
-        <div className="flex items-center gap-3 rounded-lg bg-slate-50 px-3 py-2.5">
-          <UserRound className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
-          <div className="min-w-0">
-            <p className="truncate text-xs font-semibold text-slate-800">
-              {LOCAL_USER.name}
-            </p>
-            <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-400">
-              {LOCAL_PROFILE.role} · this browser
-            </p>
-          </div>
-        </div>
-        <p className="px-3 pt-2 text-[10px] leading-relaxed text-slate-400">
-          Slips and preferences stay in localStorage while the app is local-only.
-        </p>
-      </div>
     </div>
   );
 

@@ -78,14 +78,14 @@ export function RationalePanel({
               {fmtPercent(economics.breakEvenChance)}
             </dd>
             <dd className="mt-0.5 font-mono text-[11px] text-slate-500 tabular-nums">
-              Edge {fmtFixed(economics.edgePts, 1, { sign: true, suffix: ' pts' })}
+              Ticket edge {fmtFixed(economics.edgePts, 1, { sign: true, suffix: ' pp' })}
             </dd>
           </div>
 
           <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
             <dt className="flex items-center font-medium text-slate-500">
-              Expected return
-              <InfoHint infoKey="ev" />
+              EV %
+              <InfoHint infoKey="ticketEv" />
             </dt>
             <dd className="mt-1 font-mono font-semibold text-slate-800 tabular-nums">
               {isFair ? fmtSignedPercent(economics.expectedRoi) : '—'}

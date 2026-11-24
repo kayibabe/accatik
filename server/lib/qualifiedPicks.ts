@@ -72,10 +72,12 @@ export function buildQualifiedPickRows(
         reason = 'Fixture has already kicked off or is not scheduled.';
       } else if (quality !== 'prematch') {
         reason = `Price quality is ${quality}, not prematch-confirmed.`;
-      } else if (framework && framework.status !== 'QUALIFIED') {
-        reason = `Framework ${framework.status}: ${
-          framework.reasonCodes.join(', ') || 'not qualified'
-        }.`;
+      } else if (!framework || framework.status !== 'QUALIFIED') {
+        reason = framework
+          ? `Framework ${framework.status}: ${
+              framework.reasonCodes.join(', ') || 'not qualified'
+            }.`
+          : 'No framework assessment for this selection.';
       } else if (!entry) {
         reason = 'No registry row for this card and selection.';
       } else if (entry.status !== 'promoted') {

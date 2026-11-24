@@ -68,8 +68,30 @@ function framework(
 }
 
 test('joins all three cards and promotes only whitelisted pairs', () => {
+  const subject = fixture();
+  subject.markets[0] = {
+    ...subject.markets[0],
+    framework: framework('QUALIFIED'),
+  };
+  subject.markets[1] = {
+    ...subject.markets[1],
+    framework: {
+      ...framework('QUALIFIED'),
+      marketId: 'q-ou-25',
+      selectionKey: 'GOALS-O2.5',
+    },
+  };
+  subject.markets[2] = {
+    ...subject.markets[2],
+    framework: {
+      ...framework('QUALIFIED'),
+      marketId: 'q-1x2-a',
+      selectionKey: '1X2-A',
+    },
+  };
+
   const rows = buildQualifiedPickRows(
-    [fixture()],
+    [subject],
     [entry('angle', '1X2-H'), entry('cover', 'GOALS-O2.5', 'watch')],
     'balanced',
     now
@@ -166,6 +188,20 @@ test('a framework-rejected card is never eligible for the acca', () => {
   assert.equal(angle?.frameworkStatus, 'REJECTED');
   assert.deepEqual(angle?.frameworkReasonCodes, ['EDGE_BELOW_MIN']);
   assert.match(angle?.reason ?? '', /Framework REJECTED/);
+});
+
+test('a promoted card with no framework assessment is not eligible', () => {
+  const rows = buildQualifiedPickRows(
+    [fixture()],
+    [entry('angle', '1X2-H')],
+    'balanced',
+    now
+  );
+  const angle = rows.find((row) => row.source === 'angle');
+
+  assert.equal(angle?.eligibleForAcca, false);
+  assert.equal(angle?.frameworkStatus, null);
+  assert.match(angle?.reason ?? '', /No framework assessment/);
 });
 
 test('a framework-qualified promoted card stays eligible and carries its edge', () => {

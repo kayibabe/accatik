@@ -179,9 +179,7 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState<string>(
     initialUrl.date ?? todayDate
   );
-  const [activeTab, setActiveTab] = useState<ActiveTab>(
-    initialUrl.tab === 'roi' ? 'positive-reads' : initialUrl.tab
-  );
+  const [activeTab, setActiveTab] = useState<ActiveTab>(initialUrl.tab);
   const [activeSection, setActiveSection] = useState<string | undefined>(
     initialUrl.section
   );
@@ -267,7 +265,7 @@ export default function App() {
   useEffect(() => {
     const handlePopState = () => {
       const state = parseAppUrlState(window.location.search, todayDate);
-      setActiveTab(state.tab === 'roi' ? 'positive-reads' : state.tab);
+      setActiveTab(state.tab);
       if (state.date) setSelectedDate(state.date);
       if (state.preset) {
         setFilterPreset(state.preset);
@@ -1034,7 +1032,7 @@ export default function App() {
             onGoToSlate={() => navigate('slate')}
             onApplyTicket={handleApplyAiTicket}
           />
-        ) : activeTab === 'positive-reads' || activeTab === 'roi' ? (
+        ) : activeTab === 'positive-reads' ? (
           <div className="space-y-10">
             <PositiveReadMatches
               strategy={strategy}
@@ -1089,8 +1087,6 @@ export default function App() {
           <PickGuideView
             fixtures={slate?.fixtures ?? []}
             strategy={strategy}
-            displayDate={slate?.displayDate ?? selectedDate}
-            cachedAt={slate?.cachedAt ?? ''}
             slateGuard={slate?.ticketGuard}
             onGoToSlate={() => navigate('slate')}
             onApplyLegs={handleApplyPickGuideLegs}

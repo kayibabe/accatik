@@ -351,12 +351,15 @@ export function buildBriefing(input: BriefingInput): AiBriefingResponse {
 
       // Historical ROI is a deliberately small prior: only settled samples can
       // move the estimate, and never by more than two probability points.
+      // pickAnalytics reports ROI in percentage points, so convert to a
+      // fraction before using it as a probability tilt.
       const historyRow = history.get(selection.key);
       const settled = historyRow?.settled ?? 0;
       const historyRoi = finite(historyRow?.roi) ? (historyRow!.roi as number) : null;
+      const historyRoiFraction = historyRoi === null ? null : historyRoi / 100;
       const historyTilt =
-        historyRoi !== null
-          ? clamp(historyRoi, -0.1, 0.1) * clamp(settled / 100, 0, 1) * 0.2
+        historyRoiFraction !== null
+          ? clamp(historyRoiFraction, -0.1, 0.1) * clamp(settled / 100, 0, 1) * 0.2
           : 0;
       const blendedP = clamp(pModel + historyTilt, 0.005, 0.995);
 
@@ -418,7 +421,7 @@ export function buildBriefing(input: BriefingInput): AiBriefingResponse {
       if (promoted) reasons.push("On the Positive ROI desk's promoted list");
       if (historyRow && settled >= 30 && historyRoi !== null) {
         reasons.push(
-          `${settled} settled selections at ${(historyRoi * 100).toFixed(1)}% historical ROI (small prior only)`
+          `${settled} settled selections at ${historyRoi.toFixed(1)}% historical ROI (small prior only)`
         );
       }
       if (qualifiedKeys.has(`${fixture.id}:${market.id}`)) {
@@ -565,7 +568,7 @@ export function buildBriefing(input: BriefingInput): AiBriefingResponse {
     narrativeProvider: input.narrativeProvider ?? null,
     narrativeNote:
       input.narrativeNote ??
-      'Local ensemble only. Add a free Gemini or Groq key to enable plain-English notes.',
+      'Plain-English notes are optional. All probabilities come from the local ensemble already in the workbench.',
     marketFilter,
     competitionFilter,
     summary,

@@ -116,9 +116,8 @@ export function AnalyticsHeader({
         >
           <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <p>
-            The API Function is running an older analytics version, so selection
-            drill-downs are unavailable. Redeploy the Function to see the full
-            breakdown.
+            Selection drill-downs are unavailable for this archived snapshot.
+            The headline totals above are still current.
           </p>
         </div>
       )}

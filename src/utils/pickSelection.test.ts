@@ -117,7 +117,7 @@ test('each hard filter independently keeps a leg out of the slip', () => {
     {
       id: 'edge',
       options: { ...base, model: 0.72 },
-      failed: 'Edge ≥ 5pp, EV > 0 and stressed EV > 0',
+      failed: 'Model edge ≥ 5pp, EV % > 0 and stressed EV % > 0',
     },
     {
       id: 'confidence',

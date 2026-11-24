@@ -161,7 +161,7 @@ export async function buildNarratives(
     return {
       provider: null,
       narratives: {},
-      note: 'Local ensemble only. Add a free Gemini or Groq key to enable plain-English notes.',
+      note: 'Plain-English notes are optional. All probabilities come from the local ensemble already in the workbench.',
     };
   }
 

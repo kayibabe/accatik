@@ -185,15 +185,15 @@ export function evaluatePickCandidate(
     },
     {
       id: 'value',
-      label: `Edge ≥ ${fmtFixed(requiredEdgePts, 0)}pp, EV > 0 and stressed EV > 0`,
+      label: `Model edge ≥ ${fmtFixed(requiredEdgePts, 0)}pp, EV % > 0 and stressed EV % > 0`,
       passed: valueOk,
       detail:
         edgePts === null
           ? 'No framework value assessment'
-          : `Edge ${fmtFixed(edgePts, 1, { sign: true })}pp · EV ${fmtPercent(
+          : `Model edge ${fmtFixed(edgePts, 1, { sign: true })} pp · EV ${fmtPercent(
               ev === null ? null : ev * 100,
               1
-            )} · stressed ${fmtPercent(
+            )} · stressed EV ${fmtPercent(
               evStress === null ? null : evStress * 100,
               1
             )}`,

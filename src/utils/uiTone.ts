@@ -113,9 +113,19 @@ export const METRIC_INFO: Record<
     source: 'Captured price snapshot',
   },
   modelEdge: {
-    label: 'Model edge',
+    label: 'Model edge (pp)',
     definition: 'Model probability minus the best fair book probability, in percentage points.',
     source: 'API-Football 1X2 model at capture time',
+  },
+  ticketEdge: {
+    label: 'Ticket edge (pp)',
+    definition: 'De-vigged fair chance minus the ticket’s break-even chance, in percentage points.',
+    source: 'Captured price snapshot · ticket guard',
+  },
+  ticketEv: {
+    label: 'EV %',
+    definition: 'Fair chance as a fraction multiplied by the combined decimal odds, minus one, shown as a percent. Positive means the captured fair price beats break-even.',
+    source: 'Captured price snapshot · ticket guard',
   },
   roi: {
     label: 'ROI',
@@ -129,8 +139,8 @@ export const METRIC_INFO: Record<
   },
   confidence: {
     label: 'Confidence',
-    definition: 'Framework confidence band after sample size, odds freshness, market calibration and risk flags.',
-    source: 'Framework v1.2 assessment',
+    definition: 'Framework confidence band after sample size, odds freshness and risk-flag checks.',
+    source: 'Framework assessment',
   },
   pnl: {
     label: 'Profit / loss',
@@ -138,8 +148,8 @@ export const METRIC_INFO: Record<
     source: 'Saved slip settlement',
   },
   ev: {
-    label: 'Expected value',
-    definition: 'Fair probability multiplied by the price, minus one, expressed as a percentage.',
-    source: 'Captured price snapshot · framework economics',
+    label: 'EV %',
+    definition: 'Model probability multiplied by the price, minus one, expressed as a percentage. Positive means the price beats the model’s fair price.',
+    source: 'Framework model · captured price snapshot',
   },
 };

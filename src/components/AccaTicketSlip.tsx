@@ -329,7 +329,7 @@ export function AccaTicketSlip({
                 title="The system's own de-vigged win chance minus the break-even rate"
               >
                 {guard.economics.edgePts >= 0 ? '+' : ''}
-                {guard.economics.edgePts.toFixed(1)} pts vs fair
+                {guard.economics.edgePts.toFixed(1)} pp vs fair
               </span>
             </span>
           </div>

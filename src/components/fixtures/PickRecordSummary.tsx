@@ -32,7 +32,7 @@ export function PickRecordSummary({
               </p>
               <p className="font-mono text-[10px] tabular-nums text-slate-500">
                 {entry.settled === 0
-                  ? 'Collecting data'
+                  ? 'No settled matches yet'
                   : `${entry.wins}W / ${entry.losses}L${
                       entry.voids > 0 ? ` / ${entry.voids}V` : ''
                     }`}

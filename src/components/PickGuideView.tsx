@@ -34,8 +34,6 @@ import { EmptyState } from './ui/States.tsx';
 interface PickGuideViewProps {
   fixtures: Fixture[];
   strategy: AccaStrategy;
-  displayDate: string;
-  cachedAt: string;
   slateGuard?: TicketGuardSummary;
   onGoToSlate: () => void;
   onApplyLegs: (legs: AccaLeg[]) => void;
@@ -119,24 +117,28 @@ function EconomicsPanel({
   const economics = guardEconomics(guard);
   const cells = [
     {
+      key: 'fair',
       label: 'Fair chance',
       value: fmtPercent(economics.fairChance),
       infoKey: 'fairProbability',
     },
     {
+      key: 'breakEven',
       label: 'Break-even chance',
       value: fmtPercent(economics.breakEvenChance),
       infoKey: undefined,
     },
     {
-      label: 'edgePts',
+      key: 'edge',
+      label: 'Ticket edge (pp)',
       value: fmtFixed(economics.edgePts, 1, { sign: true }),
-      infoKey: undefined,
+      infoKey: 'ticketEdge',
     },
     {
-      label: 'Expected ROI',
+      key: 'ev',
+      label: 'EV %',
       value: fmtSignedPercent(economics.expectedRoi, 1),
-      infoKey: 'roi',
+      infoKey: 'ticketEv',
     },
   ];
 
@@ -144,14 +146,14 @@ function EconomicsPanel({
     <DataCard title={title} subtitle={subtitle}>
       <div className="grid grid-cols-2 gap-3">
         {cells.map((cell) => (
-          <div key={cell.label} className="rounded-lg bg-slate-50 px-3 py-2">
+          <div key={cell.key} className="rounded-lg bg-slate-50 px-3 py-2">
             <p className="flex items-center text-[10px] font-semibold uppercase tracking-wide text-slate-500">
               {cell.label}
               {cell.infoKey && <InfoHint infoKey={cell.infoKey} />}
             </p>
             <p
               className={`mt-1 font-mono text-lg font-bold tabular-nums ${
-                cell.label === 'edgePts'
+                cell.key === 'edge'
                   ? economics.edgePts > 0
                     ? 'text-emerald-700'
                     : 'text-red-600'
@@ -303,7 +305,7 @@ function CandidateTable({
     },
     {
       key: 'value',
-      header: sortHeader('Edge / EV / stress', 'value', SORT_DESC),
+      header: sortHeader('Model edge (pp) / EV % / stress', 'value', SORT_DESC),
       cell: (candidate) => (
         <span className="font-mono tabular-nums text-slate-700">
           {fmtFixed(candidate.edgePts, 1, { sign: true })}pp /{' '}
@@ -364,8 +366,6 @@ function CandidateTable({
 export function PickGuideView({
   fixtures,
   strategy,
-  displayDate,
-  cachedAt,
   slateGuard,
   onGoToSlate,
   onApplyLegs,
@@ -390,7 +390,7 @@ export function PickGuideView({
   return (
     <section aria-label="Pick selection guide" className="space-y-8">
       <PageHeader
-        eyebrow={`${displayDate} · Framework v1.2`}
+        eyebrow="Framework check"
         title="How to Choose the Actual Picks"
         description="Grade each match's Recommended Angle card, then run the hard filters before a leg touches the slip. This tab audits the live slate against those rules — it does not invent a second set of picks."
         scope="personal"
@@ -499,11 +499,11 @@ export function PickGuideView({
             <p className="flex items-start gap-2 text-xs leading-relaxed text-amber-900">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>
-                If fair chance is below break-even chance, the ticket is
-                negative-EV even when every leg looks “safe”. The guard&apos;s
-                fair prices come from the same book, so the “recommended” label is
-                effectively unreachable without an independent model. If the UI
-                withholds it, believe it.
+                A ticket is recommended only when its fair chance clears
+                break-even and it stays inside the leg cap. Fair prices here come
+                from the captured book, so a missing recommendation means value
+                could not be independently verified — not that the legs are safe.
+                Treat it as a no-bet signal.
               </span>
             </p>
           </div>
@@ -550,8 +550,7 @@ export function PickGuideView({
         )}
       </DataCard>
 
-      <p className="text-[10px] text-slate-400">
-        Cached slate: <span className="font-mono">{cachedAt || 'not available'}</span>.
+      <p className="text-[10px] leading-relaxed text-slate-400">
         Grades use the Recommended Angle&apos;s fair chance; framework confidence is
         a separate evidence measure and must still clear its own gate.
       </p>

@@ -7,7 +7,6 @@ export type ActiveTab =
   | 'saved'
   | 'activity'
   | 'analytics'
-  | 'roi'
   | 'ai'
   | 'sources';
 
@@ -19,17 +18,15 @@ export const ACTIVE_TABS: readonly ActiveTab[] = [
   'saved',
   'activity',
   'analytics',
-  'roi',
   'ai',
   'sources',
 ];
 
-export type NavGroupId = 'build' | 'track' | 'analyze' | 'reference';
+export type NavGroupId = 'build' | 'review' | 'research';
 
 export interface NavItem {
   id: ActiveTab;
   label: string;
-  research?: boolean;
 }
 
 export interface NavGroup {
@@ -39,12 +36,12 @@ export interface NavGroup {
   items: readonly NavItem[];
 }
 
-/** Grouped by job-to-be-done instead of one flat list of seven peers. */
+/** Three destinations by job-to-be-done, with no separate reference silo. */
 export const NAV_GROUPS: readonly NavGroup[] = [
   {
     id: 'build',
     label: 'Build',
-    description: 'Assemble and review a ticket.',
+    description: 'Assemble and stress-test a ticket.',
     items: [
       { id: 'slate', label: 'Matchday Slate' },
       { id: 'pick-guide', label: 'Pick Selection' },
@@ -52,28 +49,23 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     ],
   },
   {
-    id: 'track',
-    label: 'Track',
-    description: 'Your saved slips and results.',
+    id: 'review',
+    label: 'Review',
+    description: 'Track saved slips, results and aggregates.',
     items: [
       { id: 'saved', label: 'Saved Slips' },
       { id: 'activity', label: 'My Activity' },
-    ],
-  },
-  {
-    id: 'analyze',
-    label: 'Analyze',
-    description: 'Global aggregates and research.',
-    items: [
       { id: 'analytics', label: 'Analytics' },
-      { id: 'positive-reads', label: 'Positive Reads and Analytics', research: true },
-      { id: 'ai', label: 'AI Desk', research: true },
     ],
   },
   {
-    id: 'reference',
-    label: 'Reference',
-    description: 'Where the data comes from.',
-    items: [{ id: 'sources', label: 'Sources' }],
+    id: 'research',
+    label: 'Research',
+    description: 'Read-only studies and data provenance.',
+    items: [
+      { id: 'positive-reads', label: 'Positive Reads' },
+      { id: 'ai', label: 'AI Desk' },
+      { id: 'sources', label: 'Sources' },
+    ],
   },
 ];
