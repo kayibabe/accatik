@@ -11,7 +11,6 @@ import type {
   PublicSlateResponse,
   RecommendedPickRef,
   ServerTimings,
-  SettlementStatus,
 } from '../src/types/fixtures.ts';
 import type {
   AnalyticsRefreshResult,
@@ -22,8 +21,6 @@ import type {
   PositiveReadMatchesResponse,
   QualifiedPicksResponse,
   RoiAccaResponse,
-  RoiPromotionConfig,
-  RoiPromotionResult,
   RoiRegistryEntry,
 } from '../src/types/analytics.ts';
 import type {
@@ -31,7 +28,7 @@ import type {
   AiBriefingResponse,
   AiRiskMode,
 } from '../src/types/ai.ts';
-import type { LedgerSummary, LedgerTicket } from '../src/types/ledger.ts';
+import type { LedgerSummary } from '../src/types/ledger.ts';
 import { buildRecommendedAcca } from '../src/utils/accaEngine.ts';
 import { appendFeaturedPickSnapshots } from '../src/utils/featuredPickSnapshot.ts';
 import { evaluateAccumulator } from '../src/framework/accumulator.ts';
@@ -66,21 +63,12 @@ import {
   summarizeFrameworkSlate,
 } from './lib/frameworkAssessment.ts';
 import { getFrameworkHistory } from './lib/frameworkHistory.ts';
+import { getMarketCalibration } from './lib/marketCalibration.ts';
 import { applyFrameworkSlateControls } from './lib/frameworkSlate.ts';
-import {
-  DEFAULT_ROI_PROMOTION_CONFIG,
-} from './lib/roiPromotion.ts';
-import {
-  readQualifiedPicks,
-  readRoiRegistry,
-  runDailyRoiPromotion,
-  writeQualifiedPicks,
-} from './lib/roiRegistry.ts';
+import { readRoiRegistry } from './lib/roiRegistry.ts';
 import {
   applySlateToLedger,
   getLedgerSummary,
-  listLedgerTickets,
-  settleLedgerFromArchives,
 } from './lib/ticketLedger.ts';
 import type {
   RawApiFixture,
@@ -992,11 +980,13 @@ export async function getTodayFixtures(
     // before any pick or accumulator is built. Unassessed fixtures keep the
     // legacy resolver path.
     const frameworkHistory = await getFrameworkHistory();
+    const calibration = await getMarketCalibration();
     const decisionTime = Date.now();
     fixtures = attachFrameworkAssessments(
       fixtures,
       frameworkHistory,
-      decisionTime
+      decisionTime,
+      calibration
     );
     // Slate controller: rank, cap and record every decision before picks are
     // built, so a capped selection can never reach the recommended ticket.
@@ -1668,13 +1658,6 @@ export async function getTicketAnalytics(
   }
 }
 
-const STATUSES: SettlementStatus[] = [
-  'Win',
-  'Lost',
-  'Void',
-  'Live',
-  'Pending',
-];
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function asDateIso(value: unknown): string | undefined {
@@ -1698,63 +1681,9 @@ export async function getLedgerSummaryResult(query?: unknown): Promise<
   }
 }
 
-export async function listLedgerTicketsResult(
-  query: unknown
-): Promise<ApiResult<{ tickets: LedgerTicket[] } | ErrorBody>> {
-  try {
-    const source = asRecord(query);
-    const dateIso = asDateIso(source.dateIso);
-    const status =
-      typeof source.status === 'string' &&
-      STATUSES.includes(source.status as SettlementStatus)
-        ? (source.status as SettlementStatus)
-        : undefined;
-    const limitRaw = Number(source.limit);
-    const limit = Number.isFinite(limitRaw) ? limitRaw : 100;
-
-    return ok({ tickets: await listLedgerTickets({ dateIso, status, limit }) });
-  } catch (error) {
-    console.error('Error reading ledger tickets:', error);
-    return fail(500, 'Could not read ledger tickets.');
-  }
-}
-
-export async function settleLedger(body: unknown): Promise<
-  ApiResult<{ changed: number; summary: LedgerSummary } | ErrorBody>
-> {
-  try {
-    const source = asRecord(body);
-    const dateIso = asDateIso(source.dateIso);
-
-    const changed = await settleLedgerFromArchives(dateIso);
-    return ok({ changed, summary: await getLedgerSummary() });
-  } catch (error) {
-    console.error('Error settling ledger:', error);
-    return fail(500, 'Could not settle the shadow ledger.');
-  }
-}
-
 /* ------------------------------------------------------------------ */
 /* Positive-ROI research flow                                          */
 /* ------------------------------------------------------------------ */
-
-function parseRoiConfig(source: Record<string, unknown>): RoiPromotionConfig {
-  const raw = asRecord(source.config);
-  const number = (key: keyof RoiPromotionConfig, fallback: number): number => {
-    const value = raw[key] ?? source[key];
-    const parsed = Number(value);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-  };
-  return {
-    ...DEFAULT_ROI_PROMOTION_CONFIG,
-    prematchOnly: true,
-    minSettled: number('minSettled', DEFAULT_ROI_PROMOTION_CONFIG.minSettled),
-    minSpanDays: number('minSpanDays', DEFAULT_ROI_PROMOTION_CONFIG.minSpanDays),
-    promoteAfter: number('promoteAfter', DEFAULT_ROI_PROMOTION_CONFIG.promoteAfter),
-    demoteAfter: number('demoteAfter', DEFAULT_ROI_PROMOTION_CONFIG.demoteAfter),
-    retireAfterDays: number('retireAfterDays', DEFAULT_ROI_PROMOTION_CONFIG.retireAfterDays),
-  };
-}
 
 function requestedRoiDate(source: Record<string, unknown>): string {
   const value = source.dateIso ?? source.date;
@@ -1781,22 +1710,6 @@ export async function getRoiRegistry(body: unknown): Promise<
   }
 }
 
-/** Recomputes clean analytics and applies one daily promotion snapshot. */
-export async function runRoiPromotion(body: unknown): Promise<
-  ApiResult<RoiPromotionResult | ErrorBody>
-> {
-  const source = asRecord(body);
-  const strategy = isAccaStrategy(source.strategy) ? source.strategy : 'balanced';
-  try {
-    return ok(
-      await runDailyRoiPromotion(strategy, parseRoiConfig(source), source.force === true)
-    );
-  } catch (error) {
-    console.error('Error running ROI promotion:', error);
-    return fail(500, errorMessage(error, 'Could not run the ROI promotion snapshot.'));
-  }
-}
-
 /** Daily qualified-matches table: whitelist joined to the board's three cards. */
 export async function getQualifiedPicks(body: unknown): Promise<
   ApiResult<QualifiedPicksResponse | ErrorBody>
@@ -1810,11 +1723,13 @@ export async function getQualifiedPicks(body: unknown): Promise<
       readRoiRegistry(strategy),
     ]);
     const frameworkHistory = await getFrameworkHistory();
+    const calibration = await getMarketCalibration();
     const decisionTime = Date.now();
     const assessed = attachFrameworkAssessments(
       loaded.fixtures,
       frameworkHistory,
-      decisionTime
+      decisionTime,
+      calibration
     );
     const controlled = await applyFrameworkSlateControls(
       assessed,
@@ -1828,12 +1743,6 @@ export async function getQualifiedPicks(body: unknown): Promise<
       registry,
       strategy
     );
-    try {
-      await writeQualifiedPicks(response);
-    } catch (persistError) {
-      // The table is a derived view: a failed cache write must not hide it.
-      console.error('Could not persist qualified picks:', persistError);
-    }
     return ok(response);
   } catch (error) {
     console.error('Error building qualified picks:', error);
@@ -1867,11 +1776,13 @@ export async function buildRoiAccaTicket(body: unknown): Promise<
       readRoiRegistry(strategy),
     ]);
     const frameworkHistory = await getFrameworkHistory();
+    const calibration = await getMarketCalibration();
     const decisionTime = Date.now();
     const assessed = attachFrameworkAssessments(
       loaded.fixtures,
       frameworkHistory,
-      decisionTime
+      decisionTime,
+      calibration
     );
     const controlled = await applyFrameworkSlateControls(
       assessed,
@@ -1963,11 +1874,13 @@ export function getAiBriefing(body: unknown): Promise<ApiResult<AiBriefingRespon
     try {
       const loaded = await getSlate(request.dateIso, false);
       const frameworkHistory = await getFrameworkHistory();
+      const calibration = await getMarketCalibration();
       const decisionTime = Date.now();
       const assessed = attachFrameworkAssessments(
         loaded.fixtures,
         frameworkHistory,
-        decisionTime
+        decisionTime,
+        calibration
       );
       const controlled = await applyFrameworkSlateControls(
         assessed,
@@ -2001,6 +1914,7 @@ export function getAiBriefing(body: unknown): Promise<ApiResult<AiBriefingRespon
         registry,
         qualified,
         ledger,
+        calibration,
         sources: SOURCE_LINKS(request.dateIso),
       };
 

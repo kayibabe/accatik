@@ -149,3 +149,30 @@ test('every market assessment records the explainability fields', () => {
     assert.ok(market.oddsAgeSeconds !== null);
   }
 });
+
+test('settled market calibration flows into confidence and the decision record', () => {
+  const assessed = assessFixtureFramework(fixture(), [], {
+    nowMs: now,
+    modelInput,
+    config: {
+      minMarketCalibrationSamples: 100,
+      marketCalibrationBrierCeiling: 0.25,
+    },
+    calibration: { '1X2-H': { settled: 120, brier: 0.31 } },
+  });
+  const home = assessed.markets.find((market) => market.selectionKey === '1X2-H');
+  assert.equal(home?.confidence, 'Medium');
+  assert.ok(home?.confidenceDowngrades.includes('MARKET_CALIBRATION_BRIER'));
+  assert.deepEqual(home?.calibration, { settled: 120, brier: 0.31 });
+  assert.equal(home?.calibrationUnavailable, false);
+
+  const withoutRecord = assessFixtureFramework(fixture(), [], {
+    nowMs: now,
+    modelInput,
+  });
+  const plainHome = withoutRecord.markets.find(
+    (market) => market.selectionKey === '1X2-H'
+  );
+  assert.equal(plainHome?.calibrationUnavailable, true);
+  assert.ok(!plainHome?.confidenceDowngrades.includes('MARKET_CALIBRATION_BRIER'));
+});

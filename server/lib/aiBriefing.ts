@@ -11,13 +11,15 @@ import type {
   RoiRegistryEntry,
 } from '../../src/types/analytics.ts';
 import type { LedgerSummary } from '../../src/types/ledger.ts';
-import type { ReasonCode } from '../../src/framework/config.ts';
+import { DEFAULT_FRAMEWORK_CONFIG, type ReasonCode } from '../../src/framework/config.ts';
+import type { MarketCalibrationRecord } from '../../src/framework/confidence.ts';
 import type {
   AiAccumulatorResponse,
   AiBriefingResponse,
   AiConfidenceBand,
   AiInputRead,
   AiPick,
+  AiPickCalibration,
   AiRiskMode,
   AiTicketLeg,
 } from '../../src/types/ai.ts';
@@ -60,6 +62,23 @@ const finite = (value: unknown): value is number =>
 
 function percentToFraction(value: unknown): number | null {
   return finite(value) && value >= 0 && value <= 100 ? value / 100 : null;
+}
+
+function calibrationView(
+  record: MarketCalibrationRecord | null | undefined
+): AiPickCalibration | null {
+  if (!record) return null;
+  const status: AiPickCalibration['status'] =
+    record.settled < DEFAULT_FRAMEWORK_CONFIG.minMarketCalibrationSamples
+      ? 'thin'
+      : record.brier > DEFAULT_FRAMEWORK_CONFIG.marketCalibrationBrierCeiling
+        ? 'poor'
+        : 'verified';
+  return {
+    settled: record.settled,
+    brier: Math.round(record.brier * 10_000) / 10_000,
+    status,
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -227,6 +246,7 @@ export interface BriefingInput {
   registry: RoiRegistryEntry[];
   qualified: QualifiedPicksResponse | null;
   ledger: LedgerSummary | null;
+  calibration?: Record<string, MarketCalibrationRecord> | null;
   sources: GroundingSource[];
   narratives?: Record<string, string>;
   narrativeProvider?: string | null;
@@ -314,6 +334,9 @@ export function buildBriefing(input: BriefingInput): AiBriefingResponse {
       }
 
       const assessment = market.framework;
+      const calibration = calibrationView(
+        input.calibration?.[selection.key] ?? assessment?.calibration
+      );
       if (
         assessment?.status === 'REJECTED' &&
         (assessment.reasonCodes ?? []).some((code) => HARD_REJECT_CODES.has(code))
@@ -434,6 +457,13 @@ export function buildBriefing(input: BriefingInput): AiBriefingResponse {
       if (band === 'Speculative') risks.push('Low-confidence estimate');
       if (oddsAge !== null && oddsAge > 7200) risks.push('Price more than 2 hours old');
       if (!assessment?.marketComplete) risks.push('Incomplete benchmark book');
+      if (!calibration) {
+        risks.push('No settled calibration for this market yet');
+      } else if (calibration.status === 'poor') {
+        risks.push(`Market calibration is weak (Brier ${calibration.brier.toFixed(2)})`);
+      } else if (calibration.status === 'thin') {
+        risks.push(`Only ${calibration.settled} settled market samples`);
+      }
       if (assessment?.status === 'REJECTED') {
         const codes = (assessment.reasonCodes ?? [])
           .map((code) => code.toLowerCase().replace(/_/g, ' '))
@@ -476,6 +506,7 @@ export function buildBriefing(input: BriefingInput): AiBriefingResponse {
         stakePct: stakeFor(decisionP, market.odds, confidence, disagreement, 0.02),
         frameworkStatus: assessment?.status ?? fixture.framework?.status ?? null,
         frameworkConfidence: assessment?.confidence ?? fixture.framework?.confidence ?? null,
+        calibration,
         signals: {
           framework: frameworkP,
           poisson: poissonP,
@@ -537,11 +568,11 @@ export function buildBriefing(input: BriefingInput): AiBriefingResponse {
       detail: `${ledger?.decided ?? 0} settled tickets · ROI ${
         ledger?.roi === null || ledger?.roi === undefined
           ? 'n/a'
-          : `${(ledger.roi * 100).toFixed(1)}%`
+          : `${ledger.roi.toFixed(1)}%`
       } · avg CLV ${
         ledger?.avgClv === null || ledger?.avgClv === undefined
           ? 'n/a'
-          : `${(ledger.avgClv * 100).toFixed(2)}%`
+          : `${ledger.avgClv.toFixed(2)}%`
       }`,
       records: ledger?.tickets ?? 0,
     },
@@ -569,6 +600,7 @@ export function buildBriefing(input: BriefingInput): AiBriefingResponse {
     narrativeNote:
       input.narrativeNote ??
       'Plain-English notes are optional. All probabilities come from the local ensemble already in the workbench.',
+    avgClv: finite(ledger?.avgClv) ? (ledger!.avgClv as number) : null,
     marketFilter,
     competitionFilter,
     summary,

@@ -22,10 +22,11 @@ import type {
   AiTicketLeg,
 } from '../types/ai.ts';
 import { apiFetch } from '../utils/api.ts';
-import { DataCard, MetricCard, MetricGrid } from './ui/DataCard.tsx';
+import { fmtSignedPercent } from '../utils/format.ts';
+import { DataCard, InfoHint, MetricCard, MetricGrid } from './ui/DataCard.tsx';
 import { PageHeader } from './ui/PageHeader.tsx';
 import { EmptyState, ErrorState, InlineLoading, LoadingState } from './ui/States.tsx';
-import { frameworkTone } from '../utils/uiTone.ts';
+import { frameworkTone, pnlTone } from '../utils/uiTone.ts';
 
 interface AiViewProps {
   selectedDate: string;
@@ -71,6 +72,118 @@ function toLeg(pick: AiPick): AiTicketLeg {
     aiScore: pick.aiScore,
     band: pick.band,
   };
+}
+
+/** The six numbers that decide one bet, kept together instead of scattered. */
+function DecisionChain({
+  pick,
+  avgClv,
+}: {
+  pick: AiPick | null;
+  avgClv: number | null;
+}) {
+  const calibration = pick?.calibration ?? null;
+  const calibrationStatus = !calibration
+    ? 'Unavailable'
+    : calibration.status === 'verified'
+      ? 'Verified'
+      : calibration.status === 'thin'
+        ? 'Thin'
+        : 'Weak';
+  const cells = [
+    {
+      key: 'price',
+      label: 'Price',
+      value: pick ? pick.odds.toFixed(2) : '—',
+      detail: pick ? `${pick.label} @ ${pick.bookmaker ?? 'book'}` : undefined,
+      tone: 'text-slate-900',
+    },
+    {
+      key: 'fair',
+      label: 'Fair price',
+      value: pick && pick.pFair > 0 ? (1 / pick.pFair).toFixed(2) : '—',
+      detail: pick ? `${pct(pick.pFair)} fair chance` : undefined,
+      tone: 'text-slate-900',
+      infoKey: 'fairProbability',
+    },
+    {
+      key: 'ev',
+      label: 'Stressed EV',
+      value: pick ? pct(pick.evStress) : '—',
+      detail: 'after uncertainty haircut',
+      tone: pick && pick.evStress > 0 ? 'text-emerald-700' : 'text-slate-400',
+      infoKey: 'ev',
+    },
+    {
+      key: 'stake',
+      label: 'Stake',
+      value: pick ? pct(pick.stakePct, 2) : '—',
+      detail: 'quarter-Kelly, capped at 2%',
+      tone: 'text-slate-900',
+      infoKey: 'stake',
+    },
+    {
+      key: 'clv',
+      label: 'Avg CLV',
+      value: avgClv === null ? '—' : fmtSignedPercent(avgClv, 2),
+      detail: 'settled shadow tickets',
+      tone: avgClv === null ? 'text-slate-400' : pnlTone(avgClv),
+      infoKey: 'clv',
+    },
+    {
+      key: 'calibration',
+      label: 'Calibration',
+      value: calibrationStatus,
+      detail: calibration
+        ? `${calibration.settled} settled · Brier ${calibration.brier.toFixed(2)}`
+        : 'no settled market history yet',
+      tone: calibration?.status === 'poor' ? 'text-amber-700' : 'text-slate-900',
+      infoKey: 'calibration',
+    },
+  ];
+
+  return (
+    <DataCard
+      title="Decision chain"
+      subtitle="Price → fair price → stressed EV → stake → CLV → calibration, for the top-ranked pick"
+    >
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+        {cells.map((cell) => (
+          <div
+            key={cell.key}
+            className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+          >
+            <p className="flex items-center text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+              {cell.label}
+              {cell.infoKey && <InfoHint infoKey={cell.infoKey} />}
+            </p>
+            <p className={`mt-1 font-mono text-sm font-bold tabular-nums ${cell.tone}`}>
+              {cell.value}
+            </p>
+            {cell.detail && (
+              <p className="mt-0.5 truncate text-[10px] text-slate-500" title={cell.detail}>
+                {cell.detail}
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+      {!pick ? (
+        <div className="mt-3 flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-700">
+          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
+          <span>
+            <strong>No bet.</strong> No priced selection cleared the stressed-EV gate.
+            Waiting for a better price or a clearer market is a valid decision.
+          </span>
+        </div>
+      ) : (
+        <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
+          CLV is measured after settlement. Calibration uses settled legs for this market;
+          an empty record is shown as unavailable, never as a pass.
+        </p>
+      )}
+    </DataCard>
+  );
 }
 
 /**
@@ -388,6 +501,8 @@ export function AiView({
             />
             <MetricCard label="Quality bands" value={String(metrics.strong)} detail="high / solid estimates" />
           </MetricGrid>
+
+          <DecisionChain pick={picks[0] ?? null} avgClv={briefing.avgClv} />
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 items-start">
             <div className="lg:col-span-7 min-w-0 space-y-3">

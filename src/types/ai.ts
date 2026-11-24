@@ -9,6 +9,13 @@ import type { AccaStrategy, MarketType } from './fixtures.ts';
 export type AiConfidenceBand = 'High' | 'Solid' | 'Moderate' | 'Speculative';
 export type AiRiskMode = 'conservative' | 'balanced' | 'aggressive';
 
+/** Settled Brier evidence for one canonical selection. */
+export interface AiPickCalibration {
+  settled: number;
+  brier: number;
+  status: 'verified' | 'thin' | 'poor' | 'unavailable';
+}
+
 /** Which free models contributed to one selection's probability. */
 export interface AiModelSignals {
   /** Framework scoreline matrix probability (Dixon-Coles style). */
@@ -64,6 +71,8 @@ export interface AiPick {
   stakePct: number;
   frameworkStatus: string | null;
   frameworkConfidence: string | null;
+  /** Settled market calibration behind this pick, when evidence exists. */
+  calibration: AiPickCalibration | null;
   signals: AiModelSignals;
   reasons: string[];
   risks: string[];
@@ -89,6 +98,8 @@ export interface AiBriefingResponse {
   narrativeProvider: string | null;
   /** Status of the optional narrative layer, safe to display in the UI. */
   narrativeNote: string;
+  /** Average closing-line value from settled shadow tickets, in percent. */
+  avgClv: number | null;
   marketFilter: string;
   competitionFilter: string;
   summary: string;

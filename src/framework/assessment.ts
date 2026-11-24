@@ -22,7 +22,10 @@ import { buildBenchmark, type BookPrice } from './benchmark.ts';
 import { assessIndexFlags, drawRiskFlag, type ThreeWayProbabilities } from './suitability.ts';
 import { evaluateValue, type ValueAssessment } from './value.ts';
 import { confidencePasses, qualifyCandidate } from './qualification.ts';
-import { assessMarketConfidence } from './confidence.ts';
+import {
+  assessMarketConfidence,
+  type MarketCalibrationRecord,
+} from './confidence.ts';
 import {
   marketScreeningFlags,
   teamGoalsContext,
@@ -89,6 +92,10 @@ export interface MarketFrameworkAssessment {
   staked?: boolean;
   /** Cap reason codes added after the original decision was recorded. */
   capReasonCodes?: ReasonCode[];
+  /** Settled Brier evidence for this selection, when the ledger has enough history. */
+  calibration?: MarketCalibrationRecord | null;
+  /** True when no settled calibration record was available at decision time. */
+  calibrationUnavailable?: boolean;
 }
 
 export interface FixtureModelSummary {
@@ -127,6 +134,8 @@ export interface AssessFixtureOptions {
   config?: Partial<FrameworkConfig>;
   /** Injected model input, for tests or a validated external model adapter. */
   modelInput?: FrameworkModelInput;
+  /** Market-level Brier evidence from settled ledger legs, keyed by selection. */
+  calibration?: Record<MarketKey, MarketCalibrationRecord> | null;
 }
 
 function oddsAge(
@@ -226,6 +235,8 @@ export function assessFixtureFramework(
       benchmarkBook: null,
       executionBook: market.bookmaker ?? null,
       value: null,
+      calibration: null,
+      calibrationUnavailable: true,
     }));
     return {
       version: FRAMEWORK_VERSION,
@@ -294,6 +305,7 @@ export function assessFixtureFramework(
 
   const markets: MarketFrameworkAssessment[] = priced.map((market) => {
     const pModel = probabilities[market.selectionKey] ?? null;
+    const calibration = options.calibration?.[market.selectionKey] ?? null;
     const marketConfidence = assessMarketConfidence(
       {
         base: modelInput.confidence,
@@ -301,6 +313,7 @@ export function assessFixtureFramework(
         pModel: pModel ?? 0.5,
         sampleSize: Math.min(modelInput.sampleHome, modelInput.sampleAway),
         oddsAgeSeconds: age.age,
+        calibration,
       },
       cfg
     );
@@ -356,6 +369,8 @@ export function assessFixtureFramework(
       benchmarkBook: benchmarkEntry?.book ?? benchmark.benchmarkBook,
       executionBook: market.bookmaker ?? null,
       value,
+      calibration,
+      calibrationUnavailable: marketConfidence.calibrationUnavailable,
     };
   });
 

@@ -22,7 +22,7 @@ import {
 } from '../utils/shadowRoiFilter.ts';
 import { DataTable, type DataTableColumn } from './ui/DataTable.tsx';
 import { DataStatus } from './ui/DataStatus.tsx';
-import { MetricCard, MetricGrid } from './ui/DataCard.tsx';
+import { InfoHint } from './ui/DataCard.tsx';
 import { EmptyState } from './ui/States.tsx';
 import { recordLabel } from './performance/format.ts';
 import { SortHeaderButton, SortStatus } from './performance/SortHeaderButton.tsx';
@@ -31,6 +31,30 @@ const SHORTLIST_RULE =
   `ROI ≥ ${SHADOW_ROI_SHORTLIST.minRoiPct}% · ` +
   `Hit ≥ ${SHADOW_ROI_SHORTLIST.minHitPct}% · ` +
   `CLV ≥ ${SHADOW_ROI_SHORTLIST.minAvgClvPct}%`;
+
+function SummaryItem({
+  label,
+  value,
+  detail,
+  tone = 'text-slate-900',
+  infoKey,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  tone?: string;
+  infoKey?: string;
+}) {
+  return (
+    <div className="flex items-baseline gap-1.5" title={detail}>
+      <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+        {infoKey && <InfoHint infoKey={infoKey} />}
+      </dt>
+      <dd className={`font-mono text-xs font-bold tabular-nums ${tone}`}>{value}</dd>
+    </div>
+  );
+}
 
 const VARIANT_ACCESSORS: SortAccessors<LedgerBreakdownRow> = {
   label: (row) => row.label,
@@ -400,37 +424,37 @@ export function ShadowLedgerPanel() {
           </div>
 
           <div className="px-3 pb-3">
-            <MetricGrid>
-              <MetricCard
+            <dl className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-emerald-100 bg-emerald-50/40 px-3 py-2.5">
+              <SummaryItem
                 label="Record"
                 value={recordLabel(summary.won, summary.lost, summary.voided)}
                 detail={`${fmtCount(summary.tickets)} tickets · ${fmtCount(summary.live + summary.pending)} open`}
               />
-              <MetricCard
+              <SummaryItem
                 label="Hit rate"
                 value={fmtPercent(summary.hitRate)}
                 detail={`${fmtCount(summary.decided)} decided tickets`}
               />
-              <MetricCard
+              <SummaryItem
                 label="Break-even"
                 value={fmtPercent(summary.breakEvenHitRate)}
                 detail={`Needed at ${fmtOdds(summary.avgOdds)} avg odds`}
               />
-              <MetricCard
+              <SummaryItem
                 label="ROI"
                 value={fmtSignedPercent(summary.roi)}
-                tone={summary.roi === null ? 'text-slate-400' : pnlTone(summary.roi)}
                 detail="Flat stake · void excluded"
+                tone={summary.roi === null ? 'text-slate-400' : pnlTone(summary.roi)}
                 infoKey="roi"
               />
-              <MetricCard
+              <SummaryItem
                 label="Avg CLV"
                 value={fmtSignedPercent(summary.avgClv)}
-                tone={summary.avgClv === null ? 'text-slate-400' : pnlTone(summary.avgClv)}
                 detail="Placed price vs closing"
+                tone={summary.avgClv === null ? 'text-slate-400' : pnlTone(summary.avgClv)}
                 infoKey="clv"
               />
-            </MetricGrid>
+            </dl>
           </div>
 
           <div className="space-y-2 border-t border-slate-200 px-3 py-3">

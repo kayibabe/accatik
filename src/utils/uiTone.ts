@@ -139,8 +139,18 @@ export const METRIC_INFO: Record<
   },
   confidence: {
     label: 'Confidence',
-    definition: 'Framework confidence band after sample size, odds freshness and risk-flag checks.',
-    source: 'Framework assessment',
+    definition: 'Framework confidence band after sample size, odds freshness, market calibration and risk-flag checks.',
+    source: 'Framework assessment · settled market Brier',
+  },
+  calibration: {
+    label: 'Market calibration',
+    definition: 'Brier score of the captured model probability against settled outcomes for this market. Lower is better; too few settled legs means calibration is unavailable.',
+    source: 'Settled shadow ledger · frozen matchday archive',
+  },
+  stake: {
+    label: 'Suggested stake',
+    definition: 'Quarter-Kelly suggestion from the stressed decision probability and model disagreement, capped at 2% of bankroll per selection.',
+    source: 'AI desk ensemble',
   },
   pnl: {
     label: 'Profit / loss',

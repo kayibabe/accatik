@@ -4,6 +4,7 @@ import type { MarketFrameworkAssessment } from '../../src/framework/assessment.t
 import type { ReasonCode } from '../../src/framework/config.ts';
 import type { Fixture, FixtureFrameworkSummary, MarketOption } from '../../src/types/fixtures.ts';
 import type { PickAnalyticsResponse } from '../../src/types/analytics.ts';
+import type { LedgerSummary } from '../../src/types/ledger.ts';
 import type { AiPick } from '../../src/types/ai.ts';
 import { makeFixture, makeMarket } from '../../src/utils/testFactories.ts';
 import {
@@ -168,6 +169,7 @@ function aiPick(overrides: Partial<AiPick> = {}): AiPick {
     stakePct: 0.01,
     frameworkStatus: 'QUALIFIED',
     frameworkConfidence: 'High',
+    calibration: null,
     signals: {
       framework: 0.55,
       poisson: 0.5,
@@ -325,6 +327,115 @@ test('historical ROI is read as percentage points and reported without rescaling
   assert.ok(pick.reasons.some((reason) => reason.includes('20.0% historical ROI')));
   assert.ok(!pick.reasons.some((reason) => reason.includes('2000')));
   assert.ok(pick.evStress > 0);
+});
+
+function ledgerSummary(overrides: Partial<LedgerSummary> = {}): LedgerSummary {
+  return {
+    generatedAt: '2026-11-22T12:00:00.000Z',
+    updatedAt: '2026-11-22T12:00:00.000Z',
+    dateIso: null,
+    availableDates: ['2026-11-22'],
+    byVariant: [],
+    byLegCount: [],
+    byPriceQuality: [],
+    recent: [],
+    tickets: 12,
+    won: 7,
+    lost: 5,
+    voided: 0,
+    live: 0,
+    pending: 0,
+    decided: 12,
+    hitRate: 58.3,
+    breakEvenHitRate: 47.6,
+    settledStake: 12,
+    returns: 12.65,
+    netPnl: 0.65,
+    roi: 5.4,
+    avgOdds: 2.1,
+    avgLegs: 2,
+    avgFairProbability: 45,
+    avgClv: 2.1,
+    ...overrides,
+  };
+}
+
+function briefingBase(fixtures: ReturnType<typeof assessedFixture>[]) {
+  return {
+    fixtures,
+    dateIso: '2026-11-22',
+    displayDate: '22 Nov 2026',
+    strategy: 'balanced' as const,
+    marketFilter: 'all',
+    competitionFilter: 'all',
+    analytics: analytics(),
+    combination: null,
+    registry: [],
+    qualified: null,
+    ledger: null,
+    sources: [],
+  };
+}
+
+test('pick calibration status and risk text reflect settled evidence, never treating absence as good', () => {
+  const poor = buildBriefing({
+    ...briefingBase([assessedFixture('poor')]),
+    calibration: { '1X2-H': { settled: 120, brier: 0.31 } },
+  });
+  assert.equal(poor.picks[0]?.calibration?.status, 'poor');
+  assert.equal(poor.picks[0]?.calibration?.brier, 0.31);
+  assert.ok(
+    poor.picks[0]?.risks.some((risk) =>
+      risk.includes('Market calibration is weak (Brier 0.31)')
+    )
+  );
+
+  const thin = buildBriefing({
+    ...briefingBase([assessedFixture('thin')]),
+    calibration: { '1X2-H': { settled: 10, brier: 0.1 } },
+  });
+  assert.equal(thin.picks[0]?.calibration?.status, 'thin');
+  assert.ok(
+    thin.picks[0]?.risks.some((risk) =>
+      risk.includes('Only 10 settled market samples')
+    )
+  );
+
+  const verified = buildBriefing({
+    ...briefingBase([assessedFixture('verified')]),
+    calibration: { '1X2-H': { settled: 120, brier: 0.1 } },
+  });
+  assert.equal(verified.picks[0]?.calibration?.status, 'verified');
+  assert.ok(
+    !verified.picks[0]?.risks.some((risk) =>
+      risk.toLowerCase().includes('calibration')
+    )
+  );
+
+  const unavailable = buildBriefing(briefingBase([assessedFixture('uncalibrated')]));
+  assert.equal(unavailable.picks[0]?.calibration, null);
+  assert.ok(
+    unavailable.picks[0]?.risks.some((risk) =>
+      risk.includes('No settled calibration for this market yet')
+    )
+  );
+});
+
+test('briefing passes ledger ROI and CLV through as percent values without rescaling', () => {
+  const briefing = buildBriefing({
+    ...briefingBase([assessedFixture('ledger')]),
+    ledger: ledgerSummary(),
+  });
+
+  assert.equal(briefing.avgClv, 2.1);
+  const ledgerInput = briefing.inputs.find(
+    (input) => input.page === 'My Activity / Ledger'
+  );
+  assert.ok(ledgerInput);
+  assert.match(ledgerInput!.detail, /ROI 5\.4%/);
+  assert.match(ledgerInput!.detail, /avg CLV 2\.10%/);
+  assert.ok(!ledgerInput!.detail.includes('540'));
+  assert.ok(!ledgerInput!.detail.includes('210'));
 });
 
 test('value-only framework rejections are re-evaluated with an explicit risk flag', () => {

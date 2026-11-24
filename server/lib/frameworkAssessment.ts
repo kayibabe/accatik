@@ -4,6 +4,7 @@ import type {
   FrameworkSlateSummary,
   MarketOption,
 } from '../../src/types/fixtures.ts';
+import type { MarketCalibrationRecord } from '../../src/framework/confidence.ts';
 import type { TeamMatchResult } from '../../src/framework/model.ts';
 import type {
   AssessmentFixtureInput,
@@ -97,7 +98,8 @@ export function summarizeFrameworkAssessment(
 export function attachFrameworkAssessment(
   fixture: Fixture,
   history: TeamMatchResult[],
-  nowMs: number
+  nowMs: number,
+  calibration?: Record<string, MarketCalibrationRecord> | null
 ): Fixture {
   if (fixture.status !== 'Scheduled' || fixture.markets.length === 0) {
     return fixture;
@@ -105,6 +107,7 @@ export function attachFrameworkAssessment(
 
   const assessment = assessFixtureFramework(toAssessmentInput(fixture), history, {
     nowMs,
+    calibration,
   });
   const byMarketId = new Map(
     assessment.markets.map((market) => [market.marketId, market])
@@ -127,10 +130,11 @@ export function attachFrameworkAssessment(
 export function attachFrameworkAssessments(
   fixtures: Fixture[],
   history: TeamMatchResult[],
-  nowMs: number = Date.now()
+  nowMs: number = Date.now(),
+  calibration?: Record<string, MarketCalibrationRecord> | null
 ): Fixture[] {
   return fixtures.map((fixture) =>
-    attachFrameworkAssessment(fixture, history, nowMs)
+    attachFrameworkAssessment(fixture, history, nowMs, calibration)
   );
 }
 

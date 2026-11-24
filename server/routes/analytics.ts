@@ -10,7 +10,6 @@ import {
   getRoiRegistry,
   getTicketAnalytics,
   refreshAnalytics,
-  runRoiPromotion,
 } from '../api.ts';
 
 /** Express adapter for the shared pick-analytics API handler. */
@@ -48,11 +47,6 @@ analyticsRouter.post('/refresh', async (req: Request, res: Response) => {
 
 analyticsRouter.post('/roi-registry', async (req: Request, res: Response) => {
   const result = await getRoiRegistry(req.body);
-  res.status(result.status).json(result.body);
-});
-
-analyticsRouter.post('/roi-promotion/run', async (req: Request, res: Response) => {
-  const result = await runRoiPromotion(req.body);
   res.status(result.status).json(result.body);
 });
 

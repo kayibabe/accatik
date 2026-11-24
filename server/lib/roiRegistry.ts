@@ -2,7 +2,6 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { AccaStrategy } from '../../src/types/fixtures.ts';
 import type {
-  QualifiedPicksResponse,
   RoiPromotionConfig,
   RoiPromotionResult,
   RoiRegistryEntry,
@@ -14,24 +13,13 @@ import {
   registryKey,
 } from './roiPromotion.ts';
 
-/**
- * Local JSON store for the daily ROI registry and its derived qualified-picks
- * tables. One file holds the registry; each date/strategy pair gets its own
- * qualified-picks file under `data/roi/qualified`.
- */
+/** Local JSON store for the daily ROI promotion registry. */
 
 function registryFile(): string {
   return (
     process.env.MATCHSLIP_ROI_REGISTRY_FILE ??
     path.join(process.cwd(), 'data', 'roi', 'registry.json')
   );
-}
-
-function qualifiedFile(dateIso: string, strategy: AccaStrategy): string {
-  const dir =
-    process.env.MATCHSLIP_QUALIFIED_DIR ??
-    path.join(process.cwd(), 'data', 'roi', 'qualified');
-  return path.join(dir, `${dateIso}_${strategy}.json`);
 }
 
 async function readJson<T>(file: string, fallback: T): Promise<T> {
@@ -103,20 +91,4 @@ export async function runDailyRoiPromotion(
   );
   await writeRoiRegistry(result.entries, strategy);
   return result;
-}
-
-export async function readQualifiedPicks(
-  dateIso: string,
-  strategy: AccaStrategy
-): Promise<QualifiedPicksResponse | null> {
-  return readJson<QualifiedPicksResponse | null>(qualifiedFile(dateIso, strategy), null);
-}
-
-export async function writeQualifiedPicks(
-  response: QualifiedPicksResponse
-): Promise<void> {
-  await writeJsonAtomic(
-    qualifiedFile(response.dateIso, response.strategy),
-    response
-  );
 }
