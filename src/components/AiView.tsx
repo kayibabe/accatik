@@ -206,6 +206,7 @@ export function AiView({
   const [minScore, setMinScore] = useState(60);
   const [briefing, setBriefing] = useState<AiBriefingResponse | null>(null);
   const [ticket, setTicket] = useState<AiAccumulatorResponse | null>(null);
+  const [ticketScore, setTicketScore] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [building, setBuilding] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -229,6 +230,7 @@ export function AiView({
     setLoading(true);
     setError(null);
     setTicket(null);
+    setTicketScore(null);
     try {
       setBriefing(await apiFetch<AiBriefingResponse>('/api/ai/briefing', {
         method: 'POST',
@@ -250,20 +252,22 @@ export function AiView({
   }, [load]);
 
   const generate = useCallback(async () => {
+    const bar = minScore;
     setBuilding(true);
     setError(null);
     try {
-      setTicket(
-        await apiFetch<AiAccumulatorResponse>('/api/ai/accumulator', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            ...payload,
-            targetOdds: minOdds,
-            maxLegs,
-          }),
-        })
-      );
+      const built = await apiFetch<AiAccumulatorResponse>('/api/ai/accumulator', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          ...payload,
+          minScore: bar,
+          targetOdds: minOdds,
+          maxLegs,
+        }),
+      });
+      setTicketScore(bar);
+      setTicket(built);
     } catch (err) {
       setError({
         scope: 'generate',
@@ -272,7 +276,7 @@ export function AiView({
     } finally {
       setBuilding(false);
     }
-  }, [payload, minOdds, maxLegs]);
+  }, [payload, minScore, minOdds, maxLegs]);
 
   const competitions = useMemo(() => {
     const names = new Set((briefing?.picks ?? []).map((pick) => pick.competition));
@@ -283,6 +287,10 @@ export function AiView({
     () => (briefing?.picks ?? []).filter((pick) => pick.aiScore >= minScore),
     [briefing, minScore]
   );
+
+  // A ticket built under a previous score bar is stale, even if it arrived
+  // after the slider moved, so it is hidden until regenerated at the new bar.
+  const visibleTicket = ticket !== null && ticketScore === minScore ? ticket : null;
 
   const metrics = useMemo(() => {
     if (picks.length === 0) return { positiveEv: 0, avgEdge: 0, strong: 0 };
@@ -295,12 +303,12 @@ export function AiView({
   }, [picks]);
 
   const copyTicket = async () => {
-    if (!ticket) return;
+    if (!visibleTicket) return;
     const lines = [
       `ACCATIK AI DESK · ${displayDate}`,
-      `${ticket.legs.length} legs · ${ticket.totalOdds.toFixed(2)} odds · ` +
-        `${pct(ticket.hitProbability)} model hit chance`,
-      ...ticket.legs.map(
+      `${visibleTicket.legs.length} legs · ${visibleTicket.totalOdds.toFixed(2)} odds · ` +
+        `${pct(visibleTicket.hitProbability)} model hit chance`,
+      ...visibleTicket.legs.map(
         (leg, index) =>
           `${index + 1}. ${leg.homeTeam} v ${leg.awayTeam} — ${leg.label} @ ${leg.odds.toFixed(2)}`
       ),
@@ -635,7 +643,7 @@ export function AiView({
                 title="AI accumulator"
                 subtitle="Correlation-aware, capped at five legs"
                 actions={
-                  ticket ? (
+                  visibleTicket ? (
                     <button
                       type="button"
                       onClick={() => void generate()}
@@ -647,7 +655,7 @@ export function AiView({
                   ) : null
                 }
               >
-                {!ticket ? (
+                {!visibleTicket ? (
                   <EmptyState
                     title="No ticket generated yet"
                     description="The builder searches small leg combinations, rejects low-confidence estimates and penalises shared competitions. It ranks by stressed EV, not by the biggest odds."
@@ -662,10 +670,10 @@ export function AiView({
                       </button>
                     }
                   />
-                ) : ticket.legs.length === 0 ? (
+                ) : visibleTicket.legs.length === 0 ? (
                   <EmptyState
                     title="The model declined to build a ticket"
-                    description={ticket.reason}
+                    description={visibleTicket.reason}
                   />
                 ) : (
                   <div className="space-y-4">
@@ -674,36 +682,36 @@ export function AiView({
                         Combined quote
                       </p>
                       <p className="mt-1 font-mono text-3xl font-bold tabular-nums text-emerald-900">
-                        {ticket.totalOdds.toFixed(2)}
+                        {visibleTicket.totalOdds.toFixed(2)}
                       </p>
                       <p className="mt-1 text-[11px] text-emerald-800">
-                        {ticket.legs.length} legs · {ticket.targetReached ? 'target reached' : 'below target'}
+                        {visibleTicket.legs.length} legs · {visibleTicket.targetReached ? 'target reached' : 'below target'}
                       </p>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2">
                       <div className="rounded-lg border border-slate-200 p-2.5">
                         <p className="text-[10px] text-slate-500">Model hit chance</p>
-                        <p className="font-mono text-lg font-bold text-slate-900">{pct(ticket.hitProbability)}</p>
+                        <p className="font-mono text-lg font-bold text-slate-900">{pct(visibleTicket.hitProbability)}</p>
                       </div>
                       <div className="rounded-lg border border-slate-200 p-2.5">
                         <p className="text-[10px] text-slate-500">Break-even</p>
-                        <p className="font-mono text-lg font-bold text-slate-900">{pct(ticket.breakEvenProbability)}</p>
+                        <p className="font-mono text-lg font-bold text-slate-900">{pct(visibleTicket.breakEvenProbability)}</p>
                       </div>
                       <div className="rounded-lg border border-slate-200 p-2.5">
                         <p className="text-[10px] text-slate-500">Stressed EV</p>
-                        <p className={`font-mono text-lg font-bold ${ticket.evStress > 0 ? 'text-emerald-700' : 'text-red-600'}`}>
-                          {pct(ticket.evStress)}
+                        <p className={`font-mono text-lg font-bold ${visibleTicket.evStress > 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                          {pct(visibleTicket.evStress)}
                         </p>
                       </div>
                       <div className="rounded-lg border border-slate-200 p-2.5">
                         <p className="text-[10px] text-slate-500">Kelly stake</p>
-                        <p className="font-mono text-lg font-bold text-slate-900">{pct(ticket.stakePct, 2)}</p>
+                        <p className="font-mono text-lg font-bold text-slate-900">{pct(visibleTicket.stakePct, 2)}</p>
                       </div>
                     </div>
 
                     <ol className="space-y-2">
-                      {ticket.legs.map((leg, index) => (
+                      {visibleTicket.legs.map((leg, index) => (
                         <li key={`${leg.fixtureId}:${leg.marketId}`} className="flex gap-2 rounded-lg border border-slate-200 p-2.5">
                           <span className="font-mono text-[11px] font-bold text-slate-400">{index + 1}</span>
                           <div className="min-w-0 flex-1">
@@ -718,11 +726,11 @@ export function AiView({
                       ))}
                     </ol>
 
-                    <p className="text-[11px] leading-relaxed text-slate-600">{ticket.reason}</p>
+                    <p className="text-[11px] leading-relaxed text-slate-600">{visibleTicket.reason}</p>
 
-                    {ticket.risks.length > 0 && (
+                    {visibleTicket.risks.length > 0 && (
                       <ul className="space-y-1 rounded-lg bg-amber-50 p-2.5 text-[11px] text-amber-900">
-                        {ticket.risks.map((risk) => (
+                        {visibleTicket.risks.map((risk) => (
                           <li key={risk}>· {risk}</li>
                         ))}
                       </ul>
@@ -731,7 +739,7 @@ export function AiView({
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
-                        onClick={() => onApplyTicket(ticket.legs)}
+                        onClick={() => onApplyTicket(visibleTicket.legs)}
                         disabled={!canApplyTicket}
                         title={canApplyTicket ? 'Load into a wide research slip; the five-leg cap is not applied' : 'Load the matchday slate first'}
                         className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-60 cursor-pointer"

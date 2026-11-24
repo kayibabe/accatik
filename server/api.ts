@@ -413,6 +413,13 @@ export function parseMaxLegs(value: unknown): number {
   return Math.min(Math.max(Math.round(parsed), 1), MAX_LEG_LIMIT);
 }
 
+/** The desk's 0..100 score bar; an absent or invalid value keeps every pick. */
+export function parseMinScore(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.min(Math.max(Math.round(parsed), 0), 100);
+}
+
 function cleanLabel(value: unknown, fallback: string): string {
   if (typeof value !== 'string') return fallback;
   const trimmed = value.trim();
@@ -1950,6 +1957,7 @@ export async function getAiAccumulator(
   const source = asRecord(body);
   const targetOdds = parseTargetOdds(source.targetOdds ?? 2.8);
   const maxLegs = parseMaxLegs(source.maxLegs ?? 3);
+  const minScore = parseMinScore(source.minScore);
 
   try {
     const briefingResult = await getAiBriefing(body);
@@ -1963,6 +1971,7 @@ export async function getAiAccumulator(
       targetOdds,
       maxLegs,
       riskMode: request.riskMode,
+      minScore,
     });
     return ok(ticket);
   } catch (error) {

@@ -623,6 +623,8 @@ export interface AccumulatorInput {
   targetOdds: number;
   maxLegs: number;
   riskMode: AiRiskMode;
+  /** Same 0..100 bar the desk uses to shortlist picks; 0 keeps every pick. */
+  minScore?: number;
 }
 
 interface CandidateSet {
@@ -643,6 +645,7 @@ export function buildAiAccumulator(input: AccumulatorInput): AiAccumulatorRespon
   const { dateIso, picks, riskMode } = input;
   const maxLegs = clamp(Math.floor(input.maxLegs), 2, MAX_AI_ACCUMULATOR_LEGS);
   const targetOdds = clamp(input.targetOdds, 1.5, 100);
+  const minScore = clamp(input.minScore ?? 0, 0, 100);
 
   const minBand: AiConfidenceBand[] =
     riskMode === 'conservative'
@@ -657,8 +660,14 @@ export function buildAiAccumulator(input: AccumulatorInput): AiAccumulatorRespon
   // never quietly turns a conservative desk into a lottery ticket generator.
   const minHitProbability =
     riskMode === 'conservative' ? 0.12 : riskMode === 'balanced' ? 0.06 : 0.03;
+  // The score bar excludes picks from the ticket exactly as it does from the
+  // ranked list on screen; without this the ticket could include picks the
+  // user had filtered out.
   const pool = picks
-    .filter((pick) => pick.evStress > 0 && minBand.includes(pick.band))
+    .filter(
+      (pick) =>
+        pick.aiScore >= minScore && pick.evStress > 0 && minBand.includes(pick.band)
+    )
     .slice(0, 22);
 
   const maxPerCompetition = riskMode === 'conservative' ? 1 : 2;
@@ -741,8 +750,9 @@ export function buildAiAccumulator(input: AccumulatorInput): AiAccumulatorRespon
       stakePct: 0,
       targetReached: false,
       reason:
-        'No qualifying selections cleared the stressed-EV, confidence and combined hit-probability gate ' +
-        'for this risk mode. An empty ticket is the correct answer on a thin slate.',
+        `No qualifying selections cleared the ${minScore > 0 ? `model-score bar of ${minScore}, stressed-EV, ` : 'stressed-EV, '}` +
+        'confidence and combined hit-probability gate for this risk mode. ' +
+        'An empty ticket is the correct answer on a thin slate.',
       risks: [],
       rejected: [],
       disclaimer: 'Research/shadow only. Accumulator probabilities assume independent outcomes.',

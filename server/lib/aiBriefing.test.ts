@@ -533,6 +533,50 @@ test('accumulator respects risk bands, fixture uniqueness and competition caps',
   assert.match(sameFixture.reason, /No qualifying selections/);
 });
 
+test('the model-score bar keeps accumulator legs inside the visible shortlist', () => {
+  const high = aiPick({
+    fixtureId: 'high',
+    marketId: 'high-1x2-h',
+    competition: 'League A',
+    aiScore: 80,
+  });
+  const secondHigh = aiPick({
+    fixtureId: 'second-high',
+    marketId: 'second-high-1x2-h',
+    competition: 'League B',
+    aiScore: 75,
+  });
+  // A stronger leg that the unfiltered builder would always prefer.
+  const low = aiPick({
+    fixtureId: 'low',
+    marketId: 'low-1x2-h',
+    competition: 'League C',
+    odds: 3,
+    pStress: 0.75,
+    aiScore: 55,
+  });
+  const base = {
+    dateIso: '2026-11-22',
+    picks: [high, secondHigh, low],
+    targetOdds: 3,
+    maxLegs: 2,
+    riskMode: 'conservative' as const,
+  };
+
+  assert.ok(
+    buildAiAccumulator(base).legs.some((leg) => leg.fixtureId === 'low')
+  );
+
+  const restricted = buildAiAccumulator({ ...base, minScore: 70 });
+  assert.equal(restricted.legs.length, 2);
+  assert.ok(restricted.legs.every((leg) => leg.aiScore >= 70));
+  assert.ok(restricted.legs.every((leg) => leg.fixtureId !== 'low'));
+
+  const empty = buildAiAccumulator({ ...base, minScore: 90 });
+  assert.equal(empty.legs.length, 0);
+  assert.match(empty.reason, /model-score bar of 90/);
+});
+
 test('AI accumulator can use five legs when the target needs them', () => {
   // Strong per-leg confidence keeps the combined chance above the conservative
   // hit-probability floor, so the raised ceiling is genuinely reachable.
