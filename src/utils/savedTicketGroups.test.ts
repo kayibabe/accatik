@@ -107,7 +107,7 @@ test('slips group by year, then month, then matchday', () => {
     ['2026-11-18', '2026-11-10']
   );
   assert.deepEqual(
-    groups[0].months[0].days[0].tickets.map((ticket) => ticket.id),
+    groups[0].months[0].days[0].rows.map((ticket) => ticket.id),
     ['nov-18-evening', 'nov-18-morning']
   );
 });

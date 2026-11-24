@@ -6,6 +6,8 @@ import type {
   GradeFilterResponse,
 } from '../../types/analytics.ts';
 import { apiFetch } from '../../utils/api.ts';
+import { groupRowsByDate } from '../../utils/dateGroups.ts';
+import { SORT_DESC } from '../../utils/tableSort.ts';
 import {
   fmtCount,
   fmtOdds,
@@ -17,6 +19,7 @@ import {
 import { pnlTone } from '../../utils/uiTone.ts';
 import { SettlementLabel } from '../SettlementLabel.tsx';
 import { DataCard, InfoHint, MetricCard } from '../ui/DataCard.tsx';
+import { DateGroups } from '../ui/DateGroups.tsx';
 import { DataTable, type DataTableColumn } from '../ui/DataTable.tsx';
 import { EmptyState, InlineLoading } from '../ui/States.tsx';
 import { recordLabel } from '../performance/format.ts';
@@ -24,11 +27,25 @@ import { recordLabel } from '../performance/format.ts';
 interface GradeFilterPanelProps {
   strategy: string;
   refreshKey: number;
+  todayDate: string;
 }
 
 const LEG_OPTIONS = [2, 3, 4, 5] as const;
 const STATUS_FILTERS = ['All', 'Win', 'Lost', 'Void'] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
+
+const GRADE_SORT_RANK: Record<GradeFilterGrade, number> = {
+  High: 2,
+  Solid: 1,
+};
+
+const STATUS_SORT_RANK: Record<SettlementStatus, number> = {
+  Win: 5,
+  Live: 4,
+  Pending: 3,
+  Void: 2,
+  Lost: 1,
+};
 
 function gradeTone(grade: GradeFilterGrade): string {
   return grade === 'High'
@@ -47,6 +64,10 @@ function isSettlementStatus(value: StatusFilter): value is Exclude<StatusFilter,
   return value !== 'All';
 }
 
+function newestFirst<T extends { dateIso: string }>(rows: ReadonlyArray<T>): T[] {
+  return [...rows].sort((a, b) => b.dateIso.localeCompare(a.dateIso));
+}
+
 /**
  * Archive version of the Pick Guide's High + Solid shortlist rule.
  *
@@ -55,7 +76,11 @@ function isSettlementStatus(value: StatusFilter): value is Exclude<StatusFilter,
  * The view is deliberately research-only: the grade comes from the book's
  * de-vigged probability, so it is a quality filter, not proof of edge.
  */
-export function GradeFilterPanel({ strategy, refreshKey }: GradeFilterPanelProps) {
+export function GradeFilterPanel({
+  strategy,
+  refreshKey,
+  todayDate,
+}: GradeFilterPanelProps) {
   const [legs, setLegs] = useState<number>(2);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('All');
   const [data, setData] = useState<GradeFilterResponse | null>(null);
@@ -112,6 +137,20 @@ export function GradeFilterPanel({ strategy, refreshKey }: GradeFilterPanelProps
     return data.matches.filter((match) => match.status === statusFilter);
   }, [data, statusFilter]);
 
+  const matchGroups = useMemo(
+    () =>
+      groupRowsByDate(newestFirst(visibleMatches), (row) => row.dateIso),
+    [visibleMatches]
+  );
+  const ticketGroups = useMemo(
+    () =>
+      groupRowsByDate(
+        newestFirst(data?.tickets ?? []),
+        (row) => row.dateIso
+      ),
+    [data]
+  );
+
   if (unavailable) {
     return (
       <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-3 text-xs text-slate-500">
@@ -159,6 +198,8 @@ export function GradeFilterPanel({ strategy, refreshKey }: GradeFilterPanelProps
       key: 'date',
       header: 'Date',
       cell: (row) => fmtShortDate(row.dateIso),
+      sortValue: (row) => row.dateIso,
+      defaultSortDirection: SORT_DESC,
       priority: 'primary',
     },
     {
@@ -174,6 +215,7 @@ export function GradeFilterPanel({ strategy, refreshKey }: GradeFilterPanelProps
           </span>
         </div>
       ),
+      sortValue: (row) => `${row.homeTeam} vs ${row.awayTeam}`,
       priority: 'primary',
     },
     {
@@ -186,12 +228,15 @@ export function GradeFilterPanel({ strategy, refreshKey }: GradeFilterPanelProps
           {row.grade}
         </span>
       ),
+      sortValue: (row) => GRADE_SORT_RANK[row.grade],
+      defaultSortDirection: SORT_DESC,
       priority: 'primary',
     },
     {
       key: 'angle',
       header: 'Recommended Angle',
       cell: (row) => row.marketLabel,
+      sortValue: (row) => row.marketLabel,
       priority: 'secondary',
     },
     {
@@ -199,12 +244,16 @@ export function GradeFilterPanel({ strategy, refreshKey }: GradeFilterPanelProps
       header: 'Odds',
       cell: (row) => fmtOdds(row.odds),
       align: 'right',
+      sortValue: (row) => row.odds,
+      defaultSortDirection: SORT_DESC,
       priority: 'secondary',
     },
     {
       key: 'status',
       header: 'Result',
       cell: (row) => <SettlementLabel status={row.status} />,
+      sortValue: (row) => STATUS_SORT_RANK[row.status],
+      defaultSortDirection: SORT_DESC,
       priority: 'primary',
     },
   ];
@@ -214,6 +263,8 @@ export function GradeFilterPanel({ strategy, refreshKey }: GradeFilterPanelProps
       key: 'date',
       header: 'Matchday',
       cell: (row) => fmtShortDate(row.dateIso),
+      sortValue: (row) => row.dateIso,
+      defaultSortDirection: SORT_DESC,
       priority: 'primary',
     },
     {
@@ -233,6 +284,10 @@ export function GradeFilterPanel({ strategy, refreshKey }: GradeFilterPanelProps
           ))}
         </div>
       ),
+      sortValue: (row) =>
+        row.picks
+          .map((leg) => `${leg.homeTeam} vs ${leg.awayTeam} · ${leg.marketLabel}`)
+          .join(' | '),
       priority: 'primary',
     },
     {
@@ -240,6 +295,8 @@ export function GradeFilterPanel({ strategy, refreshKey }: GradeFilterPanelProps
       header: 'Legs',
       cell: (row) => row.legs,
       align: 'right',
+      sortValue: (row) => row.legs,
+      defaultSortDirection: SORT_DESC,
       priority: 'secondary',
     },
     {
@@ -247,12 +304,16 @@ export function GradeFilterPanel({ strategy, refreshKey }: GradeFilterPanelProps
       header: 'Odds',
       cell: (row) => fmtOdds(row.odds),
       align: 'right',
+      sortValue: (row) => row.odds,
+      defaultSortDirection: SORT_DESC,
       priority: 'primary',
     },
     {
       key: 'status',
       header: 'Result',
       cell: (row) => <SettlementLabel status={row.status} />,
+      sortValue: (row) => STATUS_SORT_RANK[row.status],
+      defaultSortDirection: SORT_DESC,
       priority: 'primary',
     },
     {
@@ -264,6 +325,8 @@ export function GradeFilterPanel({ strategy, refreshKey }: GradeFilterPanelProps
         </span>
       ),
       align: 'right',
+      sortValue: (row) => row.pnl,
+      defaultSortDirection: SORT_DESC,
       priority: 'primary',
     },
   ];
@@ -358,13 +421,20 @@ export function GradeFilterPanel({ strategy, refreshKey }: GradeFilterPanelProps
           </div>
         }
       >
-        <DataTable
-          columns={matchColumns}
-          rows={visibleMatches}
-          rowKey={(row) => row.fixtureId}
-          caption="Archived matches graded High or Solid with their settlement result"
-          minWidth="min-w-[720px]"
-          compact
+        <DateGroups
+          groups={matchGroups}
+          todayDate={todayDate}
+          idPrefix="grade-filter-matches"
+          renderDay={(rows) => (
+            <DataTable
+              columns={matchColumns}
+              rows={rows}
+              rowKey={(row) => row.fixtureId}
+              caption="Archived matches graded High or Solid with their settlement result"
+              minWidth="min-w-[720px]"
+              compact
+            />
+          )}
           empty={
             <p className="py-6 text-center text-xs text-slate-500">
               No High + Solid matches with this result in the archive.
@@ -384,28 +454,35 @@ export function GradeFilterPanel({ strategy, refreshKey }: GradeFilterPanelProps
           </span>
         }
       >
-        <DataTable
-          columns={ticketColumns}
-          rows={data.tickets}
-          rowKey={(row) => row.id}
-          caption="Simulated accumulator tickets from High and Solid picks"
-          minWidth="min-w-[760px]"
-          compact
-          details={(row) => (
-            <ul className="space-y-1 text-[11px] text-slate-600">
-              {row.picks.map((leg) => (
-                <li key={leg.fixtureId} className="flex flex-wrap items-center gap-2">
-                  <span className={`font-semibold ${leg.grade === 'High' ? 'text-emerald-700' : 'text-sky-700'}`}>
-                    {leg.grade}
-                  </span>
-                  <span>
-                    {leg.homeTeam} vs {leg.awayTeam} · {leg.marketLabel} @{' '}
-                    {fmtOdds(leg.odds)}
-                  </span>
-                  <SettlementLabel status={leg.status} />
-                </li>
-              ))}
-            </ul>
+        <DateGroups
+          groups={ticketGroups}
+          todayDate={todayDate}
+          idPrefix="grade-filter-tickets"
+          renderDay={(rows) => (
+            <DataTable
+              columns={ticketColumns}
+              rows={rows}
+              rowKey={(row) => row.id}
+              caption="Simulated accumulator tickets from High and Solid picks"
+              minWidth="min-w-[760px]"
+              compact
+              details={(row) => (
+                <ul className="space-y-1 text-[11px] text-slate-600">
+                  {row.picks.map((leg) => (
+                    <li key={leg.fixtureId} className="flex flex-wrap items-center gap-2">
+                      <span className={`font-semibold ${leg.grade === 'High' ? 'text-emerald-700' : 'text-sky-700'}`}>
+                        {leg.grade}
+                      </span>
+                      <span>
+                        {leg.homeTeam} vs {leg.awayTeam} · {leg.marketLabel} @{' '}
+                        {fmtOdds(leg.odds)}
+                      </span>
+                      <SettlementLabel status={leg.status} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            />
           )}
           empty={
             <EmptyState

@@ -233,6 +233,7 @@ export function ResearchTicketCard({
     );
   }
 
+  // Sorting is view-only: the source leg order stays intact for the shadow ticket.
   const legColumns: ReadonlyArray<DataTableColumn<(typeof ticket.legs)[number]>> = [
     {
       key: 'fixture',
@@ -242,6 +243,7 @@ export function ResearchTicketCard({
           {leg.homeTeam} vs {leg.awayTeam}
         </span>
       ),
+      sortValue: (leg) => `${leg.homeTeam} vs ${leg.awayTeam}`,
       priority: 'primary',
     },
     {
@@ -250,6 +252,7 @@ export function ResearchTicketCard({
       cell: (leg) => (
         <span className="font-semibold text-emerald-800">{leg.marketLabel}</span>
       ),
+      sortValue: (leg) => leg.marketLabel,
       priority: 'primary',
     },
     {
@@ -257,6 +260,8 @@ export function ResearchTicketCard({
       header: 'Odds',
       cell: (leg) => fmtOdds(leg.odds),
       align: 'right',
+      sortValue: (leg) => leg.odds,
+      defaultSortDirection: SORT_DESC,
       priority: 'secondary',
     },
   ];
@@ -434,13 +439,13 @@ export function QualifiedPicksTable({
     },
     {
       key: 'result',
-      header: sortHeader('Result', 'result'),
+      header: sortHeader('Result', 'result', 'left', SORT_DESC),
       cell: (row) => <SettlementLabel status={row.result ?? 'Pending'} />,
       priority: 'secondary',
     },
     {
       key: 'status',
-      header: sortHeader('Status', 'status'),
+      header: sortHeader('Status', 'status', 'left', SORT_DESC),
       cell: (row) => (
         <span
           className={`px-2 py-0.5 text-[11px] font-semibold rounded ${
@@ -467,7 +472,7 @@ export function QualifiedPicksTable({
     },
     {
       key: 'reason',
-      header: 'Reason',
+      header: sortHeader('Reason', 'reason'),
       cell: (row) => (
         <span className="text-[11px] text-slate-600 max-w-xs block">
           {row.reason}

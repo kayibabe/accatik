@@ -1,4 +1,16 @@
 import type { AccaLeg, SavedTicket } from '../types/fixtures.ts';
+import {
+  CAT_TIMEZONE,
+  catIsoDate,
+  formatDateDayLabel,
+  formatDateMonthLabel,
+  groupRowsByDate,
+  normalizeIsoDate,
+  shiftIsoDate,
+  type DateDayGroup,
+  type DateMonthGroup,
+  type DateYearGroup,
+} from './dateGroups.ts';
 
 /**
  * Grouping helpers for the Local Ticket Archive.
@@ -8,64 +20,23 @@ import type { AccaLeg, SavedTicket } from '../types/fixtures.ts';
  * is one click away.
  */
 
-export const CAT_TIMEZONE = 'Africa/Blantyre';
+export {
+  CAT_TIMEZONE,
+  catIsoDate,
+  normalizeIsoDate,
+  shiftIsoDate,
+  formatDateDayLabel as formatTicketDayLabel,
+  formatDateMonthLabel as formatTicketMonthLabel,
+};
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-
-export interface TicketDayGroup {
-  dateIso: string;
-  tickets: SavedTicket[];
-}
-
-export interface TicketMonthGroup {
-  year: number;
-  month: number;
-  days: TicketDayGroup[];
-}
-
-export interface TicketYearGroup {
-  year: number;
-  months: TicketMonthGroup[];
-}
+export type TicketDayGroup = DateDayGroup<SavedTicket>;
+export type TicketMonthGroup = DateMonthGroup<SavedTicket>;
+export type TicketYearGroup = DateYearGroup<SavedTicket>;
 
 /** All the selections made against one match on a saved slip. */
 export interface TicketLegGroup {
   fixtureId: string;
   legs: AccaLeg[];
-}
-
-const catIsoFormatter = new Intl.DateTimeFormat('en-CA', {
-  timeZone: CAT_TIMEZONE,
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-});
-
-const dayFormatter = new Intl.DateTimeFormat('en-GB', {
-  timeZone: CAT_TIMEZONE,
-  weekday: 'long',
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
-});
-
-const monthFormatter = new Intl.DateTimeFormat('en-GB', {
-  timeZone: CAT_TIMEZONE,
-  month: 'long',
-});
-
-/** `2026-11-18` when the value is a real ISO calendar date, otherwise null. */
-export function normalizeIsoDate(value: string | undefined | null): string | null {
-  if (typeof value !== 'string' || !ISO_DATE.test(value)) return null;
-  const parsed = new Date(`${value}T12:00:00Z`);
-  return Number.isNaN(parsed.getTime()) ? null : value;
-}
-
-/** ISO date of an instant, in the app's Central Africa Time calendar. */
-export function catIsoDate(value: string | Date): string | null {
-  const parsed = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return catIsoFormatter.format(parsed);
 }
 
 /**
@@ -97,43 +68,9 @@ export function sortTicketsNewestFirst(tickets: SavedTicket[]): SavedTicket[] {
   });
 }
 
-/** Year → month → matchday, each level newest-first. */
+/** Year → month → matchday, each level following the newest-first input. */
 export function groupTicketsByDate(tickets: SavedTicket[]): TicketYearGroup[] {
-  const years = new Map<number, Map<number, Map<string, SavedTicket[]>>>();
-
-  for (const ticket of sortTicketsNewestFirst(tickets)) {
-    const iso = ticketDateIso(ticket);
-    const year = Number(iso.slice(0, 4));
-    const month = Number(iso.slice(5, 7));
-
-    let months = years.get(year);
-    if (!months) {
-      months = new Map();
-      years.set(year, months);
-    }
-
-    let days = months.get(month);
-    if (!days) {
-      days = new Map();
-      months.set(month, days);
-    }
-
-    const dayTickets = days.get(iso);
-    if (dayTickets) dayTickets.push(ticket);
-    else days.set(iso, [ticket]);
-  }
-
-  return [...years.entries()].map(([year, months]) => ({
-    year,
-    months: [...months.entries()].map(([month, days]) => ({
-      year,
-      month,
-      days: [...days.entries()].map(([dateIso, dayTickets]) => ({
-        dateIso,
-        tickets: dayTickets,
-      })),
-    })),
-  }));
+  return groupRowsByDate(sortTicketsNewestFirst(tickets), ticketDateIso);
 }
 
 /**
@@ -156,30 +93,4 @@ export function groupLegsByFixture(legs: AccaLeg[]): TicketLegGroup[] {
   }
 
   return groups;
-}
-
-/** Shifts an ISO date by whole days without letting time zones move it. */
-export function shiftIsoDate(isoDate: string, deltaDays: number): string {
-  const parsed = new Date(`${isoDate}T12:00:00Z`);
-  if (Number.isNaN(parsed.getTime())) return isoDate;
-  parsed.setUTCDate(parsed.getUTCDate() + deltaDays);
-  return parsed.toISOString().slice(0, 10);
-}
-
-/** "Today · Wednesday, 18 November 2026" / "Yesterday · …" / the plain date. */
-export function formatTicketDayLabel(dateIso: string, todayIso: string): string {
-  const parsed = new Date(`${dateIso}T12:00:00Z`);
-  const formatted = Number.isNaN(parsed.getTime())
-    ? dateIso
-    : dayFormatter.format(parsed);
-
-  if (dateIso === todayIso) return `Today · ${formatted}`;
-  if (dateIso === shiftIsoDate(todayIso, -1)) return `Yesterday · ${formatted}`;
-  return formatted;
-}
-
-/** "November" — the year is already the surrounding section heading. */
-export function formatTicketMonthLabel(month: number): string {
-  if (!Number.isInteger(month) || month < 1 || month > 12) return 'Unknown month';
-  return monthFormatter.format(new Date(Date.UTC(2026, month - 1, 1, 12)));
 }

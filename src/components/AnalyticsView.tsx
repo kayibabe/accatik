@@ -439,7 +439,11 @@ export function AnalyticsView({
 
           {currentSection === 'grade-filter' && (
             <section id="grade-filter" aria-label="High and Solid grade filter archive">
-              <GradeFilterPanel strategy={strategy} refreshKey={refreshKey} />
+              <GradeFilterPanel
+                strategy={strategy}
+                refreshKey={refreshKey}
+                todayDate={todayDate}
+              />
             </section>
           )}
 

@@ -1,6 +1,15 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import { SortableTh } from '../SortableTh.tsx';
+import {
+  SORT_ASC,
+  makeSortHandler,
+  sortRows,
+  type SortDirection,
+  type SortState,
+  type SortValue,
+} from '../../utils/tableSort.ts';
 
 export interface DataTableColumn<T> {
   key: string;
@@ -10,6 +19,10 @@ export interface DataTableColumn<T> {
   /** Primary columns stay on phones; secondary appear at sm, tertiary at lg. */
   priority?: 'primary' | 'secondary' | 'tertiary';
   className?: string;
+  /** Supplying a comparable value makes this header sortable. */
+  sortValue?: (row: T) => SortValue;
+  /** Direction applied on the first click of this header. */
+  defaultSortDirection?: SortDirection;
 }
 
 const PRIORITY_CLASS: Record<'primary' | 'secondary' | 'tertiary', string> = {
@@ -52,7 +65,22 @@ export function DataTable<T,>({
   compact = false,
 }: DataTableProps<T>) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [sort, setSort] = useState<SortState>({ key: null, direction: SORT_ASC });
+  const onSort = makeSortHandler(setSort);
   const cellPadding = compact ? 'px-3 py-2' : 'px-4 py-3';
+
+  const sortableAccessors = useMemo(() => {
+    const accessors: Record<string, (row: T) => SortValue> = {};
+    for (const column of columns) {
+      if (column.sortValue) accessors[column.key] = column.sortValue;
+    }
+    return accessors;
+  }, [columns]);
+
+  const sortedRows = useMemo(
+    () => sortRows([...rows], sort, sortableAccessors),
+    [rows, sort, sortableAccessors]
+  );
 
   if (rows.length === 0 && empty) {
     return <>{empty}</>;
@@ -62,7 +90,7 @@ export function DataTable<T,>({
     <div className={className}>
       {renderCard && (
         <div className="space-y-2 sm:hidden">
-          {rows.map((row, index) => (
+          {sortedRows.map((row, index) => (
             <div key={rowKey(row, index)}>{renderCard(row, index)}</div>
           ))}
         </div>
@@ -72,17 +100,43 @@ export function DataTable<T,>({
           <caption className="sr-only">{caption}</caption>
           <thead className="border-b border-slate-200 bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
             <tr>
-              {columns.map((column) => (
-                <th
-                  key={column.key}
-                  scope="col"
-                  className={`${cellPadding} ${PRIORITY_CLASS[column.priority ?? 'primary']} ${
-                    column.align === 'right' ? 'text-right' : ''
-                  } ${column.className ?? ''}`}
-                >
-                  {column.header}
-                </th>
-              ))}
+              {columns.map((column) => {
+                const ariaSort =
+                  column.sortValue && sort.key === column.key
+                    ? sort.direction === SORT_ASC
+                      ? 'ascending'
+                      : 'descending'
+                    : column.sortValue
+                      ? 'none'
+                      : undefined;
+                return (
+                  <th
+                    key={column.key}
+                    scope="col"
+                    aria-sort={ariaSort}
+                    className={`${cellPadding} ${PRIORITY_CLASS[column.priority ?? 'primary']} ${
+                      column.align === 'right' ? 'text-right' : ''
+                    } ${column.className ?? ''}`}
+                  >
+                    {column.sortValue ? (
+                      <SortableTh
+                        bare
+                        label={column.header}
+                        columnKey={column.key}
+                        sort={sort}
+                        onSort={onSort}
+                        defaultDirection={
+                          column.defaultSortDirection ?? SORT_ASC
+                        }
+                        align={column.align ?? 'left'}
+                        className="font-semibold"
+                      />
+                    ) : (
+                      column.header
+                    )}
+                  </th>
+                );
+              })}
               {details && (
                 <th scope="col" className={`${cellPadding} lg:hidden`}>
                   <span className="sr-only">Row details</span>
@@ -91,7 +145,7 @@ export function DataTable<T,>({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {rows.map((row, index) => {
+            {sortedRows.map((row, index) => {
               const key = String(rowKey(row, index));
               const isExpanded = Boolean(expanded[key]);
               return (

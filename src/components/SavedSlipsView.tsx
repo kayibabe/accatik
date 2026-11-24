@@ -22,6 +22,7 @@ import { ShadowLedgerPanel } from './ShadowLedgerPanel.tsx';
 import { CompactSlipKpis } from './tickets/CompactSlipKpis.tsx';
 import { SlipDateGroups } from './tickets/SlipDateGroups.tsx';
 import { DataStatus } from './ui/DataStatus.tsx';
+import { useDateGroupExpansion } from './ui/DateGroups.tsx';
 import { PageHeader } from './ui/PageHeader.tsx';
 import { EmptyState, ErrorState, InlineLoading } from './ui/States.tsx';
 
@@ -91,7 +92,6 @@ export function SavedSlipsView({
   onLoadMatchDetails,
 }: SavedSlipsViewProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({});
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const requestedResultsRef = useRef<Set<string>>(new Set());
@@ -118,6 +118,7 @@ export function SavedSlipsView({
   const { settlements, analytics } = activity;
 
   const groups = useMemo(() => groupTicketsByDate(savedTickets), [savedTickets]);
+  const expansion = useDateGroupExpansion(groups, todayDate);
 
   /**
    * Legs that still need a scoreline. Only fixtures whose kickoff has passed
@@ -193,28 +194,7 @@ export function SavedSlipsView({
     void requestResults(batch);
   }, [pendingFixtureIds, requestResults]);
 
-  const isDayExpanded = (dateIso: string): boolean =>
-    expandedDays[dateIso] ?? dateIso === todayDate;
-
-  const toggleDay = (dateIso: string) => {
-    setExpandedDays((prev) => ({
-      ...prev,
-      [dateIso]: !isDayExpanded(dateIso),
-    }));
-  };
-
-  const dayDates = groups.flatMap((year) =>
-    year.months.flatMap((month) => month.days.map((day) => day.dateIso))
-  );
-  const allExpanded =
-    dayDates.length > 0 && dayDates.every((dateIso) => isDayExpanded(dateIso));
-
-  const toggleAllDays = () => {
-    const next = !allExpanded;
-    setExpandedDays(
-      Object.fromEntries(dayDates.map((dateIso) => [dateIso, next]))
-    );
-  };
+  const toggleAllGroups = () => expansion.setAll(!expansion.allExpanded);
 
   const handleCopy = async (ticket: SavedTicket) => {
     try {
@@ -374,10 +354,10 @@ export function SavedSlipsView({
               )}
               <button
                 type="button"
-                onClick={toggleAllDays}
+                onClick={toggleAllGroups}
                 className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
               >
-                {allExpanded ? 'Collapse all days' : 'Expand all days'}
+                {expansion.allExpanded ? 'Collapse all' : 'Expand all'}
               </button>
             </div>
           </div>
@@ -394,9 +374,8 @@ export function SavedSlipsView({
             groups={groups}
             todayDate={todayDate}
             settlements={settlements}
-            expandedDays={expandedDays}
+            expansion={expansion}
             copiedId={copiedId}
-            onToggleDay={toggleDay}
             onCopy={handleCopy}
             onLoad={onLoadTicket}
             onDelete={onDeleteTicket}

@@ -175,6 +175,8 @@ export default function App() {
   const [activeSection, setActiveSection] = useState<string | undefined>(
     initialUrl.section
   );
+  // Slate section links may point at content that renders after the slate loads.
+  const pendingSectionRef = useRef<string | null>(initialUrl.section ?? null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [strategy, setStrategy] = useState<AccaStrategy>('balanced');
   const [minOdds, setMinOdds] = useState<number>(2.8);
@@ -244,6 +246,7 @@ export default function App() {
       scrollPositionsRef.current[activeTab] = window.scrollY;
       writeAppUrl({ tab, date: selectedDate, preset: filterPreset });
       setActiveSection(undefined);
+      pendingSectionRef.current = null;
       setActiveTab(tab);
       const target = scrollPositionsRef.current[tab] ?? 0;
       window.requestAnimationFrame(() => window.scrollTo({ top: target }));
@@ -274,10 +277,96 @@ export default function App() {
         if (state.preset !== 'custom') setFilters(presetFilters(state.preset));
       }
       setActiveSection(state.section);
+      pendingSectionRef.current = state.section ?? null;
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [todayDate]);
+
+  // Restore the original Slate in-page subnav behaviour: a deep-linked section
+  // may not exist until the slate renders, so re-assert the scroll briefly.
+  useEffect(() => {
+    const id = pendingSectionRef.current;
+    if (!id || activeTab !== 'slate') return;
+    if (id !== 'slate-filters' && id !== 'slate-results') return;
+
+    const startedAt = Date.now();
+    const deadlineMs = 8000;
+    const quietMs = 700;
+    let lastMutationAt = startedAt;
+    let lastTop: number | null = null;
+    let lastTopAt = startedAt;
+    let hasScrolled = false;
+
+    const scrollToTarget = () => {
+      const target = document.getElementById(id);
+      if (!target) return;
+      target.scrollIntoView({ behavior: 'instant', block: 'start' });
+      hasScrolled = true;
+    };
+
+    const observer = new MutationObserver(() => {
+      lastMutationAt = Date.now();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    const interval = window.setInterval(() => {
+      const now = Date.now();
+      if (now - startedAt >= deadlineMs) {
+        scrollToTarget();
+        observer.disconnect();
+        window.clearInterval(interval);
+        pendingSectionRef.current = null;
+        return;
+      }
+      const target = document.getElementById(id);
+      if (!target) return;
+      const top = target.getBoundingClientRect().top + window.scrollY;
+      const moved = lastTop === null || Math.abs(top - lastTop) > 1;
+      if (moved) {
+        lastTop = top;
+        lastTopAt = now;
+        scrollToTarget();
+      } else if (
+        hasScrolled &&
+        now - lastTopAt >= quietMs &&
+        now - lastMutationAt >= quietMs
+      ) {
+        scrollToTarget();
+        observer.disconnect();
+        window.clearInterval(interval);
+        pendingSectionRef.current = null;
+      }
+    }, 100);
+
+    return () => {
+      observer.disconnect();
+      window.clearInterval(interval);
+    };
+  }, [activeTab, activeSection]);
+
+  // Keep Slate section links out of the URL hash; they sync the query state.
+  useEffect(() => {
+    const handleSectionClick = (event: MouseEvent) => {
+      const anchor = (event.target as HTMLElement).closest<HTMLAnchorElement>(
+        'a[data-section-link][href^="#"]'
+      );
+      if (!anchor) return;
+      const id = anchor.getAttribute('href')?.slice(1);
+      if (!id) return;
+      event.preventDefault();
+      setActiveSection(id);
+      const target = document.getElementById(id);
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        pendingSectionRef.current = null;
+      } else {
+        pendingSectionRef.current = id;
+      }
+    };
+    document.addEventListener('click', handleSectionClick);
+    return () => document.removeEventListener('click', handleSectionClick);
+  }, []);
 
   const applyFilterPreset = useCallback((id: SlateFilterPresetSelection) => {
     setFilterPreset(id);
@@ -1354,6 +1443,7 @@ export default function App() {
             fixtures={slate?.fixtures ?? []}
             fixtureSnapshots={fixtureSnapshots}
             signedIn={Boolean(user)}
+            todayDate={todayDate}
             onGoToSlate={() => navigate('slate')}
           />
         ) : activeTab === 'sources' ? (
@@ -1479,8 +1569,6 @@ export default function App() {
                     onPresetChange={(id) =>
                       applyFilterPreset(id === 'custom' ? 'default' : id)
                     }
-                    activeSection={activeSection}
-                    onSectionChange={selectSection}
                   />
                 </div>
                 <div className="lg:col-span-5 min-w-0">

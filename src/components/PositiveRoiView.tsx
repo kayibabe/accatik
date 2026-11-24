@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { AccaStrategy } from '../types/fixtures.ts';
+import type { AccaStrategy, SettlementStatus } from '../types/fixtures.ts';
 import type {
   QualifiedPicksResponse,
   RoiAccaResponse,
   RoiRegistryEntry,
+  RoiRegistryStatus,
 } from '../types/analytics.ts';
 import { apiFetch } from '../utils/api.ts';
 import {
@@ -22,6 +23,22 @@ import {
   resolvePositiveRoiSection,
   type PickFilter,
 } from './analytics/PositiveRoiRegions.tsx';
+
+const SETTLEMENT_SORT_RANK: Record<SettlementStatus, number> = {
+  Win: 5,
+  Live: 4,
+  Pending: 3,
+  Void: 2,
+  Lost: 1,
+};
+
+const REGISTRY_STATUS_SORT_RANK: Record<RoiRegistryStatus | 'untracked', number> = {
+  promoted: 5,
+  watch: 4,
+  demoted: 3,
+  retired: 2,
+  untracked: 1,
+};
 
 interface PositiveRoiViewProps {
   strategy: AccaStrategy;
@@ -141,9 +158,10 @@ export function PositiveRoiView({
       roi: (row) => row.roi,
       ci: (row) => row.roiCiLow,
       settled: (row) => row.settled,
-      result: (row) => row.result ?? 'Pending',
-      status: (row) => row.status,
+      result: (row) => SETTLEMENT_SORT_RANK[row.result ?? 'Pending'],
+      status: (row) => REGISTRY_STATUS_SORT_RANK[row.status],
       framework: (row) => row.frameworkStatus ?? '',
+      reason: (row) => row.reason,
     });
   }, [qualified, pickFilter, sort]);
 

@@ -51,19 +51,43 @@ const BAND_ORDER: Record<CombinationRoiBand, number> = {
   All: 4,
 };
 
-const ACCESSORS: SortAccessors<CombinationRoiRow> = {
-  section: (row) =>
-    row.section ? SECTION_LABELS[row.section] : 'Direct market stake',
-  band: (row) => BAND_ORDER[row.band],
-  market: (row) => row.marketLabel,
-  staked: (row) => row.staked,
-  record: (row) => recordLabel(row.wins, row.losses, row.voids, '-'),
-  winRate: (row) => row.winRate,
-  avgOdds: (row) => row.avgOdds,
-  roi: (row) => row.roi,
-  dates: (row) => row.positiveDates,
-  ci: (row) => row.roiCiLow,
-};
+const READ_SORT_RANK = {
+  positiveCi: 5,
+  positive: 4,
+  negative: 3,
+  avoid: 2,
+  smallSample: 1,
+  noPicks: 0,
+} as const;
+
+/** Mirrors the SignalCell badge so sorting groups identical reads together. */
+function readSortValue(row: CombinationRoiRow, minSample: number): number {
+  if (row.staked === 0) return READ_SORT_RANK.noPicks;
+  if (row.staked < minSample) return READ_SORT_RANK.smallSample;
+  if (row.roi !== null && row.roi > 0 && (row.roiCiLow ?? 0) > 0) {
+    return READ_SORT_RANK.positiveCi;
+  }
+  if (row.roi !== null && row.roi > 0) return READ_SORT_RANK.positive;
+  if (row.roiCiHigh !== null && row.roiCiHigh < 0) return READ_SORT_RANK.avoid;
+  return READ_SORT_RANK.negative;
+}
+
+function accessorsFor(minSample: number): SortAccessors<CombinationRoiRow> {
+  return {
+    section: (row) =>
+      row.section ? SECTION_LABELS[row.section] : 'Direct market stake',
+    band: (row) => BAND_ORDER[row.band],
+    market: (row) => row.marketLabel,
+    staked: (row) => row.staked,
+    record: (row) => recordLabel(row.wins, row.losses, row.voids, '-'),
+    winRate: (row) => row.winRate,
+    avgOdds: (row) => row.avgOdds,
+    roi: (row) => row.roi,
+    dates: (row) => row.positiveDates,
+    ci: (row) => row.roiCiLow,
+    read: (row) => readSortValue(row, minSample),
+  };
+}
 
 function SignalCell({ row, minSample }: { row: CombinationRoiRow; minSample: number }) {
   if (row.staked === 0) return null;
@@ -118,7 +142,11 @@ function RoiTable({
   // The study is a fixed universe, but cells nobody staked are not evidence.
   // Keep them out of the tables instead of filling them with "No picks" rows.
   const stakedRows = useMemo(() => rows.filter((row) => row.staked > 0), [rows]);
-  const sorted = useMemo(() => sortRows(stakedRows, sort, ACCESSORS), [stakedRows, sort]);
+  const accessors = useMemo(() => accessorsFor(minSample), [minSample]);
+  const sorted = useMemo(
+    () => sortRows(stakedRows, sort, accessors),
+    [stakedRows, sort, accessors]
+  );
   const sortable = (
     label: string,
     key: string,
@@ -260,7 +288,7 @@ function RoiTable({
     },
     {
       key: 'read',
-      header: 'Read',
+      header: sortable('Read', 'read', 'left', SORT_DESC),
       cell: (row) => <SignalCell row={row} minSample={minSample} />,
       priority: 'primary',
     }

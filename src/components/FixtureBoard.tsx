@@ -8,6 +8,7 @@ import type {
   PickRecordsResponse,
 } from '../types/fixtures.ts';
 import { apiFetch } from '../utils/api.ts';
+import { groupRowsByDate } from '../utils/dateGroups.ts';
 import {
   evaluateMarketSettlement,
   getFixtureMatchResultSummary,
@@ -55,8 +56,9 @@ import {
   presetFilters,
 } from '../utils/slateFilterPresets.ts';
 import type { SlateFilterPresetSelection } from '../utils/slateFilterPresets.ts';
+import { DateGroups } from './ui/DateGroups.tsx';
 import { EmptyState, InlineLoading } from './ui/States.tsx';
-import { TabNav } from './ui/TabNav.tsx';
+import { SectionNav } from './ui/DataStatus.tsx';
 import { ActiveFilterBar } from './fixtures/ActiveFilterBar.tsx';
 import { FixtureCard } from './fixtures/FixtureCard.tsx';
 import { FixtureFilters } from './fixtures/FixtureFilters.tsx';
@@ -101,17 +103,7 @@ interface FixtureBoardProps {
   /** Optional controlled preset, deep-linked from the URL by App. */
   activePreset?: SlateFilterPresetSelection;
   onPresetChange?: (id: SlateFilterPresetSelection) => void;
-  /** Deep-linkable page selected in the slate tab strip. */
-  activeSection?: string;
-  onSectionChange: (id: string) => void;
 }
-
-const SLATE_SECTIONS = [
-  { id: 'slate-filters', label: 'Filters' },
-  { id: 'slate-results', label: 'Results' },
-] as const;
-
-type SlateSectionId = (typeof SLATE_SECTIONS)[number]['id'];
 
 export function FixtureBoard({
   fixtures,
@@ -136,13 +128,7 @@ export function FixtureBoard({
   onFiltersChange,
   activePreset: controlledPreset,
   onPresetChange,
-  activeSection,
-  onSectionChange,
 }: FixtureBoardProps) {
-  const currentSection: SlateSectionId =
-    activeSection === 'slate-filters' || activeSection === 'slate-results'
-      ? activeSection
-      : 'slate-results';
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCompetition, setSelectedCompetition] = useState<string>('ALL');
   // One object so the chips, the saved copy and the storage write agree.
@@ -674,6 +660,17 @@ export function FixtureBoard({
       };
     });
 
+  const fixtureGroups = useMemo(
+    () =>
+      groupRowsByDate(
+        [...fixtureModels].sort((a, b) =>
+          b.fixture.matchDateIso.localeCompare(a.fixture.matchDateIso)
+        ),
+        (model) => model.fixture.matchDateIso
+      ),
+    [fixtureModels]
+  );
+
   return (
     <section aria-label="Football fixtures by date" className="space-y-4">
       <SlateHeader
@@ -707,6 +704,14 @@ export function FixtureBoard({
         </button>
       </div>
 
+      <SectionNav
+        label="On this page"
+        items={[
+          { id: 'slate-filters', label: 'Filters' },
+          { id: 'slate-results', label: `Results (${filteredFixtures.length})` },
+        ]}
+      />
+
       <FixtureFilters
         filters={filters}
         activePreset={activePreset}
@@ -733,39 +738,7 @@ export function FixtureBoard({
 
       <ActiveFilterBar chips={activeFilterChips} onReset={resetAllFilters} />
 
-      <TabNav
-        items={SLATE_SECTIONS.map((section) =>
-          section.id === 'slate-results'
-            ? { ...section, label: `Results (${filteredFixtures.length})` }
-            : section
-        )}
-        activeId={currentSection}
-        onSelect={onSectionChange}
-        label="Slate pages"
-      />
-
-      {currentSection === 'slate-filters' ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <h3 className="text-sm font-bold text-slate-800">Filters in effect</h3>
-          <p className="mt-1 text-xs leading-relaxed text-slate-500">
-            {filteredFixtures.length} of {baseFixtures.length} fixtures match the
-            filters above. Open the Results page to review and select markets.
-          </p>
-          {activeFilterChips.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {activeFilterChips.map((chip) => (
-                <span
-                  key={chip.key}
-                  className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600"
-                >
-                  {chip.label}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : (
-        <div id="slate-results" className="space-y-3">
+      <div id="slate-results" className="scroll-mt-24 space-y-3">
         {isFetchingDate && (
           <InlineLoading
             label={`Loading matches and live bookmaker odds for ${selectedDate}…`}
@@ -788,20 +761,33 @@ export function FixtureBoard({
           />
         ) : (
           <>
-            {fixtureModels.map((model) => (
-              <FixtureCard
-                key={model.fixture.id}
-                model={model}
-                compact={compactCards}
-                pickLabel={pickLabel}
-                marketChipsActive={marketChipsActive}
-                marketSort={marketSort}
-                onMarketSort={handleMarketSort}
-                onToggleExpanded={() => toggleExpanded(model.fixture.id)}
-                onToggleMarket={(market) => onToggleMarket(model.fixture, market)}
-                onRequestDeepAnalysis={() => onRequestDeepAnalysis(model.fixture)}
-              />
-            ))}
+            <DateGroups
+              groups={fixtureGroups}
+              todayDate={todayDate}
+              idPrefix="slate-fixtures"
+              renderDay={(models) => (
+                <div className="space-y-3 p-4 sm:p-5">
+                  {models.map((model) => (
+                    <FixtureCard
+                      key={model.fixture.id}
+                      model={model}
+                      compact={compactCards}
+                      pickLabel={pickLabel}
+                      marketChipsActive={marketChipsActive}
+                      marketSort={marketSort}
+                      onMarketSort={handleMarketSort}
+                      onToggleExpanded={() => toggleExpanded(model.fixture.id)}
+                      onToggleMarket={(market) =>
+                        onToggleMarket(model.fixture, market)
+                      }
+                      onRequestDeepAnalysis={() =>
+                        onRequestDeepAnalysis(model.fixture)
+                      }
+                    />
+                  ))}
+                </div>
+              )}
+            />
 
             {filteredFixtures.length > visibleLimit && (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs">
@@ -829,8 +815,7 @@ export function FixtureBoard({
             )}
           </>
         )}
-        </div>
-      )}
+      </div>
     </section>
   );
 }

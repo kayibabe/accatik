@@ -21,6 +21,7 @@ interface SlipPerformancePanelProps {
   daily: DayPerformance[];
   oddsBands: OddsBandPerformance[];
   marketTypes: MarketTypePerformance[];
+  todayDate: string;
 }
 
 /**
@@ -32,6 +33,7 @@ export function SlipPerformancePanel({
   daily,
   oddsBands,
   marketTypes,
+  todayDate,
 }: SlipPerformancePanelProps) {
   const settled = analytics.won + analytics.lost + analytics.voided;
   const lastEquity = analytics.equity[analytics.equity.length - 1]?.value ?? 0;
@@ -81,7 +83,7 @@ export function SlipPerformancePanel({
         <EquityCurve points={analytics.equity} />
       </DataCard>
 
-      <SlipDailyTable daily={daily} />
+      <SlipDailyTable daily={daily} todayDate={todayDate} />
 
       <div className="grid gap-3 lg:grid-cols-2">
         <SlipMarketTypesTable marketTypes={marketTypes} />

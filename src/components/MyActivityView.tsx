@@ -14,6 +14,7 @@ interface MyActivityViewProps {
   fixtureSnapshots: FixtureSnapshots;
   /** Account slips sync to the server; guest slips stay in this browser. */
   signedIn: boolean;
+  todayDate: string;
   onGoToSlate: () => void;
 }
 
@@ -33,6 +34,7 @@ export function MyActivityView({
   fixtures,
   fixtureSnapshots,
   signedIn,
+  todayDate,
   onGoToSlate,
 }: MyActivityViewProps) {
   const activity = useMemo(
@@ -98,9 +100,14 @@ export function MyActivityView({
             daily={daily}
             oddsBands={oddsBands}
             marketTypes={marketTypes}
+            todayDate={todayDate}
           />
 
-          <RecentActivityList rows={recent} total={savedTickets.length} />
+          <RecentActivityList
+            rows={recent}
+            total={savedTickets.length}
+            todayDate={todayDate}
+          />
         </>
       )}
     </section>

@@ -6,6 +6,7 @@ import type {
   TicketReplayRow,
 } from '../types/analytics.ts';
 import { apiFetch } from '../utils/api.ts';
+import { SORT_ASC, SORT_DESC } from '../utils/tableSort.ts';
 import {
   fmtCount,
   fmtFixed,
@@ -189,6 +190,7 @@ export function TicketReplayPanel({
           </>
         );
       },
+      sortValue: (row) => row.label,
       priority: 'primary',
     },
     {
@@ -196,6 +198,8 @@ export function TicketReplayPanel({
       header: 'Tickets',
       cell: (row) => fmtCount(row.summary.tickets),
       align: 'right',
+      sortValue: (row) => row.summary.tickets,
+      defaultSortDirection: SORT_DESC,
       priority: 'primary',
     },
     {
@@ -204,6 +208,8 @@ export function TicketReplayPanel({
       cell: (row) =>
         recordLabel(row.summary.wins, row.summary.losses, row.summary.voids, '-'),
       align: 'right',
+      sortValue: (row) => row.summary.wins,
+      defaultSortDirection: SORT_DESC,
       priority: 'secondary',
     },
     {
@@ -211,6 +217,8 @@ export function TicketReplayPanel({
       header: 'Hit rate',
       cell: (row) => fmtPercent(row.summary.hitRate),
       align: 'right',
+      sortValue: (row) => row.summary.hitRate,
+      defaultSortDirection: SORT_DESC,
       priority: 'primary',
     },
     {
@@ -218,6 +226,8 @@ export function TicketReplayPanel({
       header: 'Target met',
       cell: (row) => fmtPercent(row.summary.targetHitRate),
       align: 'right',
+      sortValue: (row) => row.summary.targetHitRate,
+      defaultSortDirection: SORT_DESC,
       priority: 'primary',
     },
     {
@@ -225,6 +235,8 @@ export function TicketReplayPanel({
       header: 'Avg odds',
       cell: (row) => fmtOdds(row.summary.avgOdds),
       align: 'right',
+      sortValue: (row) => row.summary.avgOdds,
+      defaultSortDirection: SORT_DESC,
       priority: 'tertiary',
     },
     {
@@ -232,6 +244,8 @@ export function TicketReplayPanel({
       header: 'Avg legs',
       cell: (row) => fmtFixed(row.summary.avgLegs, 1),
       align: 'right',
+      sortValue: (row) => row.summary.avgLegs,
+      defaultSortDirection: SORT_DESC,
       priority: 'tertiary',
     },
     {
@@ -239,6 +253,8 @@ export function TicketReplayPanel({
       header: 'Break-even',
       cell: (row) => fmtPercent(row.summary.breakEvenHitRate),
       align: 'right',
+      sortValue: (row) => row.summary.breakEvenHitRate,
+      defaultSortDirection: SORT_DESC,
       priority: 'tertiary',
     },
     {
@@ -250,6 +266,8 @@ export function TicketReplayPanel({
         </span>
       ),
       align: 'right',
+      sortValue: (row) => row.summary.netPnl,
+      defaultSortDirection: SORT_DESC,
       priority: 'primary',
     },
     {
@@ -265,6 +283,8 @@ export function TicketReplayPanel({
         </span>
       ),
       align: 'right',
+      sortValue: (row) => row.summary.roi,
+      defaultSortDirection: SORT_DESC,
       priority: 'primary',
     },
     {
@@ -272,6 +292,8 @@ export function TicketReplayPanel({
       header: 'Max DD',
       cell: (row) => fmtFixed(row.summary.maxDrawdown, 2, { suffix: 'u' }),
       align: 'right',
+      sortValue: (row) => row.summary.maxDrawdown,
+      defaultSortDirection: SORT_ASC,
       priority: 'tertiary',
     },
     {
@@ -279,6 +301,8 @@ export function TicketReplayPanel({
       header: 'L streak',
       cell: (row) => fmtCount(row.summary.longestLossStreak),
       align: 'right',
+      sortValue: (row) => row.summary.longestLossStreak,
+      defaultSortDirection: SORT_ASC,
       priority: 'tertiary',
     },
   ];
