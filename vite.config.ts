@@ -6,6 +6,27 @@ import {defineConfig} from 'vite';
 export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
+    build: {
+      rollupOptions: {
+        output: {
+          // React and the icon set change far less often than app code, so
+          // keep them in stable chunks instead of invalidating the main bundle.
+          manualChunks(id) {
+            if (
+              id.includes('/node_modules/react/') ||
+              id.includes('/node_modules/react-dom/') ||
+              id.includes('/node_modules/scheduler/')
+            ) {
+              return 'react-vendor';
+            }
+            if (id.includes('/node_modules/lucide-react/')) {
+              return 'icons';
+            }
+            return undefined;
+          },
+        },
+      },
+    },
     resolve: {
       alias: {
         '@': path.resolve(import.meta.dirname, '.'),
