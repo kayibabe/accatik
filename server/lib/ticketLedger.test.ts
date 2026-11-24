@@ -7,7 +7,6 @@ import type { Fixture } from '../../src/types/fixtures.ts';
 import type { LedgerFile, LedgerTicket } from '../../src/types/ledger.ts';
 import { makeFixture, makeMarket } from '../../src/utils/testFactories.ts';
 import {
-  planLedgerWrites,
   readLedger,
   recordShadowTickets,
   settleTicketsWithFixtures,
@@ -181,46 +180,6 @@ function shadowTicket(id: string, status: LedgerTicket['status'] = 'Pending'): L
     legs: [],
   };
 }
-
-test('unchanged ledger documents cost no writes', () => {
-  const ticket = shadowTicket('unchanged');
-  const plan = planLedgerWrites(
-    [{ $id: ticket.id, payloadJson: JSON.stringify(ticket) }],
-    [ticket]
-  );
-
-  assert.equal(plan.changed, false);
-  assert.deepEqual(plan.toWrite, []);
-  assert.deepEqual(plan.staleIds, []);
-});
-
-test('only moved tickets are rewritten and vanished ones are pruned', () => {
-  const kept = shadowTicket('kept');
-  const moved = shadowTicket('moved', 'Win');
-
-  const plan = planLedgerWrites(
-    [
-      { $id: kept.id, payloadJson: JSON.stringify(kept) },
-      { $id: moved.id, payloadJson: JSON.stringify(shadowTicket('moved')) },
-      { $id: 'deleted', payloadJson: '{}' },
-    ],
-    [kept, moved]
-  );
-
-  assert.equal(plan.changed, true);
-  assert.deepEqual(plan.toWrite, [moved]);
-  assert.deepEqual(plan.staleIds, ['deleted']);
-});
-
-test('a failed/empty ledger read never prunes stored documents', () => {
-  const plan = planLedgerWrites(
-    [{ $id: 'survivor', payloadJson: '{}' }],
-    []
-  );
-
-  assert.equal(plan.changed, false);
-  assert.deepEqual(plan.staleIds, []);
-});
 
 test('a ledger summary can be scoped to one day without losing the day list', () => {
   const ledger: LedgerFile = {

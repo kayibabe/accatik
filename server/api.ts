@@ -117,10 +117,8 @@ import {
 import { CAT_TIMEZONE, formatDisplayDate, getTodayIsoDate } from './lib/time.ts';
 
 /**
- * Framework-agnostic API handlers.
- *
- * Both the Express server and the Appwrite Function call these functions, so a
- * route can never drift between local development and the deployed backend.
+ * Framework-agnostic API handlers shared by the Express routes and local CLI
+ * jobs, so scheduled work and interactive requests use the same logic.
  */
 export interface ApiResult<T = unknown> {
   status: number;
@@ -175,7 +173,7 @@ const emptyTimings = (): ServerTimings => ({
 
 const ms = (value: number): string => `${value.toFixed(1)}ms`;
 
-/** One structured line per phase snapshot, easy to grep in Appwrite logs. */
+/** One structured line per phase snapshot, easy to grep in local server logs. */
 function logSlateTimings(
   dateIso: string,
   source: string,

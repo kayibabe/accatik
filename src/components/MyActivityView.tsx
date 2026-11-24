@@ -12,8 +12,6 @@ interface MyActivityViewProps {
   savedTickets: SavedTicket[];
   fixtures: Fixture[];
   fixtureSnapshots: FixtureSnapshots;
-  /** Account slips sync to the server; guest slips stay in this browser. */
-  signedIn: boolean;
   todayDate: string;
   onGoToSlate: () => void;
 }
@@ -33,7 +31,6 @@ export function MyActivityView({
   savedTickets,
   fixtures,
   fixtureSnapshots,
-  signedIn,
   todayDate,
   onGoToSlate,
 }: MyActivityViewProps) {
@@ -58,7 +55,7 @@ export function MyActivityView({
   return (
     <section aria-label="My Activity" className="space-y-6">
       <PageHeader
-        eyebrow={signedIn ? 'Your Account Record' : 'This Browser’s Record'}
+        eyebrow="This Browser’s Record"
         title="My Activity"
         description="Your personal settlement record and performance from the slips you saved. The engine’s global Shadow Ticket Ledger is a separate, append-only record."
         scope="personal"
@@ -71,11 +68,9 @@ export function MyActivityView({
           aria-hidden="true"
         />
         <p className="leading-relaxed">
-          {signedIn
-            ? 'Your activity is stored on your account and syncs across devices.'
-            : 'Sign in to keep this activity on your account and sync it across devices.'}{' '}
-          The full breakdown below is the authoritative version of the compact
-          snapshot shown under Saved Slips.
+          Your saved slips and preferences stay in this browser while the app is
+          local-only. The full breakdown below is the authoritative version of
+          the compact snapshot shown under Saved Slips.
         </p>
       </div>
 

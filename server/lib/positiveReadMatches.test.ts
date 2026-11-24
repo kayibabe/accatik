@@ -476,6 +476,9 @@ test('response discloses the study cut, fixed universe and quality counts', () =
   assert.equal(response.universe.marketLabels['GOALS-O2.5'], 'Over 2.5 Goals');
   assert.equal(response.qualifiedCount, 2);
   assert.equal(response.confirmedCount, 1);
+  assert.match(response.caveats[0], /A qualifying read is a section × band × market parameter/);
+  assert.match(response.caveats[1], /Qualified parameters.*Confirmed parameters/);
+  assert.match(response.caveats.at(-1)!, /Adding a pending pick/);
 });
 
 test('upcoming fixtures stay in the feed with a null score and are kickoff-sorted', () => {

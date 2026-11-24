@@ -448,7 +448,7 @@ export function AnalyticsView({
           )}
 
           {currentSection === 'positive-reads' && (
-            <section id="positive-reads" aria-label="Daily qualifying positive-read matches">
+            <section id="positive-reads" aria-label="Daily qualifying reads">
               <PositiveReadMatches
                 strategy={strategy}
                 todayDate={todayDate}

@@ -24,7 +24,7 @@ import {
 import { isPriced } from '../../src/utils/pickResolver.ts';
 import { marketProbability } from '../../src/utils/probability.ts';
 import { angleConfidence } from '../../src/utils/recommendedAngle.ts';
-import { mapWithConcurrency } from './appwriteData.ts';
+import { mapWithConcurrency } from './concurrency.ts';
 import { createTtlCache, registerAnalyticsCache } from './cache.ts';
 import { listArchivedSlateDates, readArchivedSlate } from './slateArchive.ts';
 import { clusterRoiCi } from './roiPromotion.ts';

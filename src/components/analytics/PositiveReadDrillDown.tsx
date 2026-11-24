@@ -112,7 +112,7 @@ export function PositiveReadDrillDown({
     <div className="space-y-2">
       <DataCard
         title="Drill down"
-        subtitle={`${fmtCount(counts.combos)} of ${fmtCount(counts.totalCombos)} parameters · ${fmtCount(counts.matches)} of ${fmtCount(counts.totalMatches)} matches`}
+        subtitle={`${fmtCount(counts.combos)} of ${fmtCount(counts.totalCombos)} qualifying parameters · ${fmtCount(counts.matches)} of ${fmtCount(counts.totalMatches)} fixtures`}
         actions={
           activeCount > 0 ? (
             <button
@@ -245,11 +245,12 @@ export function PositiveReadDrillDown({
           </div>
 
           <p className="text-[11px] leading-relaxed text-slate-400">
-            Counts are faceted: each selector shows how many parameters remain
-            with the other filters applied. Market choices follow the selected
-            section and band. Qualified requires the interval to clear zero;
-            Confirmed also stayed positive one matchday earlier. Search narrows
-            the match cards only.
+            Counts are faceted: each selector shows how many qualifying parameters
+            remain with the other filters applied. Market choices follow the
+            selected section and band. Qualified and Confirmed describe
+            parameters, not fixtures — Qualified requires the interval to clear
+            zero, and Confirmed also stayed positive one matchday earlier. Search
+            narrows the fixture cards only.
           </p>
         </div>
       </DataCard>
@@ -257,7 +258,7 @@ export function PositiveReadDrillDown({
       <ActiveFilterBar
         chips={chips}
         onReset={onReset}
-        label="Active positive-read filters"
+        label="Active qualifying-read filters"
       />
     </div>
   );

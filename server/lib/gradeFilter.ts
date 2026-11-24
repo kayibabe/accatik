@@ -12,7 +12,7 @@ import { evaluateTicketSettlement } from '../../src/utils/accaMath.ts';
 import { buildRecommendedAcca } from '../../src/utils/accaEngine.ts';
 import { isPriced } from '../../src/utils/pickResolver.ts';
 import { inferPriceQuality } from '../../src/utils/priceQuality.ts';
-import { mapWithConcurrency } from './appwriteData.ts';
+import { mapWithConcurrency } from './concurrency.ts';
 import { createTtlCache, registerAnalyticsCache } from './cache.ts';
 import { studyPickForFixture } from './combinationRoi.ts';
 import { listArchivedSlateDates, readArchivedSlate } from './slateArchive.ts';

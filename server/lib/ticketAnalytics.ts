@@ -11,7 +11,7 @@ import { evaluateTicketSettlement } from '../../src/utils/accaMath.ts';
 import { buildRecommendedAcca } from '../../src/utils/accaEngine.ts';
 import { inferPriceQuality } from '../../src/utils/priceQuality.ts';
 import { buildTicketVariants } from '../../src/utils/ticketControls.ts';
-import { mapWithConcurrency } from './appwriteData.ts';
+import { mapWithConcurrency } from './concurrency.ts';
 import { createTtlCache, registerAnalyticsCache } from './cache.ts';
 import { listArchivedSlateDates, readArchivedSlate } from './slateArchive.ts';
 

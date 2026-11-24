@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { apiFetch, SessionExpiredError, type ApiDependencies } from './api.ts';
+import { apiFetch, apiUrl, type ApiDependencies } from './api.ts';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -9,112 +9,86 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-function dependencies(options: {
-  tokens: Array<string | null>;
-  responses: Response[];
-}): {
+function dependencies(responses: Response[]): {
   deps: ApiDependencies;
-  authHeaders: Array<string | null>;
-  counters: { forced: number; cleared: number };
+  calls: Array<{ url: string; init?: RequestInit }>;
 } {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
   let index = 0;
-  let tokenIndex = 0;
-  const authHeaders: Array<string | null> = [];
-  const counters = { forced: 0, cleared: 0 };
-  const deps: ApiDependencies = {
-    getJwt: async (force = false) => {
-      if (force) counters.forced += 1;
-      return options.tokens[Math.min(tokenIndex++, options.tokens.length - 1)];
+  return {
+    deps: {
+      fetchFn: async (input, init) => {
+        calls.push({ url: String(input), init });
+        return responses[Math.min(index++, responses.length - 1)];
+      },
     },
-    clearJwt: () => {
-      counters.cleared += 1;
-    },
-    fetchFn: async (_input, init) => {
-      const headers = new Headers(init?.headers);
-      authHeaders.push(headers.get('authorization'));
-      return options.responses[Math.min(index++, options.responses.length - 1)];
-    },
+    calls,
   };
-  return { deps, authHeaders, counters };
 }
 
-test('apiFetch attaches the JWT and returns the parsed body', async () => {
-  const { deps, authHeaders } = dependencies({
-    tokens: ['jwt-1'],
-    responses: [jsonResponse({ role: 'admin' })],
-  });
-
-  const result = await apiFetch<{ role: string }>('/api/account/me', undefined, deps);
-
-  assert.deepEqual(result, { role: 'admin' });
-  assert.deepEqual(authHeaders, ['Bearer jwt-1']);
+test('apiUrl keeps local requests relative to the current origin', () => {
+  assert.equal(apiUrl('/api/fixtures/today'), '/api/fixtures/today');
+  assert.equal(apiUrl('api/health'), '/api/health');
 });
 
-test('a stale JWT is refreshed and the request retried once', async () => {
-  const { deps, authHeaders, counters } = dependencies({
-    tokens: ['stale', 'fresh'],
-    responses: [
-      jsonResponse({ error: 'Sign in to continue.' }, 401),
-      jsonResponse({ profile: { role: 'admin' } }),
-    ],
-  });
+test('apiFetch returns the parsed body without attaching credentials', async () => {
+  const { deps, calls } = dependencies([jsonResponse({ ok: true })]);
 
-  const result = await apiFetch<{ profile: { role: string } }>(
-    '/api/account/me',
-    undefined,
+  const result = await apiFetch<{ ok: boolean }>('/api/health', undefined, deps);
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, '/api/health');
+  assert.equal(new Headers(calls[0].init?.headers).get('authorization'), null);
+});
+
+test('apiFetch forwards method, body and abort signal', async () => {
+  const controller = new AbortController();
+  const { deps, calls } = dependencies([jsonResponse({ saved: true })]);
+  const body = JSON.stringify({ tickets: [] });
+
+  await apiFetch(
+    '/api/tickets',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+      signal: controller.signal,
+    },
     deps
   );
 
-  assert.deepEqual(result, { profile: { role: 'admin' } });
-  assert.deepEqual(authHeaders, ['Bearer stale', 'Bearer fresh']);
-  assert.equal(counters.forced, 1);
-  assert.equal(counters.cleared, 1);
+  assert.equal(calls[0].init?.method, 'POST');
+  assert.equal(calls[0].init?.body, body);
+  assert.equal(calls[0].init?.signal, controller.signal);
 });
 
-test('a missing session produces an actionable error instead of "Sign in to continue."', async () => {
-  const { deps } = dependencies({
-    tokens: [null, null],
-    responses: [jsonResponse({ error: 'Sign in to continue.' }, 401)],
-  });
+test('API errors keep their server message and are not retried', async () => {
+  const { deps, calls } = dependencies([
+    jsonResponse({ error: 'Unknown API endpoint.' }, 404),
+    jsonResponse({ ok: true }),
+  ]);
 
   await assert.rejects(
-    () => apiFetch('/api/account/me', undefined, deps),
+    () => apiFetch('/api/missing', undefined, deps),
     (err: unknown) => {
-      assert.ok(err instanceof SessionExpiredError);
-      assert.match(err.message, /sign in again/i);
+      assert.equal(err instanceof Error && err.message, 'Unknown API endpoint.');
       return true;
     }
   );
+  assert.equal(calls.length, 1);
 });
 
-test('a second 401 after refresh is reported as an expired session', async () => {
-  const { deps } = dependencies({
-    tokens: ['stale', 'fresh'],
-    responses: [
-      jsonResponse({ error: 'Sign in to continue.' }, 401),
-      jsonResponse({ error: 'Sign in to continue.' }, 401),
-    ],
-  });
+test('a non-JSON response produces an actionable local-server error', async () => {
+  const { deps } = dependencies([
+    new Response('<h1>Not found</h1>', {
+      status: 502,
+      headers: { 'content-type': 'text/html' },
+    }),
+  ]);
 
   await assert.rejects(
-    () => apiFetch('/api/account/me', undefined, deps),
-    SessionExpiredError
+    () => apiFetch('/api/health', undefined, deps),
+    /Check that the local server is running/i
   );
-});
-
-test('other API errors keep their server message and are not retried', async () => {
-  const { deps, authHeaders, counters } = dependencies({
-    tokens: ['jwt-1', 'jwt-2'],
-    responses: [jsonResponse({ error: 'Only admins can manage roles.' }, 403)],
-  });
-
-  await assert.rejects(
-    () => apiFetch('/api/admin/users', undefined, deps),
-    (err: unknown) => {
-      assert.equal(err instanceof Error && err.message, 'Only admins can manage roles.');
-      return true;
-    }
-  );
-  assert.deepEqual(authHeaders, ['Bearer jwt-1']);
-  assert.equal(counters.forced, 0);
 });

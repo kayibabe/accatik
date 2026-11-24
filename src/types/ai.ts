@@ -1,8 +1,8 @@
 import type { AccaStrategy, MarketType } from './fixtures.ts';
 
 /**
- * AI desk contract, shared by the Express server, the Appwrite Function and
- * the browser. Every probability in this file is a FRACTION (0..1) unless the
+ * AI desk contract, shared by the Express server, local CLI jobs and the
+ * browser. Every probability in this file is a FRACTION (0..1) unless the
  * field name ends in `Pct` or `Points`.
  */
 

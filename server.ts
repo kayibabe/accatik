@@ -9,7 +9,6 @@ import { aiRouter } from './server/routes/ai.ts';
 import { analyticsRouter } from './server/routes/analytics.ts';
 import { fixturesRouter } from './server/routes/fixtures.ts';
 import { ledgerRouter } from './server/routes/ledger.ts';
-import { userRouter } from './server/routes/user.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -43,7 +42,6 @@ async function createServer() {
   app.use('/api/analytics', analyticsRouter);
   app.use('/api/ai', aiRouter);
   app.use('/api/ledger', ledgerRouter);
-  app.use('/api', userRouter);
 
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Unknown API endpoint.' });

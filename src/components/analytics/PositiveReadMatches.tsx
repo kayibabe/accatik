@@ -17,6 +17,14 @@ import type {
 import { apiFetch } from '../../utils/api.ts';
 import { fmtCount, fmtOdds, fmtShortDate, fmtSignedPercent } from '../../utils/format.ts';
 import {
+  POSITIVE_READ_ROI_LABEL,
+  POSITIVE_READ_TITLE,
+  POSITIVE_READ_UNIVERSE_LABEL,
+  positiveReadEyebrow,
+  positiveReadIntroduction,
+  positiveReadModeNote,
+} from '../../utils/positiveReadCopy.ts';
+import {
   applyPositiveReadFilters,
   derivePositiveReadOptions,
   groupPositiveReadCombos,
@@ -107,7 +115,7 @@ function ComboChip({
     ['Evidence', tier.label + (combo.stable ? ' · Stable' : '')],
   ];
   if (matchCount !== undefined) {
-    detailRows.push(['Matches on this day', fmtCount(matchCount)]);
+    detailRows.push(['Fixtures on this matchday', fmtCount(matchCount)]);
   }
   if (pick) {
     detailRows.push(['Market', pick.marketLabel]);
@@ -167,7 +175,7 @@ function ComboChip({
             block ? 'w-[68px] text-center' : ''
           }`}
         >
-          {fmtCount(matchCount)} {matchCount === 1 ? 'match' : 'matches'}
+          {fmtCount(matchCount)} {matchCount === 1 ? 'fixture' : 'fixtures'}
         </span>
       )}
       <span
@@ -323,7 +331,7 @@ export function PositiveReadMatches({
         if (!isBuild && !dateIso) setDateIso(result.dateIso);
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Could not load positive-read matches.');
+          setError(err instanceof Error ? err.message : 'Could not load qualifying reads.');
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -419,39 +427,30 @@ export function PositiveReadMatches({
     return sent;
   };
 
-  const eligiblePicks = filtered?.eligiblePicks ?? [];
+  const pendingPicks = filtered?.eligiblePicks ?? [];
   const universe = data?.universe;
   const universeLabel = universe
     ? `${universe.sections.length} sections × ${universe.bands.length} bands × ${universe.markets.length} markets`
-    : '3 sections × 5 bands × 18 markets';
+    : POSITIVE_READ_UNIVERSE_LABEL;
+  const displayedDate = data?.dateIso || effectiveDate || todayDate;
+  const surface = isBuild ? 'build' : 'analytics';
 
   return (
-    <section aria-label="Daily qualifying positive-read matches" className="space-y-3">
+    <section aria-label="Daily qualifying reads" className="space-y-3">
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs font-medium text-slate-500">
-            Daily feed · {strategy} strategy · {data?.source === 'live' ? 'live prices' : 'archived matchday'}
-            {isBuild ? ' · all eligible picks are kept' : ''}
+            {positiveReadEyebrow({ strategy, mode: surface, source: live ? 'live' : 'archive' })}
           </p>
           <h2 className="mt-1 flex items-center gap-2 text-xl font-bold tracking-tight text-slate-900">
             <CalendarDays className="h-5 w-5 text-emerald-700" aria-hidden="true" />
-            Qualifying positive-read matches
+            {POSITIVE_READ_TITLE}
           </h2>
           <p className="mt-1 max-w-3xl text-xs leading-relaxed text-slate-600">
-            {isBuild ? (
-              <>
-                Fixtures whose cards hit a <strong>section × band × market</strong> combination with
-                inception-to-date ROI of <strong>5.0% or more</strong>. Add a labelled card to your
-                slip; the market and price are copied from the same frozen pick the study measured.
-              </>
-            ) : (
-              <>
-                Fixtures whose cards hit a <strong>section × band × market</strong> combination with
-                inception-to-date ROI of <strong>5.0% or more</strong> in the study below. Each
-                match is labelled with the exact qualifying parameter that fired. Archive is the
-                default; switch to Live for upcoming games.
-              </>
-            )}
+            {positiveReadIntroduction(fmtShortDate(displayedDate))}
+          </p>
+          <p className="mt-1 max-w-3xl text-[11px] leading-relaxed text-slate-500">
+            {positiveReadModeNote(surface)}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -513,17 +512,17 @@ export function PositiveReadMatches({
           className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"
         >
           {fmtCount(lastAdded)} {lastAdded === 1 ? 'pick' : 'picks'} sent to your slip. Open the
-          ticket to check the final shape — qualifying positive reads keep every eligible pick, one
-          per match. Wide slips are research only and are not marked as recommended.
+          ticket to check the final shape — qualifying reads keep every pending pick, one per
+          fixture. Wide slips are research only and are not marked as recommended.
         </p>
       )}
 
-      {isBuild && !live && filtered && filtered.matches.length > 0 && eligiblePicks.length === 0 && (
+      {isBuild && !live && filtered && filtered.matches.length > 0 && pendingPicks.length === 0 && (
         <p
           role="status"
           className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"
         >
-          These archived picks are already settled, so they cannot join a live slip.{' '}
+          These archived picks are already settled, so they cannot join a slip.{' '}
           <button
             type="button"
             onClick={() => setLive(true)}
@@ -531,22 +530,20 @@ export function PositiveReadMatches({
           >
             Switch to Live prices
           </button>{' '}
-          to add upcoming picks.
+          to add upcoming fixtures.
         </p>
       )}
 
       {loading && !data ? (
-        <LoadingState label="Loading positive-read matches…" count={3} />
+        <LoadingState label="Loading qualifying reads…" count={3} />
       ) : error ? (
-        <ErrorState title="Could not load matches" description={error} onRetry={reload} />
+        <ErrorState title="Could not load qualifying reads" description={error} onRetry={reload} />
       ) : !data || data.combos.length === 0 ? (
         <EmptyState
-          title="No qualifying positive reads yet"
-          description={
-            isBuild
-              ? 'The section × band × market study has no row with inception-to-date ROI of 5.0% or more, so there is no qualifying parameter to pick from yet.'
-              : 'The section × band × market study has no row with inception-to-date ROI of 5.0% or more, so there is no qualifying parameter to match yet. Check the study below.'
-          }
+          title="No qualifying reads yet"
+          description={`The fixed combination study has no section × band × market parameter with inception-to-date ROI of ${POSITIVE_READ_ROI_LABEL} or more, so there is no qualifying parameter to ${
+            isBuild ? 'pick from' : 'match'
+          } yet.`}
         />
       ) : (
         <>
@@ -561,22 +558,24 @@ export function PositiveReadMatches({
             </span>
             <span aria-hidden="true">·</span>
             <span>
-              Qualifying ROI <strong className="font-semibold">≥ 5.0%</strong>
+              Qualifying reads: ROI <strong className="font-semibold">≥ {POSITIVE_READ_ROI_LABEL}</strong>
             </span>
             <span aria-hidden="true">·</span>
             <span>
               <strong className="font-semibold">{fmtCount(data.qualifiedCount)}</strong> qualified
+              parameters
             </span>
             <span aria-hidden="true">·</span>
             <span>
               <strong className="font-semibold">{fmtCount(data.confirmedCount)}</strong> confirmed
+              parameters
             </span>
             <span aria-hidden="true">·</span>
-            <span>min sample {fmtCount(data.minSample)}</span>
+            <span>min sample {fmtCount(data.minSample)} for evidence badges</span>
             <span aria-hidden="true">·</span>
             {data.studyExcludedDateIso ? (
               <span className="font-medium text-emerald-700">
-                {fmtShortDate(data.studyExcludedDateIso)} excluded (out-of-sample)
+                {fmtShortDate(data.studyExcludedDateIso)} excluded from study (out-of-sample)
               </span>
             ) : (
               <span className="font-medium text-emerald-700">
@@ -603,17 +602,17 @@ export function PositiveReadMatches({
 
           <DataCard
             title="Qualifying parameters"
-            subtitle={`${fmtCount(filtered?.combos.length ?? 0)} of ${fmtCount(data.combos.length)} qualifying ${data.combos.length === 1 ? 'combination' : 'combinations'} with ROI ≥ 5.0%`}
+            subtitle={`${fmtCount(filtered?.combos.length ?? 0)} of ${fmtCount(data.combos.length)} qualifying ${data.combos.length === 1 ? 'combination' : 'combinations'} with ROI ≥ ${POSITIVE_READ_ROI_LABEL}`}
             actions={
               <div className="flex items-center gap-2">
-                {isBuild && eligiblePicks.length > 0 && (
+                {isBuild && pendingPicks.length > 0 && (
                   <button
                     type="button"
-                    onClick={() => addPicks(eligiblePicks)}
+                    onClick={() => addPicks(pendingPicks)}
                     title="Add every currently filtered, pending pick without the five-leg cut"
                     className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-800 hover:bg-emerald-100 cursor-pointer"
                   >
-                    Add all eligible
+                    Add all pending picks
                   </button>
                 )}
                 {loading && <InlineLoading label="Refreshing…" />}
@@ -639,8 +638,9 @@ export function PositiveReadMatches({
             ) : (
               <div className="space-y-4 p-4">
                 <p className="text-[11px] text-slate-400">
-                  Counts are fixtures on this matchday that hit the parameter. Select a section or
-                  parameter to jump to its match.
+                  A qualifying parameter is one section × band × market combination from the fixed
+                  study. Counts are fixtures on {fmtShortDate(displayedDate)} that hit it. Select a
+                  section or parameter to jump to its fixture.
                 </p>
                 {groups.map((group) => {
                   const sectionFixtureIds = matchIdsBySection.get(group.combos[0]?.section ?? '') ?? [];
@@ -663,7 +663,7 @@ export function PositiveReadMatches({
                           {fmtCount(group.combos.length)} params
                         </span>
                         <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-emerald-700">
-                          {fmtCount(sectionFixtureIds.length)} matches
+                          {fmtCount(sectionFixtureIds.length)} fixtures
                         </span>
                         <ArrowRight className="h-3 w-3 shrink-0 text-emerald-700" aria-hidden="true" />
                       </button>
@@ -695,11 +695,11 @@ export function PositiveReadMatches({
           {filtered && filtered.combos.length > 0 && filtered.matches.length === 0 ? (
             data.matches.length === 0 ? (
               <EmptyState
-                title={`No matches on ${data.dateIso}`}
+                title={`No fixtures on ${data.dateIso}`}
                 description={
                   data.source === 'archive'
-                    ? 'No fixture on this matchday produced one of the qualifying positive parameters. Try another date or switch to Live for upcoming games.'
-                    : 'No upcoming fixture currently produces one of the qualifying positive parameters. Try another date or switch back to Archive.'
+                    ? 'No fixture on this matchday produced one of the qualifying parameters. Try another date or switch to Live for upcoming games.'
+                    : 'No upcoming fixture currently produces one of the qualifying parameters. Try another date or switch back to Archive.'
                 }
                 action={
                   <button
@@ -713,7 +713,7 @@ export function PositiveReadMatches({
               />
             ) : (
               <EmptyState
-                title="No matches match these filters"
+                title="No fixtures match these filters"
                 description="Those parameters exist in the study, but no fixture on this matchday matches the current drill-down or search. Reset the filters or change the matchday."
                 action={
                   <button

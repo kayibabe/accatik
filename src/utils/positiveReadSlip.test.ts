@@ -62,7 +62,7 @@ test('positive-read picks copy their labelled market and price into a leg', () =
   });
 });
 
-test('add all eligible keeps every pick beyond the five-leg recommendation cap', () => {
+test('add all pending picks keeps every pick beyond the five-leg recommendation cap', () => {
   const picks = Array.from({ length: 7 }, (_, index) =>
     makePick(`f${index}`, { odds: 2 + index / 10 })
   );

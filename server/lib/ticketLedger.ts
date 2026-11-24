@@ -1,7 +1,6 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { Query, type Databases } from 'node-appwrite';
 import type {
   AccaLeg,
   AccaStrategy,
@@ -31,13 +30,6 @@ import { STRATEGY_LABELS } from '../../src/utils/strategy.ts';
 import { guardTicket } from '../../src/utils/ticketGuard.ts';
 import { TICKET_SHAPES } from '../../src/utils/ticketShapes.ts';
 import { readArchivedSlate } from './slateArchive.ts';
-import { APPWRITE_DATABASE_ID } from './auth.ts';
-import {
-  getDataDatabases,
-  listAllDocuments,
-  mapWithConcurrency,
-  upsertDocument,
-} from './appwriteData.ts';
 
 /**
  * Shadow ticket ledger storage.
@@ -71,112 +63,7 @@ function emptyLedger(): LedgerFile {
   return { version: 1, updatedAt: new Date().toISOString(), tickets: [] };
 }
 
-async function readLedgerFromAppwrite(
-  databases: Databases
-): Promise<LedgerFile> {
-  const documents = await listAllDocuments(databases, 'ledger_tickets');
-  const tickets = documents.map(
-    (document) => JSON.parse(String(document.payloadJson)) as LedgerTicket
-  );
-  let updatedAt = new Date().toISOString();
-  try {
-    const meta = await databases.getDocument({
-      databaseId: APPWRITE_DATABASE_ID,
-      collectionId: 'ledger_meta',
-      documentId: 'state',
-    });
-    updatedAt = String(meta.updatedAt);
-  } catch {
-    updatedAt = new Date().toISOString();
-  }
-  return { version: 1, updatedAt, tickets };
-}
-
-export interface LedgerWritePlan {
-  toWrite: LedgerTicket[];
-  staleIds: string[];
-  changed: boolean;
-}
-
-/**
- * Pure diff between the stored ledger documents and the in-memory ledger. Only
- * tickets whose serialized payload moved are rewritten, so the common
- * bookkeeping pass costs a read plus a handful of writes instead of one write
- * per accumulated ticket.
- */
-export function planLedgerWrites(
-  existing: Array<{ $id: string; payloadJson?: unknown }>,
-  tickets: LedgerTicket[]
-): LedgerWritePlan {
-  const storedPayloads = new Map(
-    existing.map((document) => [document.$id, String(document.payloadJson ?? '')])
-  );
-  const wanted = new Set<string>();
-  const toWrite: LedgerTicket[] = [];
-
-  for (const ticket of tickets) {
-    wanted.add(ticket.id);
-    if (storedPayloads.get(ticket.id) === JSON.stringify(ticket)) continue;
-    toWrite.push(ticket);
-  }
-
-  // Never prune from a failed/empty read: an API hiccup must not erase the ledger.
-  const staleIds =
-    tickets.length === 0
-      ? []
-      : existing
-          .filter((document) => !wanted.has(document.$id))
-          .map((document) => document.$id);
-
-  return {
-    toWrite,
-    staleIds,
-    changed: toWrite.length > 0 || staleIds.length > 0,
-  };
-}
-
-async function writeLedgerToAppwrite(
-  databases: Databases,
-  ledger: LedgerFile
-): Promise<void> {
-  const existing = await listAllDocuments(databases, 'ledger_tickets');
-  const plan = planLedgerWrites(existing, ledger.tickets);
-  if (!plan.changed) return;
-
-  await mapWithConcurrency(plan.toWrite, 8, async (ticket) => {
-    await upsertDocument(databases, 'ledger_tickets', ticket.id, {
-      ticketId: ticket.id,
-      dateIso: ticket.dateIso,
-      kind: ticket.kind,
-      status: ticket.status,
-      createdAt: ticket.createdAt,
-      payloadJson: JSON.stringify(ticket),
-    });
-  });
-
-  for (const documentId of plan.staleIds) {
-    await databases.deleteDocument({
-      databaseId: APPWRITE_DATABASE_ID,
-      collectionId: 'ledger_tickets',
-      documentId,
-    });
-  }
-
-  await upsertDocument(databases, 'ledger_meta', 'state', {
-    updatedAt: ledger.updatedAt,
-  });
-}
-
 async function readLedgerFile(): Promise<LedgerFile> {
-  const databases = getDataDatabases();
-  if (databases) {
-    try {
-      return await readLedgerFromAppwrite(databases);
-    } catch (error) {
-      console.warn('[ledger] could not read Appwrite ledger', error);
-      return emptyLedger();
-    }
-  }
   try {
     const raw = await fs.readFile(ledgerFile(), 'utf8');
     const parsed = JSON.parse(raw) as LedgerFile;
@@ -196,11 +83,6 @@ async function readLedgerFile(): Promise<LedgerFile> {
 
 async function writeLedgerFile(ledger: LedgerFile): Promise<void> {
   ledger.updatedAt = new Date().toISOString();
-  const databases = getDataDatabases();
-  if (databases) {
-    await writeLedgerToAppwrite(databases, ledger);
-    return;
-  }
   const target = ledgerFile();
   await fs.mkdir(path.dirname(target), { recursive: true });
   const temp = `${target}.${process.pid}.tmp`;

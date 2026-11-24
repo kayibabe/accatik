@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertCircle, RefreshCw } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { TopBar } from './components/TopBar.tsx';
 import type { ActiveTab } from './types/navigation.ts';
 import { SideMenu } from './components/SideMenu.tsx';
@@ -15,12 +15,7 @@ import { PositiveRoiView } from './components/PositiveRoiView.tsx';
 import { PositiveReadMatches } from './components/analytics/PositiveReadMatches.tsx';
 import { SourcesView } from './components/SourcesView.tsx';
 import { AiView } from './components/AiView.tsx';
-import { AuthDialog } from './components/AuthDialog.tsx';
-import { AdminPanel } from './components/AdminPanel.tsx';
-import { LandingPage } from './components/LandingPage.tsx';
-import { NotificationRegion, type NoticeItem } from './components/ui/NotificationRegion.tsx';
 import { ErrorState } from './components/ui/States.tsx';
-import { useAuth } from './context/AuthContext.tsx';
 import type { AiTicketLeg } from './types/ai.ts';
 import type { PositiveReadPick } from './types/analytics.ts';
 import type {
@@ -31,7 +26,6 @@ import type {
   Fixture,
   GroundingSource,
   MarketOption,
-  PublicSlateResponse,
   SavedTicket,
 } from './types/fixtures.ts';
 import {
@@ -57,7 +51,7 @@ import type { TicketShape } from './utils/ticketShapes.ts';
 import { isPreMatchFixture } from './utils/priceQuality.ts';
 import {
   loadSlateFilterState,
-  parseSlateFilterState,
+  saveSlateFilterState,
 } from './utils/slateFilterState.ts';
 import type { SlateFilterState } from './utils/slateFilterState.ts';
 import {
@@ -71,7 +65,6 @@ import {
   parseAppUrlState,
   writeAppUrl,
 } from './utils/urlState.ts';
-import type { UserPreferences } from './types/user.ts';
 import {
   loadFixtureSnapshots,
   mergeFixturesIntoSnapshots,
@@ -80,16 +73,11 @@ import {
   type FixtureSnapshots,
 } from './utils/fixtureSnapshots.ts';
 import {
-  deleteCachedSlate,
-  getCachedSlateOwner,
   readCachedSlate,
-  setCachedSlateOwner,
   writeCachedSlate,
 } from './utils/slateClientCache.ts';
 
 const SAVED_STORAGE_KEY = 'matchslip_saved_tickets_v1';
-
-type TicketSource = 'local' | 'server';
 
 function loadLocalTickets(): SavedTicket[] {
   try {
@@ -112,14 +100,6 @@ function renameLegacyTickets(tickets: SavedTicket[]): SavedTicket[] {
   });
 }
 
-function clearLocalTickets(): void {
-  try {
-    localStorage.removeItem(SAVED_STORAGE_KEY);
-  } catch {
-    // Storage unavailable; nothing to clear.
-  }
-}
-
 function isAccaStrategy(value: unknown): value is AccaStrategy {
   return (
     value === 'balanced' ||
@@ -128,6 +108,48 @@ function isAccaStrategy(value: unknown): value is AccaStrategy {
     value === 'high-yield' ||
     value === 'probability'
   );
+}
+
+const SLATE_CONTROLS_STORAGE_KEY = 'matchslip_slate_controls_v1';
+
+interface SlateControls {
+  strategy: AccaStrategy;
+  minOdds: number;
+  maxLegs: number;
+}
+
+function loadSlateControls(): SlateControls {
+  const defaults: SlateControls = {
+    strategy: 'balanced',
+    minOdds: 2.8,
+    maxLegs: 3,
+  };
+  try {
+    const raw = localStorage.getItem(SLATE_CONTROLS_STORAGE_KEY);
+    if (!raw) return defaults;
+    const saved = JSON.parse(raw) as Record<string, unknown>;
+    return {
+      strategy: isAccaStrategy(saved.strategy) ? saved.strategy : defaults.strategy,
+      minOdds:
+        typeof saved.minOdds === 'number' && Number.isFinite(saved.minOdds)
+          ? saved.minOdds
+          : defaults.minOdds,
+      maxLegs:
+        typeof saved.maxLegs === 'number' && Number.isFinite(saved.maxLegs)
+          ? Math.max(2, Math.min(saved.maxLegs, MAX_RECOMMENDED_LEGS))
+          : defaults.maxLegs,
+    };
+  } catch {
+    return defaults;
+  }
+}
+
+function persistSlateControls(controls: SlateControls): void {
+  try {
+    localStorage.setItem(SLATE_CONTROLS_STORAGE_KEY, JSON.stringify(controls));
+  } catch {
+    // Storage unavailable; controls still work for this session.
+  }
 }
 
 function getClientLocalIsoDate(): string {
@@ -145,20 +167,7 @@ function guardLegs(legs: AccaLeg[]): AccaLeg[] {
 }
 
 export default function App() {
-  const {
-    user,
-    profile,
-    loading: authLoading,
-    notice,
-    noticeTone,
-    openAuth,
-    signOut,
-    dismissNotice,
-    refresh: refreshAuth,
-    resendVerification,
-  } = useAuth();
   const todayDate = getClientLocalIsoDate();
-  const isGuest = !authLoading && !user;
   // Tab, matchday and filter preset are deep-linkable (see utils/urlState.ts).
   const [initialUrl] = useState(() =>
     parseAppUrlState(
@@ -166,6 +175,7 @@ export default function App() {
       todayDate
     )
   );
+  const [initialControls] = useState(loadSlateControls);
   const [selectedDate, setSelectedDate] = useState<string>(
     initialUrl.date ?? todayDate
   );
@@ -178,9 +188,9 @@ export default function App() {
   // Slate section links may point at content that renders after the slate loads.
   const pendingSectionRef = useRef<string | null>(initialUrl.section ?? null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [strategy, setStrategy] = useState<AccaStrategy>('balanced');
-  const [minOdds, setMinOdds] = useState<number>(2.8);
-  const [maxLegs, setMaxLegs] = useState<number>(3);
+  const [strategy, setStrategy] = useState<AccaStrategy>(initialControls.strategy);
+  const [minOdds, setMinOdds] = useState<number>(initialControls.minOdds);
+  const [maxLegs, setMaxLegs] = useState<number>(initialControls.maxLegs);
   const [stake, setStake] = useState<number>(1);
 
   const [slate, setSlate] = useState<DailySlateResponse | null>(null);
@@ -190,12 +200,6 @@ export default function App() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRecapturing, setIsRecapturing] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  // Guests only ever receive the sanitized match list; the full priced slate
-  // is fetched exclusively for signed-in users.
-  const [publicSlate, setPublicSlate] = useState<PublicSlateResponse | null>(null);
-  const [publicLoading, setPublicLoading] = useState<boolean>(true);
-  const [publicError, setPublicError] = useState<string | null>(null);
 
   const [deepAnalyses, setDeepAnalyses] = useState<
     Record<string, DeepAnalysisResponse>
@@ -212,11 +216,6 @@ export default function App() {
   const prefRecomputedSlateRef = useRef('');
 
   const [savedTickets, setSavedTickets] = useState<SavedTicket[]>(loadLocalTickets);
-  const [ticketSource, setTicketSource] = useState<TicketSource>('local');
-  const [importPrompt, setImportPrompt] = useState<SavedTicket[] | null>(null);
-  const [importBusy, setImportBusy] = useState(false);
-  const [verificationBusy, setVerificationBusy] = useState(false);
-  const [verificationError, setVerificationError] = useState<string | null>(null);
   const [filterPreset, setFilterPreset] = useState<SlateFilterPresetSelection>(
     () => initialUrl.preset ?? loadPresetPreference()
   );
@@ -225,11 +224,9 @@ export default function App() {
       ? presetFilters(initialUrl.preset)
       : loadSlateFilterState()
   );
-  const [prefsReady, setPrefsReady] = useState(false);
-  const [adminOpen, setAdminOpen] = useState(false);
 
-  // Slate controls are read at fetch time from a ref so applying saved
-  // preferences does not add them as refetch dependencies.
+  // Slate controls are read at fetch time from a ref so loading a cached slate
+  // does not add them as refetch dependencies.
   const slateControlsRef = useRef({ strategy, minOdds, maxLegs });
   slateControlsRef.current = { strategy, minOdds, maxLegs };
 
@@ -398,146 +395,23 @@ export default function App() {
     persistFixtureSnapshots(fixtureSnapshots, savedTicketDatesRef.current);
   }, [fixtureSnapshots]);
 
-  // Browser storage mirrors guest slips only. Once signed in, the server is
-  // the source of truth and localStorage is left untouched (ready for import).
+  // Local-only persistence: saved slips, filters and slate controls all live
+  // in this browser's localStorage while the app is being tested offline.
   useEffect(() => {
-    if (ticketSource !== 'local') return;
     try {
       localStorage.setItem(SAVED_STORAGE_KEY, JSON.stringify(savedTickets));
     } catch {
-      // Ignore storage quota errors
+      // Ignore storage quota errors.
     }
-  }, [savedTickets, ticketSource]);
+  }, [savedTickets]);
 
-  /**
-   * Loads account-owned tickets and preferences on sign-in, and reverts to
-   * browser-local state on sign-out. Guest browsing stays fully functional.
-   */
   useEffect(() => {
-    if (authLoading) return;
-    let cancelled = false;
+    saveSlateFilterState(filters);
+  }, [filters]);
 
-    // Read the owner from storage, not a ref: a different account can reopen
-    // the app in a fresh page load, and its priced slates must not be reused.
-    const cacheOwner = user?.id ?? 'guest';
-    const previousOwner = getCachedSlateOwner();
-    if (previousOwner !== null && previousOwner !== cacheOwner) {
-      deleteCachedSlate();
-    }
-    setCachedSlateOwner(cacheOwner);
-
-    if (!user) {
-      setTicketSource('local');
-      setSavedTickets(loadLocalTickets());
-      setFilters(loadSlateFilterState());
-      setImportPrompt(null);
-      setAdminOpen(false);
-      // Priced slates are cleared above on the identity change; guests never
-      // receive one from the public endpoint in the first place.
-      setSlate(null);
-      setSelectedLegs([]);
-      setSlipOrigin('slate');
-      setActiveTab('slate');
-      setPrefsReady(true);
-      return;
-    }
-
-    setTicketSource('server');
-    setPrefsReady(false);
-    void (async () => {
-      try {
-        const [ticketsResult, prefsResult] = await Promise.all([
-          apiFetch<{ tickets: SavedTicket[] }>('/api/tickets'),
-          apiFetch<UserPreferences>('/api/preferences'),
-        ]);
-        if (cancelled) return;
-
-        const serverTickets = Array.isArray(ticketsResult.tickets)
-          ? renameLegacyTickets(ticketsResult.tickets)
-          : [];
-        setSavedTickets(serverTickets);
-        if (serverTickets.length > 0) clearLocalTickets();
-        // Persist the one-off rename so the origin prefix survives a reload.
-        if (
-          serverTickets.some((ticket, index) => {
-            const raw = ticketsResult.tickets[index];
-            return raw && ticket.name !== raw.name;
-          })
-        ) {
-          void apiFetch('/api/tickets', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tickets: serverTickets }),
-          }).catch(() => undefined);
-        }
-
-        try {
-          setFilters(
-            prefsResult.filtersJson
-              ? parseSlateFilterState(JSON.parse(prefsResult.filtersJson))
-              : loadSlateFilterState()
-          );
-        } catch {
-          setFilters(loadSlateFilterState());
-        }
-
-        try {
-          if (prefsResult.slateJson) {
-            const saved = JSON.parse(prefsResult.slateJson) as Record<
-              string,
-              unknown
-            >;
-            if (isAccaStrategy(saved.strategy)) setStrategy(saved.strategy);
-            if (typeof saved.minOdds === 'number' && Number.isFinite(saved.minOdds)) {
-              setMinOdds(saved.minOdds);
-            }
-            if (typeof saved.maxLegs === 'number' && Number.isFinite(saved.maxLegs)) {
-              // Older preference payloads can hold 4/6/8; the structural cap
-              // applies on read as well as on write.
-              setMaxLegs(
-                Math.max(2, Math.min(saved.maxLegs, MAX_RECOMMENDED_LEGS))
-              );
-            }
-          }
-        } catch {
-          // Corrupt preference payload: keep the defaults.
-        }
-
-        setPrefsReady(true);
-
-        if (serverTickets.length === 0) {
-          const local = loadLocalTickets();
-          if (local.length > 0) setImportPrompt(local);
-        }
-      } catch {
-        if (!cancelled) {
-          setTicketSource('local');
-          setSavedTickets(loadLocalTickets());
-          setPrefsReady(true);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id, authLoading]);
-
-  // Debounced sync of slate filters and controls to the signed-in account.
   useEffect(() => {
-    if (!user || ticketSource !== 'server' || !prefsReady) return;
-    const timer = window.setTimeout(() => {
-      void apiFetch('/api/preferences', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          filtersJson: JSON.stringify(filters),
-          slateJson: JSON.stringify({ strategy, minOdds, maxLegs }),
-        }),
-      }).catch(() => undefined);
-    }, 600);
-    return () => window.clearTimeout(timer);
-  }, [user?.id, ticketSource, prefsReady, filters, strategy, minOdds, maxLegs]);
+    persistSlateControls({ strategy, minOdds, maxLegs });
+  }, [strategy, minOdds, maxLegs]);
 
   const applySlateResponse = useCallback(
     (
@@ -652,10 +526,9 @@ export default function App() {
 
   useEffect(() => () => slateAbortRef.current?.abort(), []);
 
-  // The priced slate does not depend on preferences, so start it as soon as
-  // auth resolves instead of waiting for /tickets and /preferences to finish.
+  // Controls are restored from localStorage before the first render, so the
+  // initial slate request can start immediately.
   useEffect(() => {
-    if (authLoading || !user) return;
     const controls = slateControlsRef.current;
     fetchSlateForDate(
       todayDate,
@@ -664,13 +537,12 @@ export default function App() {
       controls.maxLegs,
       false
     );
-  }, [fetchSlateForDate, todayDate, authLoading, user?.id]);
+  }, [fetchSlateForDate, todayDate]);
 
-  // Saved controls may land while that request is in flight. Rebuild the legs
-  // from the slate we already have rather than fetching the same date twice.
+  // Rebuild legs from the slate we already have when a cached response lands.
   useEffect(() => {
-    if (!prefsReady || !user || !slate) return;
-    const key = `${user.id}:${slate.cachedAt}`;
+    if (!slate) return;
+    const key = slate.cachedAt;
     if (prefRecomputedSlateRef.current === key) return;
     prefRecomputedSlateRef.current = key;
     setSlipOrigin('slate');
@@ -687,31 +559,7 @@ export default function App() {
         )
       )
     );
-  }, [prefsReady, slate, user, strategy, minOdds, maxLegs]);
-
-  const fetchPublicMatches = useCallback(async () => {
-    setPublicLoading(true);
-    setPublicError(null);
-    try {
-      const data = await apiFetch<PublicSlateResponse>(
-        '/api/fixtures/public/today'
-      );
-      setPublicSlate(data);
-    } catch (err) {
-      setPublicError(
-        err instanceof Error
-          ? err.message
-          : 'Unable to retrieve today’s match schedule.'
-      );
-    } finally {
-      setPublicLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!isGuest) return;
-    void fetchPublicMatches();
-  }, [isGuest, fetchPublicMatches]);
+  }, [slate, strategy, minOdds, maxLegs]);
 
   const handleChangeDate = (nextDate: string) => {
     setSelectedDate(nextDate);
@@ -990,26 +838,6 @@ export default function App() {
       legs: selectedLegs,
     };
 
-    if (user && ticketSource === 'server') {
-      try {
-        await apiFetch('/api/tickets', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tickets: [ticket] }),
-        });
-        setSavedTickets((prev) => [
-          ticket,
-          ...prev.filter((entry) => entry.id !== ticket.id),
-        ]);
-      } catch (err) {
-        setErrorMessage(
-          err instanceof Error ? err.message : 'Could not save your slip.'
-        );
-        return false;
-      }
-      return true;
-    }
-
     setSavedTickets((prev) => [ticket, ...prev]);
     return true;
   };
@@ -1021,55 +849,8 @@ export default function App() {
     navigate('slate');
   };
 
-  const handleDeleteTicket = async (ticketId: string) => {
-    if (user && ticketSource === 'server') {
-      try {
-        await apiFetch(`/api/tickets/${encodeURIComponent(ticketId)}`, {
-          method: 'DELETE',
-        });
-      } catch {
-        // Remove locally regardless; the next reload reconciles with server.
-      }
-    }
+  const handleDeleteTicket = (ticketId: string) => {
     setSavedTickets((prev) => prev.filter((t) => t.id !== ticketId));
-  };
-
-  const handleImportLocal = async () => {
-    if (!importPrompt || importPrompt.length === 0) return;
-    setImportBusy(true);
-    setErrorMessage(null);
-    try {
-      await apiFetch('/api/account/migrate-local', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tickets: importPrompt }),
-      });
-      const data = await apiFetch<{ tickets: SavedTicket[] }>('/api/tickets');
-      setSavedTickets(Array.isArray(data.tickets) ? data.tickets : []);
-      clearLocalTickets();
-      setImportPrompt(null);
-      void refreshAuth();
-    } catch (err) {
-      setErrorMessage(
-        err instanceof Error ? err.message : 'Could not import your saved slips.'
-      );
-    } finally {
-      setImportBusy(false);
-    }
-  };
-
-  const handleResendVerification = async () => {
-    setVerificationBusy(true);
-    setVerificationError(null);
-    try {
-      await resendVerification();
-    } catch (err) {
-      setVerificationError(
-        err instanceof Error ? err.message : 'Could not send the verification email.'
-      );
-    } finally {
-      setVerificationBusy(false);
-    }
   };
 
   /**
@@ -1179,120 +960,10 @@ export default function App() {
   // Curated Acca heading always matches the strategy actually applied to the legs.
   const strategyCopy = describeStrategy(strategy, minOdds);
 
-  // Notifications are prioritised into one region: the most important one is
-  // expanded, the rest sit behind a single disclosure instead of a stack.
-  const authNotice: NoticeItem | null = notice
-    ? {
-        id: 'auth',
-        tone: noticeTone === 'error' ? 'warning' : 'success',
-        title: notice,
-        actions: (
-          <>
-            {noticeTone === 'error' && user && (
-              <button
-                type="button"
-                onClick={() => void refreshAuth()}
-                className="font-semibold underline hover:opacity-75 cursor-pointer"
-              >
-                Retry
-              </button>
-            )}
-            {noticeTone === 'error' && !user && (
-              <button
-                type="button"
-                onClick={openAuth}
-                className="font-semibold underline hover:opacity-75 cursor-pointer"
-              >
-                Sign in
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={dismissNotice}
-              aria-label="Dismiss notification"
-              className="font-semibold hover:opacity-75 cursor-pointer"
-            >
-              Dismiss
-            </button>
-          </>
-        ),
-      }
-    : null;
-
-  const verificationNotice: NoticeItem | null =
-    user && !user.emailVerified
-      ? {
-          id: 'verification',
-          tone: 'warning',
-          title: 'Verify your email address.',
-          body: (
-            <>
-              Check your inbox for the verification link, or send it again.
-              {verificationError && (
-                <span className="mt-1 block font-semibold text-red-700" role="alert">
-                  {verificationError}
-                </span>
-              )}
-            </>
-          ),
-          actions: (
-            <button
-              type="button"
-              onClick={() => void handleResendVerification()}
-              disabled={verificationBusy}
-              className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 font-semibold hover:bg-amber-100 disabled:opacity-60 cursor-pointer"
-            >
-              {verificationBusy ? 'Sending…' : 'Resend verification email'}
-            </button>
-          ),
-        }
-      : null;
-
-  const importNotice: NoticeItem | null = importPrompt
-    ? {
-        id: 'import',
-        tone: 'info',
-        title: `Bring your ${importPrompt.length} saved slip${
-          importPrompt.length === 1 ? '' : 's'
-        } with you?`,
-        body: 'Import them into your account so they sync across devices. Your local copy stays until the import succeeds.',
-        actions: (
-          <>
-            <button
-              type="button"
-              disabled={importBusy}
-              onClick={() => setImportPrompt(null)}
-              className="rounded-lg px-3 py-1.5 font-semibold hover:bg-indigo-100 disabled:opacity-60 cursor-pointer"
-            >
-              Not now
-            </button>
-            <button
-              type="button"
-              disabled={importBusy}
-              onClick={() => void handleImportLocal()}
-              className="rounded-lg bg-indigo-700 px-3 py-1.5 font-semibold text-white hover:bg-indigo-800 disabled:opacity-60 cursor-pointer"
-            >
-              {importBusy ? 'Importing…' : 'Import slips'}
-            </button>
-          </>
-        ),
-      }
-    : null;
-
-  const noticePriority: Record<NoticeItem['tone'], number> = {
-    error: 0,
-    warning: 1,
-    info: 2,
-    success: 3,
-  };
-  const notices = [authNotice, verificationNotice, importNotice]
-    .filter((item): item is NoticeItem => item !== null)
-    .sort((a, b) => noticePriority[a.tone] - noticePriority[b.tone]);
-
   // Outer page gutters are centralized in src/index.css (`--page-gutter*`,
   // `--page-menu-width*` and `--page-menu-gap*`). Tune them there to resize
   // the whole layout.
-  const contentInset = isGuest ? 'page-inset-guest' : 'page-inset-app';
+  const contentInset = 'page-inset-app';
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
@@ -1301,39 +972,21 @@ export default function App() {
         onSelectTab={navigate}
         onRefresh={() => fetchSlateForDate(selectedDate, strategy, minOdds, maxLegs, true)}
         isLoading={isLoading}
-        user={user}
-        profile={profile}
-        onSignIn={openAuth}
-        isGuest={isGuest}
         onToggleMenu={() => setMenuOpen((open) => !open)}
         isMenuOpen={menuOpen}
       />
 
-      {!isGuest && (
-        <SideMenu
-          activeTab={activeTab}
-          onSelectTab={navigate}
-          savedCount={savedTickets.length}
-          user={user}
-          profile={profile}
-          onSignOut={() => void signOut()}
-          onResendVerification={() => void handleResendVerification()}
-          isAdmin={profile?.role === 'admin'}
-          onAdmin={() => setAdminOpen((open) => !open)}
-          open={menuOpen}
-          onClose={() => setMenuOpen(false)}
-        />
-      )}
+      <SideMenu
+        activeTab={activeTab}
+        onSelectTab={navigate}
+        savedCount={savedTickets.length}
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+      />
 
-      <NotificationRegion items={notices} inset={contentInset} />
-
-      {/* Universal Matchday Date Bar across all views (signed-in only) */}
-      <div
-        className={`sticky top-16 z-30 bg-white border-b border-slate-200 ${
-          isGuest ? 'hidden' : 'sm:ml-[var(--page-menu-width)] lg:ml-[var(--page-menu-width-lg)]'
-        }`}
-      >
-        <div className={`${isGuest ? 'page-inset-guest' : 'page-inset-guest'} py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5`}>
+      {/* Universal Matchday Date Bar across all views */}
+      <div className="sticky top-16 z-30 bg-white border-b border-slate-200 sm:ml-[var(--page-menu-width)] lg:ml-[var(--page-menu-width-lg)]">
+        <div className="page-inset-guest py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
             <span className="font-semibold text-slate-900">
               Matchday Schedule
@@ -1358,16 +1011,8 @@ export default function App() {
         </div>
       </div>
 
-      <main
-        className={`flex-1 w-full ${contentInset} ${
-          isGuest ? 'py-8 sm:py-12' : 'py-6 sm:py-8'
-        }`}
-      >
-        {adminOpen && profile?.role === 'admin' && (
-          <AdminPanel onClose={() => setAdminOpen(false)} />
-        )}
-
-        {!isGuest && activeTab === 'analytics' ? (
+      <main className={`flex-1 w-full ${contentInset} py-6 sm:py-8`}>
+        {activeTab === 'analytics' ? (
           <AnalyticsView
             strategy={strategy}
             strategyName={strategyCopy.title}
@@ -1378,7 +1023,7 @@ export default function App() {
             onSectionChange={selectSection}
             onGoToSlate={() => navigate('slate')}
           />
-        ) : !isGuest && activeTab === 'ai' ? (
+        ) : activeTab === 'ai' ? (
           <AiView
             selectedDate={selectedDate}
             displayDate={slate?.displayDate || selectedDate}
@@ -1388,18 +1033,6 @@ export default function App() {
             canApplyTicket={Boolean(slate)}
             onGoToSlate={() => navigate('slate')}
             onApplyTicket={handleApplyAiTicket}
-          />
-        ) : isGuest ? (
-          <LandingPage
-            fixtures={publicSlate?.fixtures ?? []}
-            displayDate={publicSlate?.displayDate ?? todayDate}
-            timezoneLabel={
-              publicSlate?.timezoneLabel ?? 'CAT (GMT+2) Kickoff Times'
-            }
-            loading={publicLoading}
-            error={publicError}
-            onRetry={() => void fetchPublicMatches()}
-            onSignIn={openAuth}
           />
         ) : activeTab === 'positive-reads' || activeTab === 'roi' ? (
           <div className="space-y-10">
@@ -1442,7 +1075,6 @@ export default function App() {
             savedTickets={savedTickets}
             fixtures={slate?.fixtures ?? []}
             fixtureSnapshots={fixtureSnapshots}
-            signedIn={Boolean(user)}
             todayDate={todayDate}
             onGoToSlate={() => navigate('slate')}
           />
@@ -1636,8 +1268,6 @@ export default function App() {
           </span>
         </div>
       </footer>
-
-      <AuthDialog />
     </div>
   );
 }

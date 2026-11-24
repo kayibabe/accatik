@@ -38,7 +38,7 @@ export function eligiblePositiveReadPicks(
 }
 
 /**
- * Positive Reads are research slips: every eligible pick is kept, with one leg
+ * Positive Reads are research slips: every pending pick is kept, with one leg
  * per fixture. A later pick for the same fixture replaces the leg already held.
  *
  * No recommendation cap is applied here. Ticket Review discloses wide slips

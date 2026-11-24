@@ -11,7 +11,13 @@ import type {
 } from '../../src/types/analytics.ts';
 import { FEATURED_SOURCE_LABELS } from '../../src/utils/featuredPickLabels.ts';
 import { combinationRoiMarkets } from '../../src/utils/marketSelection.ts';
+import {
+  POSITIVE_READ_MIN_ROI,
+  positiveReadCaveats,
+} from '../../src/utils/positiveReadCopy.ts';
 import { MIN_SAMPLE, studyPickForFixture } from './combinationRoi.ts';
+
+export { POSITIVE_READ_MIN_ROI };
 
 /**
  * Daily matches behind the positive cells of the section x band x market study.
@@ -30,20 +36,6 @@ const BAND_ORDER: Record<string, number> = {
   Speculative: 3,
   All: 4,
 };
-
-/** Minimum inception-to-date ROI (%) for a study cell to qualify as a positive read. */
-export const POSITIVE_READ_MIN_ROI = 5;
-
-export const POSITIVE_READ_CAVEATS: readonly string[] = [
-  `A qualifying positive read requires inception-to-date ROI of ${POSITIVE_READ_MIN_ROI.toFixed(1)}% or more in the combination study. It is descriptive, not proven edge.`,
-  'Qualified needs the matchday-clustered 95% interval to clear zero, and Confirmed means it also cleared the qualifying ROI threshold in a study that stops before this one’s latest matchday.',
-  'Stable means a qualified cell was also positive on at least half the matchdays it appeared on, with a minimum of two, so one large win cannot carry the read.',
-  'Rows below the study’s minimum sample are still included when they clear the qualifying ROI threshold, and are badged as small samples; they can never be Qualified or Confirmed.',
-  'Archive reviews leave the reviewed matchday out of the study, so the labels are out-of-sample for that day. The study is the fixed 3-section × 5-band × 18-market universe, not a per-market promotion.',
-  'Bands are the engine’s confidence label for the fair probability of the frozen pre-match price, not a guarantee of the outcome.',
-  'Live mode prices a card from the current book, so its band can differ from the archived price that produced the study. A Band drift badge marks a match made by section and market instead of the exact band.',
-  'Adding a pick copies the price shown here into your slip. Archive uses the frozen pre-match price; switch to Live for the current book.',
-];
 
 function compareCombos(a: PositiveReadCombo, b: PositiveReadCombo): number {
   return (
@@ -268,6 +260,6 @@ export function buildPositiveReadMatchesResponse({
     availableDates,
     combos,
     matches,
-    caveats: [...POSITIVE_READ_CAVEATS],
+    caveats: positiveReadCaveats(),
   };
 }

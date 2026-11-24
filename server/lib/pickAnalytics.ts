@@ -23,7 +23,7 @@ import {
   resolveMarketSelection,
 } from '../../src/utils/marketSelection.ts';
 import { marketProbability } from '../../src/utils/probability.ts';
-import { mapWithConcurrency } from './appwriteData.ts';
+import { mapWithConcurrency } from './concurrency.ts';
 import { createTtlCache, registerAnalyticsCache } from './cache.ts';
 import { listArchivedSlateDates, readArchivedSlate } from './slateArchive.ts';
 
