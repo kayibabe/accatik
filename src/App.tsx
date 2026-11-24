@@ -175,8 +175,6 @@ export default function App() {
   const [activeSection, setActiveSection] = useState<string | undefined>(
     initialUrl.section
   );
-  // Deep-linked sections may not exist until async data renders them.
-  const pendingSectionRef = useRef<string | null>(initialUrl.section ?? null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [strategy, setStrategy] = useState<AccaStrategy>('balanced');
   const [minOdds, setMinOdds] = useState<number>(2.8);
@@ -246,13 +244,18 @@ export default function App() {
       scrollPositionsRef.current[activeTab] = window.scrollY;
       writeAppUrl({ tab, date: selectedDate, preset: filterPreset });
       setActiveSection(undefined);
-      pendingSectionRef.current = null;
       setActiveTab(tab);
       const target = scrollPositionsRef.current[tab] ?? 0;
       window.requestAnimationFrame(() => window.scrollTo({ top: target }));
     },
     [activeTab, selectedDate, filterPreset]
   );
+
+  /** Section tabs swap the visible page, so start each one at the top. */
+  const selectSection = useCallback((id: string) => {
+    setActiveSection(id);
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0 }));
+  }, []);
 
   useEffect(() => {
     writeAppUrl(
@@ -271,99 +274,10 @@ export default function App() {
         if (state.preset !== 'custom') setFilters(presetFilters(state.preset));
       }
       setActiveSection(state.section);
-      pendingSectionRef.current = state.section ?? null;
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [todayDate]);
-
-  // A deep-linked section can appear before the async content above it has
-  // finished loading, so a single scroll lands too high. Keep re-asserting the
-  // scroll while the target moves, then stop once the layout has been quiet.
-  useEffect(() => {
-    const id = pendingSectionRef.current;
-    if (!id) return;
-
-    const startedAt = Date.now();
-    const deadlineMs = 8000;
-    const quietMs = 700;
-    let lastMutationAt = startedAt;
-    let lastTop: number | null = null;
-    let lastTopAt = startedAt;
-    let hasScrolled = false;
-
-    const scrollToTarget = () => {
-      const target = document.getElementById(id);
-      if (!target) return;
-      target.scrollIntoView({ behavior: 'instant', block: 'start' });
-      hasScrolled = true;
-    };
-
-    const observer = new MutationObserver(() => {
-      lastMutationAt = Date.now();
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-
-    const interval = window.setInterval(() => {
-      const now = Date.now();
-      if (now - startedAt >= deadlineMs) {
-        scrollToTarget();
-        observer.disconnect();
-        window.clearInterval(interval);
-        pendingSectionRef.current = null;
-        return;
-      }
-      const target = document.getElementById(id);
-      if (!target) return;
-      // Compare absolute document positions so our own scrolling is not
-      // mistaken for the target moving.
-      const top = target.getBoundingClientRect().top + window.scrollY;
-      const moved = lastTop === null || Math.abs(top - lastTop) > 1;
-      if (moved) {
-        lastTop = top;
-        lastTopAt = now;
-        scrollToTarget();
-      } else if (
-        hasScrolled &&
-        now - lastTopAt >= quietMs &&
-        now - lastMutationAt >= quietMs
-      ) {
-        scrollToTarget();
-        observer.disconnect();
-        window.clearInterval(interval);
-        pendingSectionRef.current = null;
-      }
-    }, 100);
-
-    return () => {
-      observer.disconnect();
-      window.clearInterval(interval);
-    };
-  }, [activeTab, activeSection]);
-
-  // Section links are deep-linkable without letting the hash fight the query
-  // state. The shared SectionNav marks its anchors with `data-section-link`.
-  useEffect(() => {
-    const handleSectionClick = (event: MouseEvent) => {
-      const anchor = (event.target as HTMLElement).closest<HTMLAnchorElement>(
-        'a[data-section-link][href^="#"]'
-      );
-      if (!anchor) return;
-      const id = anchor.getAttribute('href')?.slice(1);
-      if (!id) return;
-      event.preventDefault();
-      setActiveSection(id);
-      const target = document.getElementById(id);
-      if (target) {
-        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        pendingSectionRef.current = null;
-      } else {
-        pendingSectionRef.current = id;
-      }
-    };
-    document.addEventListener('click', handleSectionClick);
-    return () => document.removeEventListener('click', handleSectionClick);
-  }, []);
 
   const applyFilterPreset = useCallback((id: SlateFilterPresetSelection) => {
     setFilterPreset(id);
@@ -1371,6 +1285,8 @@ export default function App() {
             minOdds={minOdds}
             maxLegs={maxLegs}
             todayDate={todayDate}
+            activeSection={activeSection}
+            onSectionChange={selectSection}
             onGoToSlate={() => navigate('slate')}
           />
         ) : !isGuest && activeTab === 'ai' ? (
@@ -1412,6 +1328,8 @@ export default function App() {
                 strategy={strategy}
                 selectedDate={selectedDate}
                 displayDate={slate?.displayDate || selectedDate}
+                activeSection={activeSection}
+                onSectionChange={selectSection}
                 onGoToSlate={() => navigate('slate')}
               />
             </div>
@@ -1561,6 +1479,8 @@ export default function App() {
                     onPresetChange={(id) =>
                       applyFilterPreset(id === 'custom' ? 'default' : id)
                     }
+                    activeSection={activeSection}
+                    onSectionChange={selectSection}
                   />
                 </div>
                 <div className="lg:col-span-5 min-w-0">

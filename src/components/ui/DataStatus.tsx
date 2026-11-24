@@ -79,35 +79,3 @@ export function DataStatus({
     </div>
   );
 }
-
-interface SectionNavProps {
-  items: ReadonlyArray<{ id: string; label: string }>;
-  label?: string;
-}
-
-/** Sticky in-page subnav for long scrolling views. */
-export function SectionNav({
-  items,
-  label = 'On this page',
-}: SectionNavProps) {
-  return (
-    <nav
-      aria-label={label}
-      className="sticky top-16 z-20 -mx-1 flex flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-white/95 px-2 py-1.5 shadow-sm backdrop-blur"
-    >
-      <span className="px-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">
-        {label}
-      </span>
-      {items.map((item) => (
-        <a
-          key={item.id}
-          href={`#${item.id}`}
-          data-section-link=""
-          className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
-        >
-          {item.label}
-        </a>
-      ))}
-    </nav>
-  );
-}

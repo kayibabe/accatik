@@ -19,7 +19,8 @@ import type {
   QualifiedPicksResponse,
   RoiAccaResponse,
 } from '../../types/analytics.ts';
-import { DataStatus, SectionNav } from '../ui/DataStatus.tsx';
+import { DataStatus } from '../ui/DataStatus.tsx';
+import { TabNav } from '../ui/TabNav.tsx';
 import { InfoHint, MetricCard, MetricGrid } from '../ui/DataCard.tsx';
 import { PageHeader } from '../ui/PageHeader.tsx';
 import { DataTable, type DataTableColumn } from '../ui/DataTable.tsx';
@@ -51,8 +52,35 @@ export const POSITIVE_ROI_SECTIONS = [
   { id: 'table', label: 'Table' },
 ] as const;
 
-export function PositiveRoiSectionNav() {
-  return <SectionNav items={POSITIVE_ROI_SECTIONS} label="Research sections" />;
+export type PositiveRoiSectionId =
+  (typeof POSITIVE_ROI_SECTIONS)[number]['id'];
+
+/** Unknown or stale deep links land on the overview page. */
+export function resolvePositiveRoiSection(
+  value: string | undefined
+): PositiveRoiSectionId {
+  return POSITIVE_ROI_SECTIONS.some((section) => section.id === value)
+    ? (value as PositiveRoiSectionId)
+    : 'overview';
+}
+
+interface PositiveRoiSectionNavProps {
+  activeId: PositiveRoiSectionId;
+  onSelect: (id: PositiveRoiSectionId) => void;
+}
+
+export function PositiveRoiSectionNav({
+  activeId,
+  onSelect,
+}: PositiveRoiSectionNavProps) {
+  return (
+    <TabNav
+      items={POSITIVE_ROI_SECTIONS}
+      activeId={activeId}
+      onSelect={onSelect}
+      label="Research pages"
+    />
+  );
 }
 
 interface PositiveRoiOverviewProps {

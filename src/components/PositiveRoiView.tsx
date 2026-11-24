@@ -19,6 +19,7 @@ import {
   QualifiedPicksTable,
   ResearchTicketCard,
   SOURCE_LABELS,
+  resolvePositiveRoiSection,
   type PickFilter,
 } from './analytics/PositiveRoiRegions.tsx';
 
@@ -26,6 +27,9 @@ interface PositiveRoiViewProps {
   strategy: AccaStrategy;
   selectedDate: string;
   displayDate: string;
+  /** Deep-linkable page selected in the research tab strip. */
+  activeSection?: string;
+  onSectionChange: (id: string) => void;
   onGoToSlate: () => void;
 }
 
@@ -34,8 +38,11 @@ export function PositiveRoiView({
   strategy,
   selectedDate,
   displayDate,
+  activeSection,
+  onSectionChange,
   onGoToSlate,
 }: PositiveRoiViewProps) {
+  const currentSection = resolvePositiveRoiSection(activeSection);
   const [qualified, setQualified] = useState<QualifiedPicksResponse | null>(null);
   const [registry, setRegistry] = useState<RoiRegistryEntry[]>([]);
   const [ticket, setTicket] = useState<RoiAccaResponse | null>(null);
@@ -142,18 +149,10 @@ export function PositiveRoiView({
 
   return (
     <section aria-label="Positive ROI research" className="space-y-6">
-      <PositiveRoiOverview
-        displayDate={displayDate}
-        qualified={qualified}
-        promotedCount={promoted.length}
-        registrySnapshot={registry[0]?.snapshotDateIso ?? null}
-        loading={loading}
-        building={building}
-        onRefresh={() => void load()}
-        onGenerate={() => void generate()}
-        onGoToSlate={onGoToSlate}
+      <PositiveRoiSectionNav
+        activeId={currentSection}
+        onSelect={onSectionChange}
       />
-      <PositiveRoiSectionNav />
 
       {error && (
         <ErrorState
@@ -172,23 +171,36 @@ export function PositiveRoiView({
 
       {loading && !qualified && error?.scope !== 'load' ? (
         <LoadingState label="Loading ROI research cards…" count={4} />
+      ) : currentSection === 'overview' ? (
+        <PositiveRoiOverview
+          displayDate={displayDate}
+          qualified={qualified}
+          promotedCount={promoted.length}
+          registrySnapshot={registry[0]?.snapshotDateIso ?? null}
+          loading={loading}
+          building={building}
+          onRefresh={() => void load()}
+          onGenerate={() => void generate()}
+          onGoToSlate={onGoToSlate}
+        />
+      ) : currentSection === 'cards' ? (
+        <ResearchTicketCard
+          ticket={ticket}
+          canGenerate={
+            (qualified?.eligibleCount ?? 0) > 0 && !building && !loading
+          }
+          onGenerate={() => void generate()}
+        />
       ) : (
-        <>
-          <ResearchTicketCard
-            ticket={ticket}
-            canGenerate={(qualified?.eligibleCount ?? 0) > 0 && !building && !loading}
-            onGenerate={() => void generate()}
-          />
-          <QualifiedPicksTable
-            rows={rows}
-            pickFilter={pickFilter}
-            onPickFilterChange={setPickFilter}
-            filterCounts={filterCounts}
-            sort={sort}
-            onSort={onSort}
-            loading={loading}
-          />
-        </>
+        <QualifiedPicksTable
+          rows={rows}
+          pickFilter={pickFilter}
+          onPickFilterChange={setPickFilter}
+          filterCounts={filterCounts}
+          sort={sort}
+          onSort={onSort}
+          loading={loading}
+        />
       )}
     </section>
   );

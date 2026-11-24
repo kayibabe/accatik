@@ -16,7 +16,10 @@ import {
 import { TicketReplayPanel } from './TicketReplayPanel.tsx';
 import { CombinationRoiView } from './CombinationRoiView.tsx';
 import { AnalyticsHeader } from './analytics/AnalyticsHeader.tsx';
-import { AnalyticsSectionNav } from './analytics/AnalyticsSectionNav.tsx';
+import {
+  AnalyticsSectionNav,
+  resolveAnalyticsSection,
+} from './analytics/AnalyticsSectionNav.tsx';
 import { AnalyticsSummaryCards } from './analytics/AnalyticsSummaryCards.tsx';
 import { GradeFilterPanel } from './analytics/GradeFilterPanel.tsx';
 import { FeaturedPicksTable } from './analytics/FeaturedPicksTable.tsx';
@@ -45,6 +48,9 @@ interface AnalyticsViewProps {
   maxLegs: number;
   /** Client-local matchday, used by the daily feed's date navigator. */
   todayDate: string;
+  /** Deep-linkable page selected in the analytics tab strip. */
+  activeSection?: string;
+  onSectionChange: (id: string) => void;
   onGoToSlate: () => void;
 }
 
@@ -54,8 +60,11 @@ export function AnalyticsView({
   minOdds,
   maxLegs,
   todayDate,
+  activeSection,
+  onSectionChange,
   onGoToSlate,
 }: AnalyticsViewProps) {
+  const currentSection = resolveAnalyticsSection(activeSection);
   const [data, setData] = useState<PickAnalyticsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -313,7 +322,10 @@ export function AnalyticsView({
         onRefresh={refreshNow}
         onGoToSlate={onGoToSlate}
       />
-      <AnalyticsSectionNav />
+      <AnalyticsSectionNav
+        activeId={currentSection}
+        onSelect={onSectionChange}
+      />
 
       {loading && !data ? (
         <LoadingState label="Loading global analytics archive…" count={6} />
@@ -347,102 +359,110 @@ export function AnalyticsView({
         />
       ) : (
         <>
-          <AnalyticsSummaryCards
-            data={data}
-            featuredSummary={featuredSummary!}
-            marketSummary={marketSummary!}
-          />
-          <CumulativePnlSection days={data.daily} />
+          {currentSection === 'summary' && (
+            <>
+              <AnalyticsSummaryCards
+                data={data}
+                featuredSummary={featuredSummary!}
+                marketSummary={marketSummary!}
+              />
+              <CumulativePnlSection days={data.daily} />
+            </>
+          )}
 
-          <FeaturedPicksTable
-            groups={featuredGroups}
-            summary={featuredSummary!}
-            totalSettled={data.featured.reduce(
-              (sum, row) => sum + row.settled,
-              0
-            )}
-            strategyName={strategyName}
-            sort={featuredSort}
-            onSort={handleFeaturedSort}
-            expandedGroups={expandedFeaturedGroups}
-            onToggleGroup={toggleFeaturedGroup}
-            onToggleAll={() =>
-              setExpandedFeaturedGroups(
-                allFeaturedExpanded
-                  ? {}
-                  : Object.fromEntries(
-                      featuredGroups.map((group) => [group.source, true])
-                    )
-              )
-            }
-            allExpanded={allFeaturedExpanded}
-            showEmpty={showEmptyFeaturedSelections}
-            onShowEmptyChange={setShowEmptyFeaturedSelections}
-          />
-
-          <MarketAnalyticsTable
-            groups={marketGroups}
-            summary={marketSummary!}
-            totalPicks={data.marketPicks}
-            insight={selectionInsight}
-            sort={sort}
-            onSort={handleMarketSort}
-            expandedGroups={expandedMarketGroups}
-            onToggleGroup={toggleMarketGroup}
-            onToggleAll={() =>
-              setExpandedMarketGroups(
-                allMarketsExpanded
-                  ? {}
-                  : Object.fromEntries(
-                      marketGroups.map((group) => [group.typeRow.key, true])
-                    )
-              )
-            }
-            allExpanded={allMarketsExpanded}
-            showEmpty={showEmptySelections}
-            onShowEmptyChange={setShowEmptySelections}
-            minProbability={minProbability}
-            onMinProbabilityChange={setMinProbability}
-            matchingSelectionCount={matchingSelectionCount}
-          />
-
-          <section id="replay" className="scroll-mt-16" aria-label="Ticket replay">
-            <TicketReplayPanel
-              strategy={strategy}
-              minOdds={minOdds}
-              maxLegs={maxLegs}
-              refreshKey={refreshKey}
+          {currentSection === 'featured' && (
+            <FeaturedPicksTable
+              groups={featuredGroups}
+              summary={featuredSummary!}
+              totalSettled={data.featured.reduce(
+                (sum, row) => sum + row.settled,
+                0
+              )}
+              strategyName={strategyName}
+              sort={featuredSort}
+              onSort={handleFeaturedSort}
+              expandedGroups={expandedFeaturedGroups}
+              onToggleGroup={toggleFeaturedGroup}
+              onToggleAll={() =>
+                setExpandedFeaturedGroups(
+                  allFeaturedExpanded
+                    ? {}
+                    : Object.fromEntries(
+                        featuredGroups.map((group) => [group.source, true])
+                      )
+                )
+              }
+              allExpanded={allFeaturedExpanded}
+              showEmpty={showEmptyFeaturedSelections}
+              onShowEmptyChange={setShowEmptyFeaturedSelections}
             />
-          </section>
+          )}
 
-          <section
-            id="grade-filter"
-            className="scroll-mt-16"
-            aria-label="High and Solid grade filter archive"
-          >
-            <GradeFilterPanel strategy={strategy} refreshKey={refreshKey} />
-          </section>
-
-          <section
-            id="positive-reads"
-            className="scroll-mt-16"
-            aria-label="Daily qualifying positive-read matches"
-          >
-            <PositiveReadMatches
-              strategy={strategy}
-              todayDate={todayDate}
-              refreshKey={refreshKey}
+          {currentSection === 'markets' && (
+            <MarketAnalyticsTable
+              groups={marketGroups}
+              summary={marketSummary!}
+              totalPicks={data.marketPicks}
+              insight={selectionInsight}
+              sort={sort}
+              onSort={handleMarketSort}
+              expandedGroups={expandedMarketGroups}
+              onToggleGroup={toggleMarketGroup}
+              onToggleAll={() =>
+                setExpandedMarketGroups(
+                  allMarketsExpanded
+                    ? {}
+                    : Object.fromEntries(
+                        marketGroups.map((group) => [group.typeRow.key, true])
+                      )
+                )
+              }
+              allExpanded={allMarketsExpanded}
+              showEmpty={showEmptySelections}
+              onShowEmptyChange={setShowEmptySelections}
+              minProbability={minProbability}
+              onMinProbabilityChange={setMinProbability}
+              matchingSelectionCount={matchingSelectionCount}
             />
-          </section>
+          )}
 
-          <section id="research" className="scroll-mt-16" aria-label="Combination ROI research">
-            <CombinationRoiView
-              strategy={strategy}
-              refreshKey={refreshKey}
-              force={forceRefresh}
-              onReload={refreshNow}
-            />
-          </section>
+          {currentSection === 'replay' && (
+            <section id="replay" aria-label="Ticket replay">
+              <TicketReplayPanel
+                strategy={strategy}
+                minOdds={minOdds}
+                maxLegs={maxLegs}
+                refreshKey={refreshKey}
+              />
+            </section>
+          )}
+
+          {currentSection === 'grade-filter' && (
+            <section id="grade-filter" aria-label="High and Solid grade filter archive">
+              <GradeFilterPanel strategy={strategy} refreshKey={refreshKey} />
+            </section>
+          )}
+
+          {currentSection === 'positive-reads' && (
+            <section id="positive-reads" aria-label="Daily qualifying positive-read matches">
+              <PositiveReadMatches
+                strategy={strategy}
+                todayDate={todayDate}
+                refreshKey={refreshKey}
+              />
+            </section>
+          )}
+
+          {currentSection === 'research' && (
+            <section id="research" aria-label="Combination ROI research">
+              <CombinationRoiView
+                strategy={strategy}
+                refreshKey={refreshKey}
+                force={forceRefresh}
+                onReload={refreshNow}
+              />
+            </section>
+          )}
         </>
       )}
     </section>
