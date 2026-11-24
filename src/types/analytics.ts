@@ -525,3 +525,93 @@ export interface TicketReplayResponse {
   /** The exact strategy / min odds / max legs held by the slip when loaded. */
   current: TicketReplayRow | null;
 }
+
+/* ------------------------------------------------------------------ */
+/* High + Solid archive filter and accumulator simulation              */
+/* ------------------------------------------------------------------ */
+
+/** The two grades the Pick Guide shortlist allows as real legs. */
+export type GradeFilterGrade = Extract<RoiBand, 'High' | 'Solid'>;
+
+/** One archived Recommended Angle card that cleared the grade filter. */
+export interface GradeFilterMatch {
+  fixtureId: string;
+  dateIso: string;
+  homeTeam: string;
+  awayTeam: string;
+  competition: string;
+  matchDate: string;
+  kickoffTime: string;
+  grade: GradeFilterGrade;
+  marketId: string;
+  marketLabel: string;
+  marketType: MarketType;
+  odds: number;
+  fairProbability: number | null;
+  status: SettlementStatus;
+}
+
+/** A leg inside a simulated accumulator ticket. */
+export interface GradeFilterTicketLeg {
+  fixtureId: string;
+  homeTeam: string;
+  awayTeam: string;
+  marketLabel: string;
+  grade: GradeFilterGrade;
+  odds: number;
+  status: SettlementStatus;
+}
+
+/** One hypothetical accumulator built from filtered cards on a matchday. */
+export interface GradeFilterTicket {
+  id: string;
+  dateIso: string;
+  status: TicketReplayStatus;
+  legs: number;
+  odds: number;
+  pnl: number;
+  picks: GradeFilterTicketLeg[];
+}
+
+export interface GradeFilterPickSummary {
+  matches: number;
+  settled: number;
+  staked: number;
+  wins: number;
+  losses: number;
+  voids: number;
+  hitRate: number | null;
+  avgOdds: number | null;
+  netPnl: number;
+  roi: number | null;
+}
+
+export interface GradeFilterTicketSummary {
+  tickets: number;
+  wins: number;
+  losses: number;
+  voids: number;
+  hitRate: number | null;
+  avgOdds: number | null;
+  netPnl: number;
+  roi: number | null;
+  positiveDays: number;
+}
+
+export interface GradeFilterResponse {
+  strategy: AccaStrategy;
+  generatedAt: string;
+  firstDateIso: string | null;
+  lastDateIso: string | null;
+  matchdays: number;
+  grades: GradeFilterGrade[];
+  priceFilter: 'prematch';
+  stakePerPick: number;
+  stakePerTicket: number;
+  targetLegs: number;
+  matches: GradeFilterMatch[];
+  pickSummary: GradeFilterPickSummary;
+  tickets: GradeFilterTicket[];
+  ticketSummary: GradeFilterTicketSummary;
+  caveats: string[];
+}

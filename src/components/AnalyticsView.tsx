@@ -18,6 +18,7 @@ import { CombinationRoiView } from './CombinationRoiView.tsx';
 import { AnalyticsHeader } from './analytics/AnalyticsHeader.tsx';
 import { AnalyticsSectionNav } from './analytics/AnalyticsSectionNav.tsx';
 import { AnalyticsSummaryCards } from './analytics/AnalyticsSummaryCards.tsx';
+import { GradeFilterPanel } from './analytics/GradeFilterPanel.tsx';
 import { FeaturedPicksTable } from './analytics/FeaturedPicksTable.tsx';
 import { MarketAnalyticsTable } from './analytics/MarketAnalyticsTable.tsx';
 import { CumulativePnlSection } from './analytics/CumulativePnlSection.tsx';
@@ -412,6 +413,14 @@ export function AnalyticsView({
               maxLegs={maxLegs}
               refreshKey={refreshKey}
             />
+          </section>
+
+          <section
+            id="grade-filter"
+            className="scroll-mt-16"
+            aria-label="High and Solid grade filter archive"
+          >
+            <GradeFilterPanel strategy={strategy} refreshKey={refreshKey} />
           </section>
 
           <section

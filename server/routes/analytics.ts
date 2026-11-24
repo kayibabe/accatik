@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import {
   buildRoiAccaTicket,
   getCombinationRoi,
+  getGradeFilter,
   getPickAnalytics,
   getPositiveReadMatches,
   getQualifiedPicks,
@@ -27,6 +28,11 @@ analyticsRouter.post('/tickets', async (req: Request, res: Response) => {
 
 analyticsRouter.post('/combination-roi', async (req: Request, res: Response) => {
   const result = await getCombinationRoi(req.body);
+  res.status(result.status).json(result.body);
+});
+
+analyticsRouter.post('/grade-filter', async (req: Request, res: Response) => {
+  const result = await getGradeFilter(req.body);
   res.status(result.status).json(result.body);
 });
 

@@ -16,6 +16,7 @@ import type {
 import type {
   AnalyticsRefreshResult,
   CombinationRoiResponse,
+  GradeFilterResponse,
   PickAnalyticsResponse,
   TicketReplayResponse,
   PositiveReadMatchesResponse,
@@ -49,6 +50,7 @@ import {
 import { computePickAnalytics } from './lib/pickAnalytics.ts';
 import { computeTicketAnalytics } from './lib/ticketAnalytics.ts';
 import { computeCombinationRoi } from './lib/combinationRoi.ts';
+import { computeGradeFilter } from './lib/gradeFilter.ts';
 import {
   buildPositiveReadMatchesResponse,
   positiveCombosFromStudy,
@@ -1522,6 +1524,26 @@ export async function getCombinationRoi(
   } catch (error) {
     console.error('Error computing combination ROI:', error);
     return fail(500, errorMessage(error, 'Failed to build the combination ROI study.'));
+  }
+}
+
+/**
+ * Archived High + Solid Recommended Angle cards with their settlement result,
+ * plus one hypothetical accumulator replay per matchday built from that pool.
+ * Prematch prices only; the filter is a risk screen, not an edge signal.
+ */
+export async function getGradeFilter(
+  body: unknown
+): Promise<ApiResult<GradeFilterResponse | ErrorBody>> {
+  const source = asRecord(body);
+  const strategy = isAccaStrategy(source.strategy) ? source.strategy : 'balanced';
+  const legs = typeof source.legs === 'number' ? source.legs : 2;
+  const force = source.force === true;
+  try {
+    return ok(await computeGradeFilter(strategy, legs, force));
+  } catch (error) {
+    console.error('Error computing grade filter:', error);
+    return fail(500, errorMessage(error, 'Failed to build the grade filter.'));
   }
 }
 
