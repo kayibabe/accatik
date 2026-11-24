@@ -6,6 +6,7 @@
  * Keeping the definition, threshold and caveats here stops the two screens
  * drifting into different vocabularies.
  */
+import { researchCopy } from './researchCopy.ts';
 
 /** Minimum inception-to-date ROI (%) for a study cell to be a qualifying read. */
 export const POSITIVE_READ_MIN_ROI = 5;
@@ -60,8 +61,7 @@ export function positiveReadModeNote(mode: 'analytics' | 'build'): string {
       'Add a labelled card, or use Add all pending picks. Adding a pick copies ' +
       'the displayed price into your slip: Archive uses the frozen pre-match ' +
       'price, Live uses the current book and may drift a band (Band drift). Every ' +
-      'pending pick is kept, one per fixture. Wide slips are research only, not ' +
-      'recommendations.'
+      'pending pick is kept, one per fixture. ' + researchCopy.wideSlip
     );
   }
   return (

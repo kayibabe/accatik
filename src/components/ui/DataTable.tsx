@@ -95,7 +95,7 @@ export function DataTable<T,>({
           ))}
         </div>
       )}
-      <div className={`overflow-x-auto rounded-xl border border-slate-200 bg-white ${renderCard ? 'hidden sm:block' : ''}`}>
+      <div className={`relative overflow-x-auto rounded-xl border border-slate-200 bg-white ${renderCard ? 'hidden sm:block' : ''}`}>
         <table className={`w-full ${minWidth} border-collapse text-left text-xs`}>
           <caption className="sr-only">{caption}</caption>
           <thead className="border-b border-slate-200 bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">

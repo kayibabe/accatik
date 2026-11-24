@@ -3,7 +3,6 @@ import {
   Bot,
   Check,
   Clipboard,
-  Cpu,
   Filter,
   Info,
   Layers3,
@@ -27,6 +26,8 @@ import { DataCard, InfoHint, MetricCard, MetricGrid } from './ui/DataCard.tsx';
 import { PageHeader } from './ui/PageHeader.tsx';
 import { EmptyState, ErrorState, InlineLoading, LoadingState } from './ui/States.tsx';
 import { frameworkTone, pnlTone } from '../utils/uiTone.ts';
+import { aiPicksSummary } from '../utils/aiPicksSummary.ts';
+import { researchCopy } from '../utils/researchCopy.ts';
 
 interface AiViewProps {
   selectedDate: string;
@@ -302,6 +303,11 @@ export function AiView({
     };
   }, [picks]);
 
+  const picksSummary = useMemo(
+    () => aiPicksSummary(picks, displayDate, minScore),
+    [picks, displayDate, minScore]
+  );
+
   const copyTicket = async () => {
     if (!visibleTicket) return;
     const lines = [
@@ -312,7 +318,7 @@ export function AiView({
         (leg, index) =>
           `${index + 1}. ${leg.homeTeam} v ${leg.awayTeam} — ${leg.label} @ ${leg.odds.toFixed(2)}`
       ),
-      'Research/shadow ticket. Verify prices with your bookmaker.',
+      `${researchCopy.notRecommendation} ${researchCopy.verifyPrices}`,
     ];
     try {
       await navigator.clipboard.writeText(lines.join('\n'));
@@ -356,9 +362,9 @@ export function AiView({
       <div className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-relaxed text-amber-900">
         <ShieldAlert className="h-5 w-5 shrink-0 text-amber-600" aria-hidden="true" />
         <p>
-          <strong>Estimates, not certainty.</strong> No model can know a result. Each pick carries
-          uncertainty, and the accumulator assumes independent outcomes, which is optimistic.
-          Wide slips stay labelled research rather than recommended.
+          <strong>Estimates, not certainty.</strong> No model can know a result; the accumulator
+          assumes independent outcomes, so its combined hit chance is optimistic.{' '}
+          {researchCopy.wideSlip}
         </p>
       </div>
 
@@ -504,7 +510,7 @@ export function AiView({
             <div className="lg:col-span-7 min-w-0 space-y-3">
               <DataCard
                 title={`Ranked picks · ${marketFilter === 'all' ? 'all markets' : marketFilter}`}
-                subtitle={briefing.summary}
+                subtitle={picksSummary}
                 actions={
                   picks.length > 0 ? (
                     <button
@@ -760,14 +766,8 @@ export function AiView({
                 )}
               </DataCard>
 
-              <DataCard title="How the free models work" subtitle="No paid AI subscription required">
+              <DataCard title="How the free models work" subtitle="Why picks rank the way they do">
                 <div className="space-y-2 text-[11px] leading-relaxed text-slate-600">
-                  <p className="flex gap-2">
-                    <Cpu className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
-                    Five signals are blended: the framework scoreline model, an independent Poisson
-                    matrix, the provider&apos;s 1X2 model, the de-vigged book, and a heavily shrunken
-                    historical-ROI prior from the Analytics page.
-                  </p>
                   <p className="flex gap-2">
                     <Filter className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
                     When signals disagree, the estimate is pulled toward the market and the confidence
@@ -778,8 +778,7 @@ export function AiView({
                     <Layers3 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
                     The generated accumulator is capped at five legs from separate matches, penalises
                     shared competitions, and sizes stakes with quarter-Kelly capped at 2% per pick and
-                    1% per ticket. Selections added from this desk become a wide research slip, shown
-                    in full in Ticket Review and never marked as recommended.
+                    1% per ticket.
                   </p>
                   <p className="flex gap-2">
                     <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />

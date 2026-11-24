@@ -21,6 +21,7 @@ import { isPreMatchFixture } from '../utils/priceQuality.ts';
 import { MAX_RECOMMENDED_LEGS, guardTicket } from '../utils/ticketGuard.ts';
 import type { SortDirection, SortState } from '../utils/tableSort.ts';
 import { SORT_ASC, toggleSort } from '../utils/tableSort.ts';
+import { researchCopy } from '../utils/researchCopy.ts';
 import { SettlementLabel } from './SettlementLabel.tsx';
 import { RationalePanel } from './tickets/RationalePanel.tsx';
 import { TicketHistoryPanel } from './tickets/TicketHistoryPanel.tsx';
@@ -182,12 +183,9 @@ export function CuratedAccaView({
           role="status"
           className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs leading-relaxed text-emerald-900"
         >
-          <span className="font-semibold">
-            Wide research slip — shown in full.
-          </span>{' '}
-          All {fmtCount(legs.length)} research picks were kept. Positive Reads and
-          AI Desk additions are shown for research, not as a recommended
-          accumulator; bookmaker margin compounds with each added leg.
+          <span className="font-semibold">{researchCopy.wideSlip}</span>{' '}
+          All {fmtCount(legs.length)} picks were kept. Bookmaker margin compounds
+          with each added leg.
         </div>
       )}
 

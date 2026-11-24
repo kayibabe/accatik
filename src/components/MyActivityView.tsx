@@ -3,6 +3,7 @@ import { Info } from 'lucide-react';
 import type { Fixture, SavedTicket } from '../types/fixtures.ts';
 import type { FixtureSnapshots } from '../utils/fixtureSnapshots.ts';
 import { buildSlipActivityData } from '../utils/slipActivity.ts';
+import { researchCopy } from '../utils/researchCopy.ts';
 import { SlipPerformancePanel } from './SlipPerformancePanel.tsx';
 import { RecentActivityList } from './tickets/RecentActivityList.tsx';
 import { PageHeader } from './ui/PageHeader.tsx';
@@ -57,7 +58,7 @@ export function MyActivityView({
       <PageHeader
         eyebrow="This Browser’s Record"
         title="My Activity"
-        description="Your saved slips, settlements and full performance breakdown. The engine’s global Shadow Ticket Ledger is a separate, append-only record."
+        description={`Your saved slips, settlements and full performance breakdown. ${researchCopy.ledgerBoundary}`}
         scope="personal"
         onBack={onGoToSlate}
       />

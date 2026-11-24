@@ -1,6 +1,7 @@
 import { Info } from 'lucide-react';
 import { fmtCount, fmtPercent, fmtSignedPercent, fmtUnits } from '../../utils/format.ts';
 import { pnlTone } from '../../utils/uiTone.ts';
+import { researchCopy } from '../../utils/researchCopy.ts';
 import type { PickAnalyticsResponse } from '../../types/analytics.ts';
 import { InfoHint, MetricCard, MetricGrid } from '../ui/DataCard.tsx';
 import type { Summary } from './analyticsModel.ts';
@@ -78,10 +79,9 @@ export function AnalyticsSummaryCards({
         />
       </MetricGrid>
       <p className="flex items-center gap-1 text-[11px] text-slate-400">
-        Figures are a flat-stake research record, not real money. Closing line
-        value is tracked in the shadow ledger, not in this archive.
-        <InfoHint infoKey="clv" />
-        Verify prices and results with your sportsbook before placing a bet.
+        Flat-stake research record, not real money. Closing line value is
+        tracked in the shadow ledger, not in this archive.
+        <InfoHint infoKey="clv" /> {researchCopy.verifyPrices}
       </p>
     </section>
   );

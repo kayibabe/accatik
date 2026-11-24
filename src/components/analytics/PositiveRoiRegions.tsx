@@ -8,6 +8,7 @@ import {
   fmtSignedPercent,
 } from '../../utils/format.ts';
 import { frameworkStatusLabel } from '../../utils/frameworkCopy.ts';
+import { researchCopy, shadowLedgerNote } from '../../utils/researchCopy.ts';
 import { frameworkTone } from '../../utils/uiTone.ts';
 import {
   SORT_ASC,
@@ -126,9 +127,7 @@ export function PositiveRoiOverview({
           <>
             Only selections whose strategy/source/key is promoted after a
             clustered ROI check are admitted. Every other card stays in the
-            table with the reason it was withheld. This is a read-only study —
-            nothing here is a live betting recommendation and no ticket is ever
-            staked with a bookmaker.
+            table with the reason it was withheld. This is a read-only study.
           </>
         }
         actions={
@@ -167,15 +166,14 @@ export function PositiveRoiOverview({
       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900 flex gap-2.5">
         <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
         <p>
-          <span className="font-semibold">Research, not a recommendation.</span>{' '}
+          <span className="font-semibold">{researchCopy.notRecommendation}</span>{' '}
           Promoted selections must also clear every framework gate, and the
           accumulator is capped at five legs. A 5.00 target may therefore be
           left short rather than padded. Bookmaker margins compound with every
-          leg; no ticket here is presented as positive-EV or recommended. Flat
-          staking and exposure caps still apply. Closing line value is tracked
-          in the shadow ledger, not on this screen.
-          <InfoHint infoKey="clv" />
-          These tickets are never live-staked.
+          leg, so no ticket here is presented as positive-EV or recommended.
+          Flat staking and exposure caps still apply. Closing line value is
+          tracked in the shadow ledger, not on this screen.
+          <InfoHint infoKey="clv" /> {shadowLedgerNote()}
         </p>
       </div>
 
@@ -324,9 +322,7 @@ export function ResearchTicketCard({
           )}
         />
         <p className="px-4 py-3 text-[11px] leading-relaxed text-amber-900 bg-amber-50 border-t border-amber-200">
-          {ticket.riskWarning} This ticket is recorded in the shadow ledger at
-          a flat one-unit stake ({ticket.stake}) and is never placed with a
-          bookmaker.
+          {ticket.riskWarning} {shadowLedgerNote(ticket.stake)}
         </p>
       </div>
     </section>

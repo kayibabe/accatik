@@ -516,7 +516,7 @@ export function PositiveReadMatches({
         >
           {fmtCount(lastAdded)} {lastAdded === 1 ? 'pick' : 'picks'} sent to your slip. Open the
           ticket to check the final shape — qualifying reads keep every pending pick, one per
-          fixture. Wide slips are research only and are not marked as recommended.
+          fixture.
         </p>
       )}
 

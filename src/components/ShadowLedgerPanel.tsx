@@ -16,6 +16,7 @@ import {
   type SortState,
 } from '../utils/tableSort.ts';
 import { pnlTone } from '../utils/uiTone.ts';
+import { shadowLedgerNote } from '../utils/researchCopy.ts';
 import {
   selectShadowRoiShortlist,
   SHADOW_ROI_SHORTLIST,
@@ -272,10 +273,9 @@ export function ShadowLedgerPanel() {
             Shadow Ticket Ledger
           </h2>
           <p className="mt-0.5 max-w-2xl text-xs text-slate-500">
-            Every ticket the engine would have built, at flat one-unit stakes
-            and never placed with a bookmaker, using only prices captured before
-            kickoff. Tickets the EV gate would not recommend stay in the ledger
-            so the gate itself can be graded.
+            Every ticket the engine would have built. {shadowLedgerNote()} Only
+            prices captured before kickoff are used; tickets the EV gate would
+            not recommend stay in the ledger so the gate itself can be graded.
           </p>
         </div>
         <button
