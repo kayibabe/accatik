@@ -1,11 +1,13 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { AlertTriangle, ArrowRight, Check, X } from 'lucide-react';
 import type {
   AccaLeg,
   AccaStrategy,
   Fixture,
+  SettlementStatus,
   TicketGuardSummary,
 } from '../types/fixtures.ts';
+import { evaluateMarketSettlement } from '../utils/accaMath.ts';
 import {
   buildPickSelection,
   GRADE_PLAN,
@@ -13,7 +15,17 @@ import {
   type PickCandidate,
 } from '../utils/pickSelection.ts';
 import { fmtFixed, fmtOdds, fmtPercent, fmtSignedPercent } from '../utils/format.ts';
+import {
+  makeSortHandler,
+  sortRows,
+  SORT_ASC,
+  SORT_DESC,
+  type SortAccessors,
+  type SortState,
+} from '../utils/tableSort.ts';
 import { angleTone, frameworkTone } from '../utils/uiTone.ts';
+import { SettlementLabel } from './SettlementLabel.tsx';
+import { SortableTh } from './SortableTh.tsx';
 import { DataCard, InfoHint } from './ui/DataCard.tsx';
 import { DataTable, type DataTableColumn } from './ui/DataTable.tsx';
 import { PageHeader } from './ui/PageHeader.tsx';
@@ -35,6 +47,64 @@ function FilterMark({ passed }: { passed: boolean }) {
   ) : (
     <X className="h-3.5 w-3.5 text-red-600" aria-label="Failed" />
   );
+}
+
+const GRADE_SORT_RANK: Record<PickCandidate['grade'], number> = {
+  High: 4,
+  Solid: 3,
+  Moderate: 2,
+  Speculative: 1,
+};
+
+const FRAMEWORK_SORT_RANK: Record<string, number> = {
+  QUALIFIED: 6,
+  CONDITIONAL_REVIEW: 5,
+  SCREEN_ONLY: 4,
+  INSUFFICIENT_DATA: 3,
+  REJECTED: 2,
+  NO_DECISION: 1,
+};
+
+const SETTLEMENT_SORT_RANK: Record<SettlementStatus, number> = {
+  Win: 5,
+  Live: 4,
+  Pending: 3,
+  Void: 2,
+  Lost: 1,
+};
+
+type DecisionKind = 'use' | 'hold' | 'idle' | 'reject';
+
+const DECISION_CLASS: Record<DecisionKind, string> = {
+  use: 'font-semibold text-emerald-800',
+  hold: 'text-amber-800',
+  idle: 'text-slate-600',
+  reject: 'text-red-700',
+};
+
+function decisionFor(
+  candidate: PickCandidate,
+  selectedIds: Set<string>,
+  heldReason: Map<string, string>
+): { kind: DecisionKind; rank: number; label: string; detail?: string } {
+  if (selectedIds.has(candidate.fixtureId)) {
+    return {
+      kind: 'use',
+      rank: 4,
+      label: `Use · leg ${candidate.selectedSlot ?? ''} (${candidate.role.toLowerCase()})`,
+    };
+  }
+  const held = heldReason.get(candidate.fixtureId);
+  if (held) return { kind: 'hold', rank: 3, label: `Hold · ${held}` };
+  if (!candidate.eligible) {
+    return {
+      kind: 'reject',
+      rank: 1,
+      label: `Reject · ${candidate.rejectionReasons[0]}`,
+      detail: candidate.rejectionReasons.join('; '),
+    };
+  }
+  return { kind: 'idle', rank: 2, label: 'Not in this shape' };
 }
 
 function EconomicsPanel({
@@ -106,20 +176,70 @@ function EconomicsPanel({
 
 function CandidateTable({
   candidates,
+  fixtures,
   shortlist,
   held,
 }: {
   candidates: PickCandidate[];
+  fixtures: Fixture[];
   shortlist: PickCandidate[];
   held: ReturnType<typeof buildPickSelection>['held'];
 }) {
-  const selectedIds = new Set(shortlist.map((candidate) => candidate.fixtureId));
-  const heldReason = new Map(held.map((entry) => [entry.fixtureId, entry.reason]));
+  const selectedIds = useMemo(
+    () => new Set(shortlist.map((candidate) => candidate.fixtureId)),
+    [shortlist]
+  );
+  const heldReason = useMemo(
+    () => new Map(held.map((entry) => [entry.fixtureId, entry.reason])),
+    [held]
+  );
+  const fixtureById = useMemo(
+    () => new Map(fixtures.map((fixture) => [fixture.id, fixture])),
+    [fixtures]
+  );
+  const statusFor = useCallback(
+    (candidate: PickCandidate): SettlementStatus => {
+      const fixture = fixtureById.get(candidate.fixtureId);
+      return fixture ? evaluateMarketSettlement(fixture, candidate.market) : 'Pending';
+    },
+    [fixtureById]
+  );
+  const [sort, setSort] = useState<SortState>({ key: null, direction: SORT_ASC });
+  const onSort = makeSortHandler(setSort);
+  const accessors = useMemo<SortAccessors<PickCandidate>>(
+    () => ({
+      fixture: (candidate) => `${candidate.homeTeam} vs ${candidate.awayTeam}`,
+      angle: (candidate) => candidate.market.label,
+      grade: (candidate) => GRADE_SORT_RANK[candidate.grade],
+      framework: (candidate) =>
+        FRAMEWORK_SORT_RANK[candidate.frameworkStatus ?? 'NO_DECISION'],
+      status: (candidate) => SETTLEMENT_SORT_RANK[statusFor(candidate)],
+      value: (candidate) => candidate.edgePts,
+      decision: (candidate) => decisionFor(candidate, selectedIds, heldReason).rank,
+    }),
+    [selectedIds, heldReason, statusFor]
+  );
+  const rows = useMemo(
+    () => sortRows(candidates, sort, accessors),
+    [candidates, sort, accessors]
+  );
+
+  const sortHeader = (label: string, columnKey: string, defaultDirection = SORT_ASC) => (
+    <SortableTh
+      bare
+      label={label}
+      columnKey={columnKey}
+      sort={sort}
+      onSort={onSort}
+      defaultDirection={defaultDirection}
+      className="font-semibold"
+    />
+  );
 
   const columns: ReadonlyArray<DataTableColumn<PickCandidate>> = [
     {
-      key: 'match',
-      header: 'Fixture',
+      key: 'fixture',
+      header: sortHeader('Fixture', 'fixture'),
       cell: (candidate) => (
         <div className="min-w-0">
           <p className="font-semibold text-slate-900">
@@ -135,7 +255,7 @@ function CandidateTable({
     },
     {
       key: 'angle',
-      header: 'Recommended angle',
+      header: sortHeader('Recommended angle', 'angle'),
       cell: (candidate) => (
         <div>
           <p className="font-medium text-slate-900">{candidate.market.label}</p>
@@ -149,7 +269,7 @@ function CandidateTable({
     },
     {
       key: 'grade',
-      header: 'Grade',
+      header: sortHeader('Grade', 'grade', SORT_DESC),
       cell: (candidate) => (
         <span
           className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold ${angleTone(
@@ -162,8 +282,8 @@ function CandidateTable({
       priority: 'secondary',
     },
     {
-      key: 'status',
-      header: 'Framework',
+      key: 'framework',
+      header: sortHeader('Framework', 'framework', SORT_DESC),
       cell: (candidate) => (
         <span
           className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold ${frameworkTone(
@@ -176,8 +296,14 @@ function CandidateTable({
       priority: 'secondary',
     },
     {
+      key: 'status',
+      header: sortHeader('Match status', 'status', SORT_DESC),
+      cell: (candidate) => <SettlementLabel status={statusFor(candidate)} />,
+      priority: 'primary',
+    },
+    {
       key: 'value',
-      header: 'Edge / EV / stress',
+      header: sortHeader('Edge / EV / stress', 'value', SORT_DESC),
       cell: (candidate) => (
         <span className="font-mono tabular-nums text-slate-700">
           {fmtFixed(candidate.edgePts, 1, { sign: true })}pp /{' '}
@@ -192,31 +318,14 @@ function CandidateTable({
     },
     {
       key: 'decision',
-      header: 'Decision',
+      header: sortHeader('Decision', 'decision', SORT_DESC),
       cell: (candidate) => {
-        if (selectedIds.has(candidate.fixtureId)) {
-          const slot = candidate.selectedSlot ?? '';
-          return (
-            <span className="font-semibold text-emerald-800">
-              Use · leg {slot} ({candidate.role.toLowerCase()})
-            </span>
-          );
-        }
-        if (heldReason.has(candidate.fixtureId)) {
-          return (
-            <span className="text-amber-800">
-              Hold · {heldReason.get(candidate.fixtureId)}
-            </span>
-          );
-        }
-        if (!candidate.eligible) {
-          return (
-            <span className="text-red-700" title={candidate.rejectionReasons.join('; ')}>
-              Reject · {candidate.rejectionReasons[0]}
-            </span>
-          );
-        }
-        return <span className="text-slate-600">Not in this shape</span>;
+        const decision = decisionFor(candidate, selectedIds, heldReason);
+        return (
+          <span className={DECISION_CLASS[decision.kind]} title={decision.detail}>
+            {decision.label}
+          </span>
+        );
       },
       priority: 'primary',
     },
@@ -225,10 +334,10 @@ function CandidateTable({
   return (
     <DataTable
       columns={columns}
-      rows={candidates}
+      rows={rows}
       rowKey={(candidate) => candidate.fixtureId}
       caption="Recommended Angle cards graded against the pick-selection filters"
-      minWidth="min-w-[820px]"
+      minWidth="min-w-[940px]"
       details={(candidate) => (
         <div className="space-y-2">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
@@ -434,6 +543,7 @@ export function PickGuideView({
         ) : (
           <CandidateTable
             candidates={selection.candidates}
+            fixtures={fixtures}
             shortlist={selection.shortlist}
             held={selection.held}
           />
