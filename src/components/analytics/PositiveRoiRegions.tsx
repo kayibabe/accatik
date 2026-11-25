@@ -60,6 +60,7 @@ export const POSITIVE_ROI_SECTIONS = [
   { id: 'overview', label: 'Overview' },
   { id: 'cards', label: 'Cards' },
   { id: 'table', label: 'Table' },
+  { id: 'combination-roi', label: 'Combination ROI' },
 ] as const;
 
 export type PositiveRoiSectionId =
@@ -136,7 +137,7 @@ export function PositiveRoiOverview({
               type="button"
               onClick={onRefresh}
               disabled={loading || building}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-slate-800 bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-50 rounded-lg transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-slate-800 bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-50 rounded-lg transition-colors cursor-pointer"
             >
               <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
               Refresh
@@ -146,7 +147,7 @@ export function PositiveRoiOverview({
               onClick={onGenerate}
               disabled={building || loading || (qualified?.eligibleCount ?? 0) === 0}
               title="Build a 5.00+ odds research accumulator from framework-qualified promoted markets only"
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 rounded-lg transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 rounded-lg transition-colors cursor-pointer"
             >
               <Wand2 className="w-3.5 h-3.5" aria-hidden="true" />
               {building ? 'Building…' : 'Generate 5.00+ ROI Acca'}
@@ -154,7 +155,7 @@ export function PositiveRoiOverview({
             <button
               type="button"
               onClick={onGoToSlate}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-slate-700 hover:text-slate-900 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900 transition-colors cursor-pointer"
             >
               Edit on Fixture Board
               <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
@@ -163,7 +164,7 @@ export function PositiveRoiOverview({
         }
       />
 
-      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900 flex gap-2.5">
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-900 flex gap-2.5">
         <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
         <p>
           <span className="font-semibold">{researchCopy.notRecommendation}</span>{' '}
@@ -228,7 +229,7 @@ export function ResearchTicketCard({
               type="button"
               onClick={onGenerate}
               disabled={!canGenerate}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-50 cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50 cursor-pointer"
             >
               <Wand2 className="h-3.5 w-3.5" aria-hidden="true" />
               Generate 5.00+ ROI Acca
@@ -285,7 +286,7 @@ export function ResearchTicketCard({
               Research accumulator · {ticket.legs.length} legs ·{' '}
               <span className="font-mono">{fmtOdds(ticket.totalOdds)}</span> odds
             </p>
-            <p className="text-[11px] text-slate-500">
+            <p className="text-xs text-slate-500">
               {ticket.targetReached
                 ? '5.00 target reached using promoted markets only.'
                 : `Target not reached with ${ticket.maxLegs} promoted legs; left short rather than padding.`}{' '}
@@ -294,7 +295,7 @@ export function ResearchTicketCard({
               {fmtSignedPercent(ticket.economics.expectedRoi)}.
             </p>
           </div>
-          <span className="px-2 py-1 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded">
+          <span className="px-2 py-1 text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded">
             SHADOW ONLY · NOT RECOMMENDED
           </span>
         </div>
@@ -311,7 +312,7 @@ export function ResearchTicketCard({
                 <p className="text-sm font-semibold text-slate-900">
                   {leg.homeTeam} vs {leg.awayTeam}
                 </p>
-                <p className="text-xs font-semibold text-emerald-800">
+                <p className="text-sm font-semibold text-emerald-800">
                   {leg.marketLabel}
                 </p>
               </div>
@@ -321,7 +322,7 @@ export function ResearchTicketCard({
             </div>
           )}
         />
-        <p className="px-4 py-3 text-[11px] leading-relaxed text-amber-900 bg-amber-50 border-t border-amber-200">
+        <p className="px-4 py-3 text-xs leading-relaxed text-amber-900 bg-amber-50 border-t border-amber-200">
           {ticket.riskWarning} {shadowLedgerNote(ticket.stake)}
         </p>
       </div>
@@ -376,7 +377,7 @@ export function QualifiedPicksTable({
           <p className="font-semibold text-slate-900">
             {row.homeTeam} vs {row.awayTeam}
           </p>
-          <p className="text-[11px] text-slate-500">{row.competition}</p>
+          <p className="text-xs text-slate-500">{row.competition}</p>
         </div>
       ),
       priority: 'primary',
@@ -385,7 +386,7 @@ export function QualifiedPicksTable({
       key: 'kickoff',
       header: sortHeader('Kickoff', 'kickoff'),
       cell: (row) => (
-        <span className="font-mono text-[11px] text-slate-600 whitespace-nowrap">
+        <span className="font-mono text-xs text-slate-600 whitespace-nowrap">
           {row.kickoffCat}
         </span>
       ),
@@ -395,7 +396,7 @@ export function QualifiedPicksTable({
       key: 'source',
       header: sortHeader('Card', 'source'),
       cell: (row) => (
-        <span className="text-xs text-slate-700">
+        <span className="text-sm text-slate-700">
           {SOURCE_LABELS[row.source] ?? row.source}
         </span>
       ),
@@ -422,9 +423,9 @@ export function QualifiedPicksTable({
       key: 'ci',
       header: sortHeader('ROI / CI', 'ci', 'right', SORT_DESC),
       cell: (row) => (
-        <span className="font-mono text-[11px] tabular-nums text-slate-700">
+        <span className="font-mono text-xs tabular-nums text-slate-700">
           {fmtSignedPercent(row.roi)}
-          <span className="block text-slate-400">
+          <span className="block text-slate-600">
             {row.roiCiLow === null || row.roiCiHigh === null
               ? '—'
               : `${fmtPercent(row.roiCiLow)}..${fmtPercent(row.roiCiHigh)}`}
@@ -452,7 +453,7 @@ export function QualifiedPicksTable({
       header: sortHeader('Status', 'status', 'left', SORT_DESC),
       cell: (row) => (
         <span
-          className={`px-2 py-0.5 text-[11px] font-semibold rounded ${
+          className={`px-2 py-0.5 text-xs font-semibold rounded ${
             row.status === 'promoted'
               ? 'bg-emerald-100 text-emerald-800'
               : 'bg-slate-100 text-slate-600'
@@ -473,7 +474,7 @@ export function QualifiedPicksTable({
       key: 'reason',
       header: sortHeader('Reason', 'reason'),
       cell: (row) => (
-        <span className="text-[11px] text-slate-600 max-w-xs block">
+        <span className="text-xs text-slate-600 max-w-xs block">
           {row.reason}
         </span>
       ),
@@ -525,7 +526,7 @@ export function QualifiedPicksTable({
                 <button
                   type="button"
                   onClick={() => onPickFilterChange('all')}
-                  className="text-xs font-semibold text-emerald-700 underline cursor-pointer"
+                  className="text-sm font-semibold text-emerald-700 underline cursor-pointer"
                 >
                   Show all cards
                 </button>
@@ -540,7 +541,7 @@ export function QualifiedPicksTable({
                 <p className="text-sm font-semibold text-slate-900">
                   {row.homeTeam} vs {row.awayTeam}
                 </p>
-                <p className="text-[11px] text-slate-500">
+                <p className="text-xs text-slate-500">
                   {SOURCE_LABELS[row.source] ?? row.source} · {row.kickoffCat}
                 </p>
               </div>
@@ -548,15 +549,15 @@ export function QualifiedPicksTable({
                 <p className="font-mono text-sm font-bold text-slate-800">
                   {fmtOdds(row.odds)}
                 </p>
-                <p className="font-mono text-xs text-slate-600">
+                <p className="font-mono text-sm text-slate-600">
                   {fmtSignedPercent(row.roi)}
                 </p>
               </div>
             </div>
-            <p className="text-xs font-semibold text-emerald-800">
+            <p className="text-sm font-semibold text-emerald-800">
               {row.selectionLabel}
             </p>
-            <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-500">
+            <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-500">
               <div>
                 <dt className="inline">CI: </dt>
                 <dd className="inline font-mono text-slate-700">
@@ -585,7 +586,7 @@ export function QualifiedPicksTable({
               </div>
             </dl>
             <FrameworkCell row={row} />
-            <p className="text-[11px] text-slate-600">{row.reason}</p>
+            <p className="text-xs text-slate-600">{row.reason}</p>
           </div>
         )}
       />
@@ -595,18 +596,18 @@ export function QualifiedPicksTable({
 
 function FrameworkCell({ row }: { row: QualifiedPickRow }): ReactNode {
   if (!row.frameworkStatus) {
-    return <span className="text-[11px] text-slate-400">Not assessed</span>;
+    return <span className="text-xs text-slate-600">Not assessed</span>;
   }
   return (
     <>
       <span
-        className={`inline-block border rounded px-2 py-0.5 text-[11px] font-semibold ${frameworkTone(
+        className={`inline-block border rounded px-2 py-0.5 text-xs font-semibold ${frameworkTone(
           row.frameworkStatus
         )}`}
       >
         {frameworkStatusLabel(row.frameworkStatus)}
       </span>
-      <span className="block text-[10px] text-slate-500 mt-0.5">
+      <span className="block text-xs text-slate-500 mt-0.5">
         {row.frameworkConfidence ?? '—'}
         {typeof row.frameworkEdge === 'number'
           ? ` · ${fmtPercent(row.frameworkEdge * 100)} edge`

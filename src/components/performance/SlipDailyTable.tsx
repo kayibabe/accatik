@@ -10,7 +10,7 @@ import {
   type SortAccessors,
   type SortState,
 } from '../../utils/tableSort.ts';
-import { pnlTone } from '../../utils/uiTone.ts';
+import { EMPTY_COPY, pnlTone } from '../../utils/uiTone.ts';
 import { DateGroups } from '../ui/DateGroups.tsx';
 import { DataTable, type DataTableColumn } from '../ui/DataTable.tsx';
 import { EmptyState } from '../ui/States.tsx';
@@ -30,10 +30,15 @@ const ACCESSORS: SortAccessors<DayPerformance> = {
 interface SlipDailyTableProps {
   daily: DayPerformance[];
   todayDate: string;
+  selectedDate: string;
 }
 
 /** P&L grouped by matchday, sortable on every column. */
-export function SlipDailyTable({ daily, todayDate }: SlipDailyTableProps) {
+export function SlipDailyTable({
+  daily,
+  todayDate,
+  selectedDate,
+}: SlipDailyTableProps) {
   const [sort, setSort] = useState<SortState>({
     key: null,
     direction: SORT_DESC,
@@ -65,7 +70,7 @@ export function SlipDailyTable({ daily, todayDate }: SlipDailyTableProps) {
         <span className="font-medium text-slate-800">
           {fmtShortDate(row.dateIso)}
           {row.open > 0 && (
-            <span className="ml-1.5 text-[10px] text-slate-400">
+            <span className="ml-1.5 text-xs text-slate-600">
               ({row.open} open)
             </span>
           )}
@@ -118,7 +123,7 @@ export function SlipDailyTable({ daily, todayDate }: SlipDailyTableProps) {
       cell: (row) => (
         <span
           className={`font-semibold ${
-            row.roi === null ? 'text-slate-400' : pnlTone(row.roi)
+            row.roi === null ? 'text-slate-600' : pnlTone(row.roi)
           }`}
         >
           {fmtSignedPercent(row.roi)}
@@ -132,10 +137,10 @@ export function SlipDailyTable({ daily, todayDate }: SlipDailyTableProps) {
   return (
     <div className="space-y-2">
       <div className="flex items-baseline justify-between gap-2 px-1">
-        <h3 className="text-xs font-semibold text-slate-700">
+        <h3 className="text-sm font-semibold text-slate-700">
           P&amp;L by matchday
         </h3>
-        <span className="text-[11px] text-slate-400">
+        <span className="text-xs text-slate-600">
           Grouped by date · void days stay flat
         </span>
       </div>
@@ -143,6 +148,7 @@ export function SlipDailyTable({ daily, todayDate }: SlipDailyTableProps) {
       <DateGroups
         groups={groups}
         todayDate={todayDate}
+        focusDate={selectedDate}
         idPrefix="slip-daily"
         renderDay={(dayRows) => (
           <DataTable
@@ -153,35 +159,35 @@ export function SlipDailyTable({ daily, todayDate }: SlipDailyTableProps) {
             minWidth="min-w-[720px]"
             compact
             details={(row) => (
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
                 <div>
-                  <dt className="text-slate-400">Slips</dt>
+                  <dt className="text-slate-600">Slips</dt>
                   <dd className="font-mono text-slate-700">{row.slips}</dd>
                 </div>
                 <div>
-                  <dt className="text-slate-400">Open</dt>
+                  <dt className="text-slate-600">Open</dt>
                   <dd className="font-mono text-slate-700">{row.open}</dd>
                 </div>
                 <div>
-                  <dt className="text-slate-400">Record (W-L-V)</dt>
+                  <dt className="text-slate-600">Record (W-L-V)</dt>
                   <dd className="font-mono text-slate-700">
                     {recordLabel(row.won, row.lost, row.voided)}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-slate-400">Void stake returned</dt>
+                  <dt className="text-slate-600">Void stake returned</dt>
                   <dd className="font-mono text-slate-700">
                     {formatMwk(row.voidedStake)}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-slate-400">Staked</dt>
+                  <dt className="text-slate-600">Staked</dt>
                   <dd className="font-mono text-slate-700">
                     {formatMwk(row.settledStake)}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-slate-400">Returns</dt>
+                  <dt className="text-slate-600">Returns</dt>
                   <dd className="font-mono text-slate-700">
                     {formatMwk(row.returns)}
                   </dd>
@@ -192,7 +198,7 @@ export function SlipDailyTable({ daily, todayDate }: SlipDailyTableProps) {
         )}
         empty={
           <EmptyState
-            title="No settled matchdays yet"
+            title={EMPTY_COPY.settledMatchdays}
             description="Saved slips appear here once their matchday has been settled."
           />
         }

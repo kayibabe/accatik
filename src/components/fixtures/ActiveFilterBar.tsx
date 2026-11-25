@@ -21,7 +21,7 @@ export function ActiveFilterBar({
       aria-label={label}
       className="sticky top-16 z-20 flex flex-wrap items-center gap-1.5 rounded-xl border border-slate-200 bg-white/95 px-2.5 py-2 shadow-sm backdrop-blur"
     >
-      <span className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+      <span className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
         Filters
       </span>
       {chips.map((chip) => (
@@ -30,16 +30,16 @@ export function ActiveFilterBar({
           type="button"
           onClick={chip.clear}
           title={`Remove ${chip.label} filter`}
-          className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-700 transition-colors hover:border-slate-300 hover:bg-white hover:text-slate-900 cursor-pointer"
+          className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700 transition-colors hover:border-slate-300 hover:bg-white hover:text-slate-900 cursor-pointer"
         >
           <span>{chip.label}</span>
-          <X className="h-3 w-3 text-slate-400" aria-hidden="true" />
+          <X className="h-3 w-3 text-slate-600" aria-hidden="true" />
         </button>
       ))}
       <button
         type="button"
         onClick={onReset}
-        className="ml-auto px-2 py-1 text-[11px] font-semibold text-emerald-800 hover:text-emerald-900 underline underline-offset-2 cursor-pointer"
+        className="ml-auto px-2 py-1 text-xs font-semibold text-emerald-800 hover:text-emerald-900 underline underline-offset-2 cursor-pointer"
       >
         Clear all
       </button>

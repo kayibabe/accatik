@@ -41,7 +41,7 @@ export function MarketTileGrid({
 
   if (displayMarkets.length === 0) {
     return (
-      <p className="pt-1 text-xs text-slate-400">
+      <p className="pt-1 text-sm text-slate-600">
         {marketChipsActive
           ? 'No markets on this match meet the current market, probability and price filters.'
           : 'Pre-match bookmaker odds are not currently published for this fixture.'}
@@ -52,7 +52,7 @@ export function MarketTileGrid({
   return (
     <div className="space-y-2 pt-1">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-600">
           {marketChipsActive
             ? `Markets · ${displayMarkets.length} of ${fixture.markets.length} meeting your filters`
             : 'Markets · ranked by win probability'}
@@ -62,7 +62,7 @@ export function MarketTileGrid({
           shortestPrice.id !== pickMarket?.id &&
           shortestPrice.id !== angle?.cover?.id && (
             <p
-              className="inline-flex items-center gap-1 text-[11px] text-slate-400"
+              className="inline-flex items-center gap-1 text-xs text-slate-600"
               title="Highest margin-adjusted win probability on this fixture — market context, not a recommendation"
             >
               <TrendingUp className="h-3 w-3 shrink-0" aria-hidden="true" />
@@ -129,7 +129,7 @@ export function MarketTileGrid({
             >
               <div className="flex w-full items-center justify-between gap-1">
                 <span
-                  className={`inline-flex min-w-0 items-center gap-1 text-[11px] font-medium ${
+                  className={`inline-flex min-w-0 items-center gap-1 text-xs font-medium ${
                     isSelected ? 'text-emerald-100' : 'text-slate-500'
                   }`}
                 >
@@ -140,13 +140,19 @@ export function MarketTileGrid({
                     {marketTypeShortLabel(market.marketType)}
                   </span>
                   {market.framework && (
-                    <span
-                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${frameworkDot(
-                        market.framework.status
-                      )}`}
-                      title={frameworkStatusLabel(market.framework.status)}
-                      aria-hidden="true"
-                    />
+                    <span className="inline-flex shrink-0 items-center">
+                      <span className="sr-only">
+                        Framework status:{' '}
+                        {frameworkStatusLabel(market.framework.status)}
+                      </span>
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full ${frameworkDot(
+                          market.framework.status
+                        )}`}
+                        title={frameworkStatusLabel(market.framework.status)}
+                        aria-hidden="true"
+                      />
+                    </span>
                   )}
                 </span>
                 {marketOutcome ? (
@@ -154,7 +160,7 @@ export function MarketTileGrid({
                 ) : (
                   isRecommended && (
                     <span
-                      className={`whitespace-nowrap text-[11px] font-semibold ${
+                      className={`whitespace-nowrap text-xs font-semibold ${
                         isSelected ? 'text-white' : 'text-emerald-700'
                       }`}
                     >
@@ -164,7 +170,9 @@ export function MarketTileGrid({
                 )}
               </div>
               <div className="mt-1 flex w-full items-end justify-between gap-1.5">
-                <span className="truncate text-xs font-medium">{market.label}</span>
+                <span className="line-clamp-2 text-sm font-medium leading-snug">
+                  {market.label}
+                </span>
                 <span className="shrink-0 text-right leading-tight">
                   <span
                     className={`block text-sm font-mono font-semibold tabular-nums ${
@@ -174,12 +182,12 @@ export function MarketTileGrid({
                     {fmtOdds(market.odds)}
                   </span>
                   <span
-                    className={`block text-[10px] font-mono tabular-nums ${
+                    className={`block text-xs font-mono tabular-nums ${
                       isSelected
                         ? 'text-emerald-100'
                         : probability >= 70
                         ? 'font-semibold text-emerald-700'
-                        : 'text-slate-400'
+                        : 'text-slate-600'
                     }`}
                     title="Margin-adjusted win probability"
                   >

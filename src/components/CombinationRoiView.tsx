@@ -43,6 +43,40 @@ interface CombinationRoiViewProps {
 
 const SECTION_LABELS = FEATURED_SOURCE_LABELS;
 
+const ROW_LIMIT = 10;
+
+/** The three cuts of the same study; one table is visible at a time. */
+const ROI_VIEWS = [
+  {
+    id: 'section-band',
+    tab: 'Section × band',
+    title: 'Section × band × market',
+    subtitle:
+      'The main study. Bands: High ≥70%, Solid ≥52%, Moderate ≥38%, Speculative <38% of fair probability.',
+    showSection: true,
+    showBand: true,
+  },
+  {
+    id: 'section',
+    tab: 'Section totals',
+    title: 'Section × market · all bands combined',
+    subtitle: 'The “All” chip: every confidence band pooled for one section and market.',
+    showSection: true,
+    showBand: false,
+  },
+  {
+    id: 'market',
+    tab: 'Direct markets',
+    title: 'Direct market stakes',
+    subtitle:
+      'Control group: every requested market staked directly from the full price ladder, with no section filter.',
+    showSection: false,
+    showBand: false,
+  },
+] as const;
+
+type RoiViewId = (typeof ROI_VIEWS)[number]['id'];
+
 const BAND_ORDER: Record<CombinationRoiBand, number> = {
   High: 0,
   Solid: 1,
@@ -93,33 +127,33 @@ function SignalCell({ row, minSample }: { row: CombinationRoiRow; minSample: num
   if (row.staked === 0) return null;
   if (row.staked < minSample) {
     return (
-      <span className="px-1.5 py-0.5 rounded bg-amber-50 text-[10px] font-semibold text-amber-700 border border-amber-200">
+      <span className="px-1.5 py-0.5 rounded bg-amber-50 text-xs font-semibold text-amber-700 border border-amber-200">
         Small sample
       </span>
     );
   }
   if (row.roi !== null && row.roi > 0 && (row.roiCiLow ?? 0) > 0) {
     return (
-      <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-[10px] font-semibold text-emerald-700 border border-emerald-200">
+      <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-xs font-semibold text-emerald-700 border border-emerald-200">
         Positive · CI &gt; 0
       </span>
     );
   }
   if (row.roi !== null && row.roi > 0) {
     return (
-      <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-[10px] font-semibold text-emerald-700">
+      <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-xs font-semibold text-emerald-700">
         Positive
       </span>
     );
   }
   if (row.roiCiHigh !== null && row.roiCiHigh < 0) {
     return (
-      <span className="px-1.5 py-0.5 rounded bg-red-50 text-[10px] font-semibold text-red-700 border border-red-200">
+      <span className="px-1.5 py-0.5 rounded bg-red-50 text-xs font-semibold text-red-700 border border-red-200">
         Avoid
       </span>
     );
   }
-  return <span className="text-[10px] text-slate-400">Negative</span>;
+  return <span className="text-xs text-slate-600">Negative</span>;
 }
 
 function RoiTable({
@@ -138,6 +172,7 @@ function RoiTable({
   showBand?: boolean;
 }) {
   const [sort, setSort] = useState<SortState>({ key: 'roi', direction: SORT_DESC });
+  const [showAll, setShowAll] = useState(false);
   const onSort = makeSortHandler(setSort, SORT_DESC);
   // The study is a fixed universe, but cells nobody staked are not evidence.
   // Keep them out of the tables instead of filling them with "No picks" rows.
@@ -147,6 +182,7 @@ function RoiTable({
     () => sortRows(stakedRows, sort, accessors),
     [stakedRows, sort, accessors]
   );
+  const visibleRows = showAll ? sorted : sorted.slice(0, ROW_LIMIT);
   const sortable = (
     label: string,
     key: string,
@@ -184,7 +220,7 @@ function RoiTable({
       header: sortable('Band', 'band', 'left'),
       cell: (row) => (
         <span
-          className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${angleTone(row.band)}`}
+          className={`rounded border px-1.5 py-0.5 text-xs font-semibold ${angleTone(row.band)}`}
         >
           {row.band}
         </span>
@@ -201,7 +237,7 @@ function RoiTable({
           {row.marketLabel}
           {row.marketKey.startsWith('DNB-') && (
             <span
-              className="ml-1.5 text-[10px] font-medium text-amber-600"
+              className="ml-1.5 text-xs font-medium text-amber-600"
               title="Draw No Bet archive prices are unreliable; direct DNB ROI is a price artifact, not an edge."
               aria-label="Draw No Bet price warning"
             >
@@ -246,7 +282,7 @@ function RoiTable({
       cell: (row) => (
         <span
           className={`font-semibold ${
-            row.roi === null ? 'text-slate-400' : pnlTone(row.roi)
+            row.roi === null ? 'text-slate-600' : pnlTone(row.roi)
           }`}
         >
           {fmtSignedPercent(row.roi)}
@@ -301,21 +337,21 @@ function RoiTable({
         <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">
           {title}
         </h3>
-        <p className="mt-0.5 text-[11px] text-slate-400">{subtitle}</p>
+        <p className="mt-0.5 text-xs text-slate-600">{subtitle}</p>
       </div>
       <SortStatus sort={sort} label="ROI table" />
       <DataTable
         columns={columns}
-        rows={sorted}
+        rows={visibleRows}
         rowKey={(row) => row.key}
         caption={title}
         minWidth="min-w-[1080px]"
         compact
         details={(row) => (
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] sm:grid-cols-3">
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
             {showSection && (
               <div>
-                <dt className="text-slate-400">Section</dt>
+                <dt className="text-slate-600">Section</dt>
                 <dd className="text-slate-700">
                   {row.section ? SECTION_LABELS[row.section] : '—'}
                 </dd>
@@ -323,30 +359,30 @@ function RoiTable({
             )}
             {showBand && (
               <div>
-                <dt className="text-slate-400">Band</dt>
+                <dt className="text-slate-600">Band</dt>
                 <dd className="text-slate-700">{row.band}</dd>
               </div>
             )}
             <div>
-              <dt className="text-slate-400">Staked</dt>
+              <dt className="text-slate-600">Staked</dt>
               <dd className="font-mono text-slate-700">{fmtCount(row.staked)}</dd>
             </div>
             <div>
-              <dt className="text-slate-400">W-L-V</dt>
+              <dt className="text-slate-600">W-L-V</dt>
               <dd className="font-mono text-slate-700">
                 {recordLabel(row.wins, row.losses, row.voids, '-')}
               </dd>
             </div>
             <div>
-              <dt className="text-slate-400">Win rate</dt>
+              <dt className="text-slate-600">Win rate</dt>
               <dd className="font-mono text-slate-700">{fmtPercent(row.winRate)}</dd>
             </div>
             <div>
-              <dt className="text-slate-400">Avg odds</dt>
+              <dt className="text-slate-600">Avg odds</dt>
               <dd className="font-mono text-slate-700">{fmtOdds(row.avgOdds)}</dd>
             </div>
             <div>
-              <dt className="text-slate-400">Positive dates</dt>
+              <dt className="text-slate-600">Positive dates</dt>
               <dd className="font-mono text-slate-700">
                 {row.totalDates === 0
                   ? '—'
@@ -354,7 +390,7 @@ function RoiTable({
               </dd>
             </div>
             <div>
-              <dt className="text-slate-400">95% CI</dt>
+              <dt className="text-slate-600">95% CI</dt>
               <dd className="font-mono text-slate-700">
                 {row.roiCiLow === null || row.roiCiHigh === null
                   ? '—'
@@ -370,6 +406,20 @@ function RoiTable({
           />
         }
       />
+      {sorted.length > ROW_LIMIT && (
+        <div className="flex flex-wrap items-center gap-2 px-1">
+          <button
+            type="button"
+            onClick={() => setShowAll((current) => !current)}
+            className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
+          >
+            {showAll ? 'Show less' : 'Show more'}
+          </button>
+          <span className="text-xs text-slate-600">
+            Showing {fmtCount(visibleRows.length)} of {fmtCount(sorted.length)} rows
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -387,6 +437,7 @@ export function CombinationRoiView({
   const [section, setSection] = useState<'all' | FeaturedPickSource>('all');
   const [market, setMarket] = useState('all');
   const [positiveOnly, setPositiveOnly] = useState(false);
+  const [view, setView] = useState<RoiViewId>('section-band');
 
   useEffect(() => {
     let cancelled = false;
@@ -469,6 +520,7 @@ export function CombinationRoiView({
   );
 
   const filterActive = band !== 'All' || section !== 'all' || market !== 'all' || positiveOnly;
+  const activeView = ROI_VIEWS.find((item) => item.id === view)!;
   const reset = () => {
     setBand('All');
     setSection('all');
@@ -480,14 +532,14 @@ export function CombinationRoiView({
     <section aria-label="Combination ROI study" className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-medium text-slate-500">
+          <p className="text-sm font-medium text-slate-500">
             Inception to date · flat {fmtFixed(data?.stakePerPick ?? 1, 0)}u · {strategy} strategy
           </p>
           <h2 className="mt-1 flex items-center gap-2 text-xl font-bold tracking-tight text-slate-900">
             <FlaskConical className="h-5 w-5 text-emerald-700" aria-hidden="true" />
             Combination ROI study
           </h2>
-          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-slate-600">
+          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-600">
             Section × confidence band × market, rebuilt from every archived
             matchday. A band is the engine&apos;s own confidence label for the
             fair probability of the exact price the card referred to.
@@ -499,7 +551,7 @@ export function CombinationRoiView({
             type="button"
             onClick={onReload}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 cursor-pointer"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
             Reload
@@ -508,7 +560,7 @@ export function CombinationRoiView({
       </div>
 
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       )}
@@ -563,25 +615,25 @@ export function CombinationRoiView({
                     type="button"
                     onClick={() => setBand(item)}
                     aria-pressed={band === item}
-                    className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer ${
+                    className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-sm font-medium transition-colors cursor-pointer ${
                       band === item
                         ? 'border-slate-900 bg-slate-900 text-white'
                         : angleTone(item)
                     }`}
                   >
                     {item}
-                    <span className={`font-mono tabular-nums ${band === item ? 'text-white/70' : 'text-slate-500'}`}>
+                    <span className={`font-mono tabular-nums ${band === item ? 'text-white' : 'text-slate-500'}`}>
                       {fmtCount(bandCounts.get(item) ?? 0)}
                     </span>
                   </button>
                 ))}
               </div>
-              <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-600">
+              <label className="inline-flex items-center gap-1.5 text-xs text-slate-600">
                 Section
                 <select
                   value={section}
                   onChange={(event) => setSection(event.target.value as 'all' | FeaturedPickSource)}
-                  className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700"
+                  className="rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700"
                 >
                   <option value="all">All sections</option>
                   <option value="angle">{SECTION_LABELS.angle}</option>
@@ -589,12 +641,12 @@ export function CombinationRoiView({
                   <option value="note">{SECTION_LABELS.note}</option>
                 </select>
               </label>
-              <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-600">
+              <label className="inline-flex items-center gap-1.5 text-xs text-slate-600">
                 Market
                 <select
                   value={market}
                   onChange={(event) => setMarket(event.target.value)}
-                  className="max-w-[230px] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700"
+                  className="max-w-[230px] rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700"
                 >
                   <option value="all">All markets</option>
                   {data.markets.map((item) => (
@@ -602,7 +654,7 @@ export function CombinationRoiView({
                   ))}
                 </select>
               </label>
-              <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-600 cursor-pointer">
+              <label className="inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={positiveOnly}
@@ -612,19 +664,19 @@ export function CombinationRoiView({
                 Positive ROI only
               </label>
               {filterActive && (
-                <button type="button" onClick={reset} className="text-[11px] font-semibold text-emerald-700 hover:underline cursor-pointer">
+                <button type="button" onClick={reset} className="text-xs font-semibold text-emerald-700 hover:underline cursor-pointer">
                   Reset filters
                 </button>
               )}
             </div>
-            <p className="mt-2 text-[11px] text-slate-400">
+            <p className="mt-2 text-xs text-slate-600">
               {fmtCount(data.sampleDates)} settled matchdays · {fmtCount(data.sampleFixtures)} priced fixtures ·{' '}
               {fmtCount(data.snapshotFixtures)} fixtures with frozen pick snapshots ·
               {' '}price capture: {fmtCount(data.priceQuality.prematch)} pre-match / {fmtCount(data.priceQuality.live)} live / {fmtCount(data.priceQuality.unknown)} unknown
             </p>
           </div>
 
-          <details className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+          <details className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             <summary className="flex cursor-pointer items-center gap-2 font-semibold">
               <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
               How to read these numbers
@@ -636,26 +688,42 @@ export function CombinationRoiView({
             </ul>
           </details>
 
+          <div
+            role="group"
+            aria-label="Combination ROI table view"
+            className="flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1"
+          >
+            {ROI_VIEWS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setView(item.id)}
+                aria-pressed={view === item.id}
+                className={`rounded-md px-3 py-1.5 text-sm font-semibold transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${
+                  view === item.id
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {item.tab}
+              </button>
+            ))}
+          </div>
+
           <RoiTable
-            title="Section × band × market"
-            subtitle="The main study. Bands: High ≥70%, Solid ≥52%, Moderate ≥38%, Speculative <38% of fair probability."
-            rows={sectionBandRows}
+            key={view}
+            title={activeView.title}
+            subtitle={activeView.subtitle}
+            rows={
+              view === 'section-band'
+                ? sectionBandRows
+                : view === 'section'
+                  ? sectionRows
+                  : directRows
+            }
             minSample={data.minSample}
-          />
-          <RoiTable
-            title="Section × market · all bands combined"
-            subtitle="The “All” chip: every confidence band pooled for one section and market."
-            rows={sectionRows}
-            minSample={data.minSample}
-            showBand={false}
-          />
-          <RoiTable
-            title="Direct market stakes"
-            subtitle="Control group: every requested market staked directly from the full price ladder, with no section filter."
-            rows={directRows}
-            minSample={data.minSample}
-            showSection={false}
-            showBand={false}
+            showSection={activeView.showSection}
+            showBand={activeView.showBand}
           />
         </>
       )}

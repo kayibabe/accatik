@@ -119,8 +119,17 @@ export function attachFrameworkAssessment(
       : market;
   };
 
+  const model = assessment.model;
+  const modelXg =
+    model &&
+    Number.isFinite(model.lambdaHome) &&
+    Number.isFinite(model.lambdaAway)
+      ? { modelXgHome: model.lambdaHome, modelXgAway: model.lambdaAway }
+      : {};
+
   return {
     ...fixture,
+    ...modelXg,
     markets: fixture.markets.map(attach),
     allMarkets: fixture.allMarkets?.map(attach),
     framework: summarizeFrameworkAssessment(assessment),

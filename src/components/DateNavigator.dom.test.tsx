@@ -83,9 +83,12 @@ test('the strip shows five CAT-labelled days around the selection', async () => 
   assert.equal(tiles.length, 5);
   assert.deepEqual(
     tiles.map((tile) => tile.textContent),
-    ['Mon16', 'Tue17', 'Today18', 'Thu19', 'Fri20']
+    ['MON\n16', 'TUE\n17', 'TODAY\n18', 'THU\n19', 'FRI\n20']
   );
-  assert.equal(tiles[2].getAttribute('aria-label'), 'Today · Wednesday, 18 November 2026');
+  assert.equal(
+    tiles[2].getAttribute('aria-label'),
+    'TODAY\n18 · Today · Wednesday, 18 November 2026'
+  );
   assert.equal(tiles[2].getAttribute('aria-pressed'), 'true');
   assert.equal(tiles[0].getAttribute('aria-pressed'), 'false');
   assert.equal(tiles[2].getAttribute('aria-current'), 'date');
@@ -94,6 +97,26 @@ test('the strip shows five CAT-labelled days around the selection', async () => 
     false,
     'the Today reset should be hidden on the current matchday'
   );
+});
+
+test('the selection ring stays clear of the stacked weekday label', async () => {
+  const container = await renderNavigator();
+  const tiles = stripTiles(container);
+
+  assert.ok(
+    tiles.every((tile) => tile.classList.contains('py-1.5')),
+    'every tile needs vertical padding so its edge never clips the weekday text'
+  );
+
+  const selected = tiles.find(
+    (tile) => tile.getAttribute('aria-pressed') === 'true'
+  );
+  assert.ok(selected);
+  assert.ok(
+    selected.classList.contains('ring-inset'),
+    'the selected tile should use an inset ring'
+  );
+  assert.equal(selected.classList.contains('border-emerald-700'), false);
 });
 
 test('arrows shift the selection and wrap across a month boundary', async () => {

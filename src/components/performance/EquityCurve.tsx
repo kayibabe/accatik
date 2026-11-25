@@ -31,7 +31,7 @@ export function EquityCurve({ points }: EquityCurveProps) {
   if (points.length <= 1) {
     return (
       <div className="flex h-40 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/60">
-        <p className="px-4 text-center text-xs text-slate-400">
+        <p className="px-4 text-center text-sm text-slate-600">
           Not enough settled slips to plot an equity curve yet.
         </p>
       </div>
@@ -225,7 +225,7 @@ export function EquityCurve({ points }: EquityCurveProps) {
         <div
           role="status"
           aria-live="polite"
-          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-left text-[10px] shadow-lg"
+          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-left text-xs shadow-lg"
           style={{
             left: `${Math.min(88, Math.max(12, (activeCoordinate.x / WIDTH) * 100))}%`,
             top: `${(activeCoordinate.y / HEIGHT) * 100 - 4}%`,
@@ -241,7 +241,7 @@ export function EquityCurve({ points }: EquityCurveProps) {
         </div>
       )}
 
-      <div className="mt-1 flex items-center justify-between text-[10px] text-slate-400">
+      <div className="mt-1 flex items-center justify-between text-xs text-slate-600">
         <span>{pointDate(points[0])}</span>
         <span>zero line</span>
         <span>{pointDate(last)}</span>

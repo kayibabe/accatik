@@ -94,10 +94,6 @@ export function FixtureFilters({
   maxOdds,
   onToggleSelection,
 }: FixtureFiltersProps) {
-  const [advancedOpen, setAdvancedOpen] = useState(
-    () => activeFilterCount(filters, 'advanced') > 0
-  );
-
   const {
     angle: angleFilter,
     cover: coverFilter,
@@ -108,6 +104,16 @@ export function FixtureFilters({
     minModelEdge,
     kickoffWindowHours,
   } = filters;
+
+  // Competition and market chips are also advanced, but they live outside the
+  // SlateFilterState keys that activeFilterCount knows about.
+  const advancedActiveCount =
+    activeFilterCount(filters, 'advanced') +
+    (selectedCompetition === 'ALL' ? 0 : 1) +
+    (marketSelections.length > 0 ? 1 : 0);
+  const [advancedOpen, setAdvancedOpen] = useState(
+    () => advancedActiveCount > 0
+  );
 
   const statusOptions: ReadonlyArray<{ id: StatusFilter; label: string }> = [
     { id: 'all', label: `All Today (${counts.total})` },
@@ -122,7 +128,7 @@ export function FixtureFilters({
       <div className="space-y-3">
         {/* Presets are the fast path; every preset can still be refined below. */}
         <div className="min-w-0">
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
             Quick views
           </p>
           <div
@@ -137,7 +143,7 @@ export function FixtureFilters({
                 onClick={() => onPresetChange(preset.id)}
                 aria-pressed={activePreset === preset.id}
                 title={preset.description}
-                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${
+                className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${
                   activePreset === preset.id
                     ? 'border-emerald-700 bg-emerald-700 text-white'
                     : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900'
@@ -147,7 +153,7 @@ export function FixtureFilters({
               </button>
             ))}
             {activePreset === 'custom' && (
-              <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] font-semibold text-amber-800">
+              <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-800">
                 Custom
               </span>
             )}
@@ -157,7 +163,7 @@ export function FixtureFilters({
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
             <Search
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600"
               aria-hidden="true"
             />
             <input
@@ -166,7 +172,7 @@ export function FixtureFilters({
               onChange={(event) => onSearchChange(event.target.value)}
               placeholder="Search team, league, or country…"
               aria-label="Search this matchday"
-              className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-emerald-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+              className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-600 focus:border-emerald-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
             />
           </div>
           <div
@@ -185,7 +191,7 @@ export function FixtureFilters({
                 type="button"
                 onClick={() => onSortModeChange(mode.id)}
                 aria-pressed={sortMode === mode.id}
-                className={`whitespace-nowrap rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-colors cursor-pointer ${
+                className={`whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
                   sortMode === mode.id
                     ? 'bg-white text-slate-900 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
@@ -198,7 +204,7 @@ export function FixtureFilters({
         </div>
 
         <div className="min-w-0">
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
             Match status
           </p>
           <div role="group" aria-label="Filter by match status" className="flex flex-wrap gap-1.5">
@@ -208,52 +214,13 @@ export function FixtureFilters({
                 type="button"
                 onClick={() => onStatusChange(option.id)}
                 aria-pressed={statusFilter === option.id}
-                className={`whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
                   statusFilter === option.id
                     ? 'bg-emerald-700 text-white'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
                 }`}
               >
                 {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="min-w-0">
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-            Competition
-          </p>
-          <div
-            role="group"
-            aria-label="Filter by competition"
-            className="flex items-center gap-1.5 overflow-x-auto pb-0.5"
-          >
-            <button
-              type="button"
-              onClick={() => onCompetitionChange('ALL')}
-              aria-pressed={selectedCompetition === 'ALL'}
-              className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
-                selectedCompetition === 'ALL'
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
-              }`}
-            >
-              All Competitions
-            </button>
-            {competitions.map((competition) => (
-              <button
-                key={competition.name}
-                type="button"
-                onClick={() => onCompetitionChange(competition.name)}
-                aria-pressed={selectedCompetition === competition.name}
-                className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
-                  selectedCompetition === competition.name
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
-                }`}
-              >
-                {competition.name} ({competition.count})
               </button>
             ))}
           </div>
@@ -274,8 +241,47 @@ export function FixtureFilters({
           id="slate-advanced-filters"
           open={advancedOpen}
           onToggle={() => setAdvancedOpen((open) => !open)}
-          activeCount={activeFilterCount(filters, 'advanced')}
+          activeCount={advancedActiveCount}
         >
+          <div className="min-w-0">
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Competition
+            </p>
+            <div
+              role="group"
+              aria-label="Filter by competition"
+              className="flex items-center gap-1.5 overflow-x-auto pb-0.5"
+            >
+              <button
+                type="button"
+                onClick={() => onCompetitionChange('ALL')}
+                aria-pressed={selectedCompetition === 'ALL'}
+                className={`shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
+                  selectedCompetition === 'ALL'
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+                }`}
+              >
+                All Competitions
+              </button>
+              {competitions.map((competition) => (
+                <button
+                  key={competition.name}
+                  type="button"
+                  onClick={() => onCompetitionChange(competition.name)}
+                  aria-pressed={selectedCompetition === competition.name}
+                  className={`shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
+                    selectedCompetition === competition.name
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+                  }`}
+                >
+                  {competition.name} ({competition.count})
+                </button>
+              ))}
+            </div>
+          </div>
+
           <FilterChipGroup
             label="Model angle"
             ariaLabel="Filter by model-angle confidence"
@@ -315,14 +321,14 @@ export function FixtureFilters({
 
           <div className="min-w-0">
             <div className="mb-1.5 flex items-center justify-between gap-2">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Market selection
               </p>
               {marketSelections.length > 0 && (
                 <button
                   type="button"
                   onClick={() => onUpdateFilters({ marketSelections: [], marketType: 'all' })}
-                  className="text-[11px] font-semibold text-emerald-800 underline underline-offset-2 hover:text-emerald-900 cursor-pointer"
+                  className="text-xs font-semibold text-emerald-800 underline underline-offset-2 hover:text-emerald-900 cursor-pointer"
                 >
                   Clear markets
                 </button>
@@ -337,7 +343,7 @@ export function FixtureFilters({
                 type="button"
                 onClick={() => onUpdateFilters({ marketSelections: [], marketType: 'all' })}
                 aria-pressed={marketSelections.length === 0 && marketType === 'all'}
-                className={`rounded border px-1.5 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
+                className={`rounded border px-1.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
                   marketSelections.length === 0 && marketType === 'all'
                     ? 'border-slate-900 bg-slate-900 text-white'
                     : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
@@ -354,7 +360,7 @@ export function FixtureFilters({
                     onClick={() => onToggleSelection(selection.key)}
                     aria-pressed={active}
                     title={selection.marketType}
-                    className={`inline-flex items-center gap-1 rounded border px-1.5 py-1 text-[11px] font-medium transition-colors cursor-pointer ${
+                    className={`inline-flex items-center gap-1 rounded border px-1.5 py-1 text-xs font-medium transition-colors cursor-pointer ${
                       active
                         ? 'border-emerald-700 bg-emerald-700 text-white'
                         : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
@@ -371,7 +377,7 @@ export function FixtureFilters({
           </div>
 
           <div className="min-w-0">
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
               Price band · decimal odds
             </p>
             <div className="flex items-center gap-1.5">
@@ -384,9 +390,9 @@ export function FixtureFilters({
                 onChange={(event) => onUpdateFilters({ minOddsInput: event.target.value })}
                 placeholder="Min"
                 aria-label="Minimum decimal odds"
-                className="h-8 w-20 rounded-md border border-slate-200 bg-white px-2 text-xs font-mono tabular-nums text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700"
+                className="h-8 w-20 rounded-md border border-slate-200 bg-white px-2 text-sm font-mono tabular-nums text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700"
               />
-              <span className="text-xs text-slate-400" aria-hidden="true">
+              <span className="text-sm text-slate-600" aria-hidden="true">
                 to
               </span>
               <input
@@ -398,13 +404,13 @@ export function FixtureFilters({
                 onChange={(event) => onUpdateFilters({ maxOddsInput: event.target.value })}
                 placeholder="Max"
                 aria-label="Maximum decimal odds"
-                className="h-8 w-20 rounded-md border border-slate-200 bg-white px-2 text-xs font-mono tabular-nums text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700"
+                className="h-8 w-20 rounded-md border border-slate-200 bg-white px-2 text-sm font-mono tabular-nums text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700"
               />
               {(filters.minOddsInput !== '' || filters.maxOddsInput !== '') && (
                 <button
                   type="button"
                   onClick={() => onUpdateFilters({ minOddsInput: '', maxOddsInput: '' })}
-                  className="rounded px-2 py-1 text-[11px] font-medium text-slate-500 hover:text-slate-900 cursor-pointer"
+                  className="rounded px-2 py-1 text-xs font-medium text-slate-500 hover:text-slate-900 cursor-pointer"
                 >
                   Any
                 </button>
@@ -434,14 +440,14 @@ export function FixtureFilters({
             value={String(kickoffWindowHours)}
             onChange={(value) => onUpdateFilters({ kickoffWindowHours: Number(value) })}
           />
-          <p className="-mt-1 text-[10px] leading-snug text-slate-400">
+          <p className="-mt-1 text-xs leading-snug text-slate-600">
             Counted from now; matches already under way drop out.
           </p>
         </AdvancedFilters>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
-        <p className="max-w-2xl text-[11px] leading-relaxed text-slate-500">
+        <p className="max-w-2xl text-xs leading-relaxed text-slate-500">
           Win probability is margin-adjusted so it compares across fixtures.
           Model edge is the model’s 1X2 figure minus the de-vigged book.
           {(minOdds > 0 || maxOdds > 0) && ` Odds band: ${minOdds || 'any'}–${maxOdds || 'any'}.`}
@@ -450,7 +456,7 @@ export function FixtureFilters({
           <button
             type="button"
             onClick={onResetSlateFilters}
-            className="shrink-0 text-[11px] font-semibold text-emerald-800 underline underline-offset-2 hover:text-emerald-900 cursor-pointer"
+            className="shrink-0 text-xs font-semibold text-emerald-800 underline underline-offset-2 hover:text-emerald-900 cursor-pointer"
           >
             Reset insight, market &amp; price filters
           </button>

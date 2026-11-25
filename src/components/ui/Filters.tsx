@@ -33,7 +33,7 @@ export function FilterChip({
       onClick={onClick}
       aria-pressed={active}
       aria-label={ariaLabel}
-      className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border transition-colors whitespace-nowrap cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${
+      className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-sm font-medium rounded-md border transition-colors whitespace-nowrap cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${
         active
           ? FILTER_CHIP_ACTIVE_TONE[tone]
           : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50'
@@ -43,7 +43,7 @@ export function FilterChip({
       {count !== undefined && (
         <span
           className={`font-mono tabular-nums ${
-            active ? 'text-white/70' : 'text-slate-400'
+            active ? 'text-white' : 'text-slate-600'
           }`}
         >
           {count}
@@ -73,7 +73,7 @@ export function FilterChipGroup<T extends string>({
 }: FilterChipGroupProps<T>) {
   return (
     <div className="min-w-0">
-      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+      <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
         {label}
       </p>
       <div role="group" aria-label={ariaLabel} className="flex flex-wrap items-center gap-1">
@@ -116,12 +116,12 @@ export function AdvancedFilters({
         onClick={onToggle}
         aria-expanded={open}
         aria-controls={id}
-        className="inline-flex items-center gap-2 rounded-md px-1 py-1 text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
+        className="inline-flex items-center gap-2 rounded-md px-1 py-1 text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
       >
         <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
         Advanced filters
         {activeCount > 0 && (
-          <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 font-mono text-[10px] text-emerald-800">
+          <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 font-mono text-xs text-emerald-800">
             {activeCount}
           </span>
         )}

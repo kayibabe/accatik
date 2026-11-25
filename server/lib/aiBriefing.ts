@@ -251,6 +251,8 @@ export interface BriefingInput {
   narratives?: Record<string, string>;
   narrativeProvider?: string | null;
   narrativeNote?: string;
+  /** Decision time for replay/backfill. Defaults to now for live requests. */
+  nowMs?: number;
 }
 
 /** Score every priced, pre-match selection and return the strongest picks. */
@@ -270,7 +272,7 @@ export function buildBriefing(input: BriefingInput): AiBriefingResponse {
     narratives = {},
   } = input;
 
-  const now = Date.now();
+  const now = input.nowMs ?? Date.now();
   const history = new Map(
     (analytics?.marketsBySelection ?? []).map((row) => [row.key, row])
   );
@@ -594,7 +596,7 @@ export function buildBriefing(input: BriefingInput): AiBriefingResponse {
     dateIso,
     displayDate,
     strategy,
-    generatedAt: new Date().toISOString(),
+    generatedAt: new Date(now).toISOString(),
     modelVersion: AI_MODEL_VERSION,
     narrativeProvider: input.narrativeProvider ?? null,
     narrativeNote:

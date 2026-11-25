@@ -16,10 +16,20 @@ import {
   frameworkDecisionCopy,
   frameworkStatusLabel,
 } from '../../utils/frameworkCopy.ts';
+import {
+  formatLeaguePosition,
+  LEAGUE_POSITION_TITLE,
+} from '../../utils/leaguePosition.ts';
+import { formatXg, getXgDisplay, xgTitle } from '../../utils/modelXg.ts';
 import { angleConfidence } from '../../utils/recommendedAngle.ts';
-import { angleTone, frameworkTone } from '../../utils/uiTone.ts';
+import {
+  angleTone,
+  frameworkTone,
+  MATCH_METRIC_TONE,
+} from '../../utils/uiTone.ts';
 import { SettlementLabel } from '../SettlementLabel.tsx';
 import { BriefPanel } from './BriefPanel.tsx';
+import { FormGuide } from './FormGuide.tsx';
 import { MarketTileGrid } from './MarketTileGrid.tsx';
 import {
   INSIGHT_CARD_TONES,
@@ -61,7 +71,7 @@ function BriefToggle({
       onClick={onToggle}
       aria-expanded={isExpanded}
       aria-controls={controls}
-      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
         accent
           ? 'border-emerald-200 bg-white/70 text-emerald-800 hover:bg-white hover:text-emerald-900'
           : 'border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900'
@@ -104,7 +114,7 @@ function InsightCard({
     tone === 'angle' ? Compass : tone === 'cover' ? ShieldCheck : NotebookPen;
   return (
     <div
-      className={`rounded-md border border-l-2 px-2.5 py-1.5 text-[11px] leading-snug ${theme.surface}`}
+      className={`rounded-md border border-l-2 px-2.5 py-1.5 text-xs leading-snug ${theme.surface}`}
     >
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
         <p className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
@@ -154,6 +164,8 @@ export function FixtureCard({
     modelEdge,
     showModelEdge,
   } = model;
+  const xg = getXgDisplay(fixture);
+  const leaguePosition = formatLeaguePosition(fixture);
 
   return (
     <article
@@ -161,7 +173,7 @@ export function FixtureCard({
       className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-colors"
     >
       <div className={`${compact ? 'space-y-2 p-3' : 'space-y-3.5 p-4 sm:p-5'}`}>
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono font-semibold tabular-nums text-slate-800">
               {fixture.matchDate}
@@ -185,13 +197,13 @@ export function FixtureCard({
             <span aria-hidden="true" className="hidden sm:inline">
               ·
             </span>
-            <span className="hidden text-slate-400 sm:inline">{fixture.venue}</span>
+            <span className="hidden text-slate-600 sm:inline">{fixture.venue}</span>
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-3">
             {showModelEdge && modelEdge && (
               <span
-                className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-sky-700"
+                className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold text-sky-700"
                 title={`API-Football's 1X2 model has ${fmtPercent(
                   modelEdge.points,
                   1
@@ -209,7 +221,7 @@ export function FixtureCard({
                 />
               )}
             {activeLeg && (
-              <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-emerald-700">
+              <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold text-emerald-700">
                 <Check className="h-3.5 w-3.5" aria-hidden="true" />
                 In Ticket @ {fmtOdds(activeLeg.odds)}
               </span>
@@ -228,14 +240,14 @@ export function FixtureCard({
                   {fixture.score?.home} - {fixture.score?.away}
                 </span>
               ) : (
-                <span className="text-xs font-medium text-slate-400">vs</span>
+                <span className="text-sm font-medium text-slate-600">vs</span>
               )}
               <span className="text-base font-semibold tracking-tight text-slate-900 sm:text-lg">
                 {fixture.awayTeam}
               </span>
               {(fixture.status !== 'Scheduled' || fixture.awaitingResult) && (
                 <span
-                  className={`font-mono text-xs font-semibold tabular-nums ${
+                  className={`font-mono text-sm font-semibold tabular-nums ${
                     fixture.status === 'Void' || fixture.awaitingResult
                       ? 'text-amber-700'
                       : fixture.status === 'Live'
@@ -251,10 +263,24 @@ export function FixtureCard({
               )}
             </div>
             {(homeForm !== '—' || awayForm !== '—') && (
-              <div className="flex flex-wrap items-center gap-3 font-mono text-xs text-slate-500">
-                <span>Home form: {homeForm}</span>
+              <div className="flex flex-wrap items-center gap-3 font-mono text-sm text-slate-500">
+                <span className="inline-flex items-center gap-1">
+                  Home form: <FormGuide value={homeForm} />
+                </span>
                 <span aria-hidden="true">/</span>
-                <span>Away form: {awayForm}</span>
+                <span className="inline-flex items-center gap-1">
+                  Away form: <FormGuide value={awayForm} />
+                </span>
+              </div>
+            )}
+            {leaguePosition && (
+              <div className={`font-mono text-sm ${MATCH_METRIC_TONE.position}`}>
+                <span title={LEAGUE_POSITION_TITLE}>{leaguePosition}</span>
+              </div>
+            )}
+            {xg && (
+              <div className={`font-mono text-sm ${MATCH_METRIC_TONE.xg}`}>
+                <span title={xgTitle(xg)}>{formatXg(xg)}</span>
               </div>
             )}
           </div>
@@ -290,7 +316,7 @@ export function FixtureCard({
               />
             }
           >
-            <span className="font-semibold text-slate-900">
+            <span className="min-w-0 break-words font-semibold leading-snug text-slate-900">
               {angle.market.label}
             </span>
             <span className="font-mono font-semibold tabular-nums text-slate-700">
@@ -303,7 +329,7 @@ export function FixtureCard({
               {fmtPercent(angle.probability, 0)} fair
             </span>
             <span
-              className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${angleTone(
+              className={`rounded border px-1.5 py-0.5 text-xs font-semibold ${angleTone(
                 angle.confidence
               )}`}
             >
@@ -311,7 +337,7 @@ export function FixtureCard({
             </span>
             {fixture.framework && (
               <span
-                className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${frameworkTone(
+                className={`rounded border px-1.5 py-0.5 text-xs font-semibold ${frameworkTone(
                   fixture.framework.status
                 )}`}
                 title={`${frameworkDecisionCopy(
@@ -328,7 +354,7 @@ export function FixtureCard({
                 (market) => market.id === angle.market.id
               ) && (
                 <span
-                  className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800"
+                  className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-800"
                   title="This pick does not meet the current market, probability or price filters, so its tile is hidden from the grid below."
                 >
                   Outside your market filters
@@ -340,7 +366,9 @@ export function FixtureCard({
 
         {angle?.cover && (!compact || isExpanded) && (
           <InsightCard tone="cover" label="Alternative cover">
-            <span className="font-medium text-slate-900">{angle.cover.label}</span>
+            <span className="min-w-0 break-words font-medium leading-snug text-slate-900">
+              {angle.cover.label}
+            </span>
             <span className="font-mono font-semibold tabular-nums text-slate-900">
               @ {fmtOdds(angle.cover.odds)}
             </span>
@@ -361,7 +389,7 @@ export function FixtureCard({
           >
             {noteBand && (
               <span
-                className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${angleTone(
+                className={`rounded border px-1.5 py-0.5 text-xs font-semibold ${angleTone(
                   noteBand
                 )}`}
                 title="Confidence band used by the research-note filter"
@@ -390,13 +418,13 @@ export function FixtureCard({
         />
 
         {analysisError && !isExpanded && (
-          <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+          <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
             <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
             <span>{analysisError}</span>
           </div>
         )}
         {deepAnalysis && !isExpanded && (
-          <p className="text-[11px] text-slate-500">
+          <p className="text-xs text-slate-500">
             Tactical brief loaded — expand to read the full notes and market
             ladder.
           </p>

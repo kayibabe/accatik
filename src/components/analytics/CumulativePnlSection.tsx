@@ -15,7 +15,7 @@ function EquityChart({ days }: { days: PickAnalyticsDay[] }) {
   if (days.length <= 1) {
     return (
       <div className="flex h-40 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/60">
-        <p className="px-4 text-center text-xs text-slate-400">
+        <p className="px-4 text-center text-sm text-slate-600">
           More settled matchdays are needed to plot a curve.
         </p>
       </div>
@@ -61,7 +61,7 @@ function EquityChart({ days }: { days: PickAnalyticsDay[] }) {
               type="button"
               onClick={() => setSeries(id)}
               aria-pressed={series === id}
-              className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
+              className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
                 series === id
                   ? 'bg-white text-slate-900 shadow-sm'
                   : 'text-slate-500 hover:text-slate-800'
@@ -107,7 +107,7 @@ function EquityChart({ days }: { days: PickAnalyticsDay[] }) {
           vectorEffect="non-scaling-stroke"
         />
       </svg>
-      <div className="mt-1 flex items-center justify-between text-[10px] text-slate-400">
+      <div className="mt-1 flex items-center justify-between text-xs text-slate-600">
         <span>{fmtShortDate(days[0].dateIso)}</span>
         <span>zero line</span>
         <span>{fmtShortDate(days[days.length - 1].dateIso)}</span>
@@ -142,7 +142,7 @@ export function CumulativePnlSection({ days }: { days: PickAnalyticsDay[] }) {
             {lastTrendIcon(days)}
             Cumulative P&amp;L
           </h2>
-          <p className="mt-0.5 text-[11px] text-slate-400">
+          <p className="mt-0.5 text-xs text-slate-600">
             One point per archived matchday, oldest to newest.
           </p>
         </div>

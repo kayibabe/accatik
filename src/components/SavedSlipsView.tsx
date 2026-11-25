@@ -14,12 +14,16 @@ import {
   resolveSettlementPool,
   type FixtureSnapshots,
 } from '../utils/fixtureSnapshots.ts';
-import { fmtCount } from '../utils/format.ts';
+import {
+  fmtCount,
+  fmtPercent,
+  fmtSignedPercent,
+  fmtUnits,
+} from '../utils/format.ts';
 import { groupTicketsByDate, ticketDateIso } from '../utils/savedTicketGroups.ts';
 import { buildSlipActivityData } from '../utils/slipActivity.ts';
 import { SavedMatchDetailDialog } from './SavedMatchDetailDialog.tsx';
 import { ShadowLedgerPanel } from './ShadowLedgerPanel.tsx';
-import { CompactSlipKpis } from './tickets/CompactSlipKpis.tsx';
 import { SlipDateGroups } from './tickets/SlipDateGroups.tsx';
 import { DataStatus } from './ui/DataStatus.tsx';
 import { useDateGroupExpansion } from './ui/DateGroups.tsx';
@@ -30,8 +34,10 @@ interface SavedSlipsViewProps {
   savedTickets: SavedTicket[];
   fixtures: Fixture[];
   fixtureSnapshots: FixtureSnapshots;
-  /** CAT calendar date, used to expand only the current matchday. */
+  /** CAT calendar date, used for "Today"/"Yesterday" labels. */
   todayDate: string;
+  /** Matchday selected in the date bar, whose group opens by default. */
+  selectedDate: string;
   /** Whether loading a saved ticket would replace picks already in the builder. */
   hasCurrentTicket: boolean;
   onLoadTicket: (ticket: SavedTicket) => void;
@@ -83,6 +89,7 @@ export function SavedSlipsView({
   fixtures,
   fixtureSnapshots,
   todayDate,
+  selectedDate,
   hasCurrentTicket,
   onLoadTicket,
   onDeleteTicket,
@@ -118,7 +125,7 @@ export function SavedSlipsView({
   const { settlements, analytics } = activity;
 
   const groups = useMemo(() => groupTicketsByDate(savedTickets), [savedTickets]);
-  const expansion = useDateGroupExpansion(groups, todayDate);
+  const expansion = useDateGroupExpansion(groups, selectedDate);
 
   /**
    * Legs that still need a scoreline. Only fixtures whose kickoff has passed
@@ -299,8 +306,6 @@ export function SavedSlipsView({
         }
       />
 
-      <ShadowLedgerPanel />
-
       {savedTickets.length === 0 ? (
         <EmptyState
           title="No saved accumulator slips yet"
@@ -309,7 +314,7 @@ export function SavedSlipsView({
             <button
               type="button"
               onClick={onGoToSlate}
-              className="px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
+              className="px-4 py-2 text-sm font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
             >
               Build First Slip
             </button>
@@ -317,13 +322,55 @@ export function SavedSlipsView({
         />
       ) : (
         <>
-          <CompactSlipKpis
-            analytics={analytics}
-            onViewActivity={goToActivity}
-          />
+          <section
+            aria-label="Saved slip status"
+            className="rounded-xl border border-slate-200 bg-white overflow-hidden"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-2.5">
+              <h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">
+                Status snapshot
+              </h2>
+              <button
+                type="button"
+                onClick={goToActivity}
+                className="text-sm font-semibold text-emerald-700 hover:text-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 cursor-pointer"
+              >
+                Full performance in My Performance
+              </button>
+            </div>
+            <div className="grid grid-cols-1 divide-y divide-slate-200 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+              <div className="px-4 py-3">
+                <p className="text-xs font-medium text-slate-600">Open slips</p>
+                <p className="mt-1 font-mono text-xl font-bold tabular-nums text-slate-900">
+                  {fmtCount(analytics.open)}
+                </p>
+                <p className="mt-1 text-xs text-slate-600">
+                  {fmtCount(analytics.total)} saved in this browser
+                </p>
+              </div>
+              <div className="px-4 py-3">
+                <p className="text-xs font-medium text-slate-600">Settled slips</p>
+                <p className="mt-1 font-mono text-xl font-bold tabular-nums text-slate-900">
+                  {fmtCount(analytics.decided + analytics.voided)}
+                </p>
+                <p className="mt-1 text-xs text-slate-600">
+                  {fmtPercent(analytics.hitRate)} hit rate
+                </p>
+              </div>
+              <div className="px-4 py-3">
+                <p className="text-xs font-medium text-slate-600">ROI</p>
+                <p className="mt-1 font-mono text-xl font-bold tabular-nums text-slate-900">
+                  {fmtSignedPercent(analytics.roi)}
+                </p>
+                <p className="mt-1 text-xs text-slate-600">
+                  Net {fmtUnits(analytics.netPnl)} · full breakdown in My Performance
+                </p>
+              </div>
+            </div>
+          </section>
 
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs text-slate-500">
+            <p className="text-sm text-slate-500">
               {pendingFixtureIds.length > 0
                 ? `${fmtCount(pendingFixtureIds.length)} fixture${
                     pendingFixtureIds.length === 1 ? '' : 's'
@@ -343,7 +390,7 @@ export function SavedSlipsView({
                   type="button"
                   onClick={handleManualRefresh}
                   disabled={isRefreshing}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors disabled:opacity-60 cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors disabled:opacity-60 cursor-pointer"
                 >
                   <RefreshCw
                     className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`}
@@ -355,7 +402,7 @@ export function SavedSlipsView({
               <button
                 type="button"
                 onClick={toggleAllGroups}
-                className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                className="px-3 py-1.5 text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
               >
                 {expansion.allExpanded ? 'Collapse all' : 'Expand all'}
               </button>
@@ -382,6 +429,8 @@ export function SavedSlipsView({
             hasCurrentTicket={hasCurrentTicket}
             onSelectMatch={handleSelectMatch}
           />
+
+          <ShadowLedgerPanel />
         </>
       )}
 

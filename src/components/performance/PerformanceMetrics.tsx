@@ -27,7 +27,7 @@ export function PerformanceMetrics({ analytics }: { analytics: SlipAnalytics }) 
       <MetricCard
         label="ROI"
         value={fmtSignedPercent(analytics.roi)}
-        tone={analytics.roi === null ? 'text-slate-400' : pnlTone(analytics.roi)}
+        tone={analytics.roi === null ? 'text-slate-600' : pnlTone(analytics.roi)}
         infoKey="roi"
         detail="Net P&L ÷ Win/Lost stake"
       />
@@ -64,7 +64,7 @@ export function PerformanceMetrics({ analytics }: { analytics: SlipAnalytics }) 
         label="Avg P&L / slip"
         value={avgPnlPerSlip === null ? '—' : signedMwk(avgPnlPerSlip)}
         tone={
-          avgPnlPerSlip === null ? 'text-slate-400' : pnlTone(avgPnlPerSlip)
+          avgPnlPerSlip === null ? 'text-slate-600' : pnlTone(avgPnlPerSlip)
         }
         detail={
           <>

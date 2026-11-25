@@ -44,8 +44,8 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     description: 'Assemble and stress-test a ticket.',
     items: [
       { id: 'slate', label: 'Matchday Slate' },
-      { id: 'pick-guide', label: 'Pick Selection' },
-      { id: 'acca', label: 'Ticket Review' },
+      { id: 'pick-guide', label: 'Pick Shortlist' },
+      { id: 'acca', label: 'Ticket Builder' },
     ],
   },
   {
@@ -54,7 +54,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     description: 'Track saved slips, results and aggregates.',
     items: [
       { id: 'saved', label: 'Saved Slips' },
-      { id: 'activity', label: 'My Activity' },
+      { id: 'activity', label: 'My Performance' },
       { id: 'analytics', label: 'Analytics' },
     ],
   },

@@ -57,7 +57,7 @@ export function SourcesView({
             <button
               type="button"
               onClick={onGoToSlate}
-              className="px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
+              className="px-4 py-2 text-sm font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
             >
               Back to Fixture Board
             </button>
@@ -84,12 +84,12 @@ export function SourcesView({
                 <p className="text-sm font-semibold text-slate-900 truncate">
                   {src.title}
                 </p>
-                <p className="text-xs font-mono text-slate-500 truncate mt-0.5">
+                <p className="text-sm font-mono text-slate-500 truncate mt-0.5">
                   {src.uri}
                 </p>
               </div>
               <ExternalLink
-                className="w-4 h-4 text-slate-400 shrink-0"
+                className="w-4 h-4 text-slate-600 shrink-0"
                 aria-hidden="true"
               />
             </a>

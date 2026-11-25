@@ -47,6 +47,22 @@ export function angleTone(band: string | null | undefined): string {
   return (band && ANGLE_TONE[band as AngleConfidence]) || ANGLE_TONE.Speculative;
 }
 
+/** Recent form: each result keeps its own colour, never a shared grey. */
+export const FORM_TONE: Record<
+  'W' | 'D' | 'L',
+  { label: string; className: string }
+> = {
+  W: { label: 'Win', className: 'bg-emerald-50 font-semibold text-emerald-700' },
+  D: { label: 'Draw', className: 'bg-amber-50 font-semibold text-amber-700' },
+  L: { label: 'Loss', className: 'bg-rose-50 font-semibold text-rose-700' },
+};
+
+/** One distinct accent per match-context line on a pick card. */
+export const MATCH_METRIC_TONE = {
+  position: 'text-sky-700',
+  xg: 'text-violet-700',
+} as const;
+
 /** Pill-style settlement tones (the compact counterpart to SettlementLabel). */
 export const SETTLEMENT_TONE: Record<SettlementStatus, string> = {
   Win: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -59,6 +75,52 @@ export const SETTLEMENT_TONE: Record<SettlementStatus, string> = {
 export function settlementTone(status: string | null | undefined): string {
   return (status && SETTLEMENT_TONE[status as SettlementStatus]) || SETTLEMENT_TONE.Pending;
 }
+
+/**
+ * Stable ordering for result columns: a win outranks an open pick, which in
+ * turn outranks a void or a loss. Shared by every sortable settlement table.
+ */
+export const SETTLEMENT_SORT_RANK: Record<SettlementStatus, number> = {
+  Win: 5,
+  Live: 4,
+  Pending: 3,
+  Void: 2,
+  Lost: 1,
+};
+
+/** Legacy name used by the analytics result columns. */
+export const STATUS_SORT_RANK = SETTLEMENT_SORT_RANK;
+
+/** Open = still capable of settling; Live and Pending are not final results. */
+export function isOpenSettlement(
+  status: SettlementStatus | null | undefined
+): boolean {
+  return status === 'Pending' || status === 'Live';
+}
+
+/** Alias kept for callers that used the original local helper name. */
+export const isSettlementOpen = isOpenSettlement;
+
+/** Text tones for the compact SettlementLabel (live is not a win). */
+export const SETTLEMENT_LABEL_TONE: Record<
+  SettlementStatus,
+  { normal: string; inverted: string }
+> = {
+  Win: { normal: 'text-emerald-700', inverted: 'text-emerald-100' },
+  Lost: { normal: 'text-red-600', inverted: 'text-red-200' },
+  Void: { normal: 'text-amber-700', inverted: 'text-amber-200' },
+  Live: { normal: 'text-sky-700', inverted: 'text-sky-100' },
+  Pending: { normal: 'text-slate-600', inverted: 'text-slate-100' },
+};
+
+/** One canonical wording for empty settled-data surfaces. */
+export const EMPTY_COPY = {
+  settledData: 'No settled data yet',
+  settledSlips: 'No settled slips yet',
+  settledMatchdays: 'No settled matchdays yet',
+  settledSlipsInBands: 'No settled slips in these bands',
+  settledPicks: 'No settled picks in the archive yet',
+} as const;
 
 /** P&L text tone shared by every analytics table and metric card. */
 export function pnlTone(value: number | null | undefined): string {

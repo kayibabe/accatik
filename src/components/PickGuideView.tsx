@@ -16,6 +16,11 @@ import {
 } from '../utils/pickSelection.ts';
 import { fmtFixed, fmtOdds, fmtPercent, fmtSignedPercent } from '../utils/format.ts';
 import {
+  formatLeaguePosition,
+  LEAGUE_POSITION_TITLE,
+} from '../utils/leaguePosition.ts';
+import { formatXg, getXgDisplay, xgTitle } from '../utils/modelXg.ts';
+import {
   makeSortHandler,
   sortRows,
   SORT_ASC,
@@ -23,7 +28,11 @@ import {
   type SortAccessors,
   type SortState,
 } from '../utils/tableSort.ts';
-import { angleTone, frameworkTone } from '../utils/uiTone.ts';
+import {
+  angleTone,
+  frameworkTone,
+  MATCH_METRIC_TONE,
+} from '../utils/uiTone.ts';
 import { SettlementLabel } from './SettlementLabel.tsx';
 import { SortableTh } from './SortableTh.tsx';
 import { DataCard, InfoHint } from './ui/DataCard.tsx';
@@ -157,7 +166,7 @@ function EconomicsSummary({
       <div className="grid grid-cols-2 gap-3">
         {rows.map((row) => (
           <div key={row.key} className="rounded-lg bg-slate-50 px-3 py-2">
-            <p className="flex items-center text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            <p className="flex items-center text-xs font-semibold uppercase tracking-wide text-slate-500">
               {row.label}
               {row.infoKey && <InfoHint infoKey={row.infoKey} />}
             </p>
@@ -173,7 +182,7 @@ function EconomicsSummary({
               {row.value(shortlist)}
             </p>
             {slate && (
-              <p className="mt-1 border-t border-slate-200 pt-1 text-[11px] text-slate-600">
+              <p className="mt-1 border-t border-slate-200 pt-1 text-xs text-slate-600">
                 Live ticket:{' '}
                 <span className="font-mono font-semibold tabular-nums">
                   {row.value(slate)}
@@ -183,7 +192,7 @@ function EconomicsSummary({
           </div>
         ))}
       </div>
-      <p className="mt-3 text-[11px] leading-relaxed text-slate-600">
+      <p className="mt-3 text-xs leading-relaxed text-slate-600">
         Basis: <span className="font-semibold">{economics.basis}</span>.{' '}
         {economics.recommended
           ? 'The guard allows the “recommended” label on the shortlist.'
@@ -260,17 +269,38 @@ function CandidateTable({
     {
       key: 'fixture',
       header: sortHeader('Fixture', 'fixture'),
-      cell: (candidate) => (
-        <div className="min-w-0">
-          <p className="font-semibold text-slate-900">
-            {candidate.homeTeam} <span className="font-normal text-slate-400">vs</span>{' '}
-            {candidate.awayTeam}
-          </p>
-          <p className="mt-0.5 text-[11px] text-slate-500">
-            {candidate.competition} · {candidate.kickoffTime}
-          </p>
-        </div>
-      ),
+      cell: (candidate) => {
+        const fixture = fixtureById.get(candidate.fixtureId);
+        const xg = fixture ? getXgDisplay(fixture) : null;
+        const leaguePosition = fixture ? formatLeaguePosition(fixture) : null;
+        return (
+          <div className="min-w-0">
+            <p className="font-semibold text-slate-900">
+              {candidate.homeTeam} <span className="font-normal text-slate-600">vs</span>{' '}
+              {candidate.awayTeam}
+            </p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              {candidate.competition} · {candidate.kickoffTime}
+            </p>
+            {leaguePosition && (
+              <p
+                className={`mt-0.5 font-mono text-xs ${MATCH_METRIC_TONE.position}`}
+                title={LEAGUE_POSITION_TITLE}
+              >
+                {leaguePosition}
+              </p>
+            )}
+            {xg && (
+              <p
+                className={`mt-0.5 font-mono text-xs ${MATCH_METRIC_TONE.xg}`}
+                title={xgTitle(xg)}
+              >
+                {formatXg(xg)}
+              </p>
+            )}
+          </div>
+        );
+      },
       priority: 'primary',
     },
     {
@@ -292,7 +322,7 @@ function CandidateTable({
       header: sortHeader('Grade', 'grade', SORT_DESC),
       cell: (candidate) => (
         <span
-          className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold ${angleTone(
+          className={`inline-flex rounded border px-1.5 py-0.5 text-xs font-semibold ${angleTone(
             candidate.grade
           )}`}
         >
@@ -306,7 +336,7 @@ function CandidateTable({
       header: sortHeader('Framework', 'framework', SORT_DESC),
       cell: (candidate) => (
         <span
-          className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold ${frameworkTone(
+          className={`inline-flex rounded border px-1.5 py-0.5 text-xs font-semibold ${frameworkTone(
             candidate.frameworkStatus
           )}`}
         >
@@ -364,7 +394,7 @@ function CandidateTable({
           <div className="space-y-2">
             {/* The full five-check legend lives in the Hard filters card above;
                 a row only needs to show why it was rejected. */}
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               {failed.length === 0
                 ? 'All five hard filters pass'
                 : `${failed.length} hard filter${failed.length === 1 ? '' : 's'} failed`}
@@ -372,7 +402,7 @@ function CandidateTable({
             {failed.length > 0 && (
               <ul className="grid gap-1 sm:grid-cols-2">
                 {failed.map((check) => (
-                  <li key={check.id} className="flex items-start gap-2 text-[11px]">
+                  <li key={check.id} className="flex items-start gap-2 text-xs">
                     <FilterMark passed={false} />
                     <span className="text-slate-700">
                       <span className="font-medium">{check.label}</span>
@@ -438,23 +468,23 @@ export function PickGuideView({
             >
               <div className="flex items-center justify-between gap-2">
                 <span
-                  className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${angleTone(
+                  className={`rounded border px-1.5 py-0.5 text-xs font-semibold ${angleTone(
                     grade
                   )}`}
                 >
                   {grade}
                 </span>
-                <span className="font-mono text-xs font-semibold tabular-nums text-slate-500">
+                <span className="font-mono text-sm font-semibold tabular-nums text-slate-500">
                   {count} {count === 1 ? 'card' : 'cards'}
                 </span>
               </div>
-              <p className="mt-2 font-mono text-xs font-semibold text-slate-900">
+              <p className="mt-2 font-mono text-sm font-semibold text-slate-900">
                 {plan.band}
               </p>
-              <p className="mt-1 text-xs font-semibold text-slate-800">
-                {plan.role} <span className="font-normal text-slate-400">· {plan.slot}</span>
+              <p className="mt-1 text-sm font-semibold text-slate-800">
+                {plan.role} <span className="font-normal text-slate-600">· {plan.slot}</span>
               </p>
-              <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+              <p className="mt-1 text-xs leading-relaxed text-slate-500">
                 {plan.guidance}
               </p>
             </div>
@@ -473,22 +503,22 @@ export function PickGuideView({
         >
           <ul className="space-y-2">
             {exampleCandidate?.checks.map((check) => (
-              <li key={check.id} className="flex items-start gap-2 text-xs">
+              <li key={check.id} className="flex items-start gap-2 text-sm">
                 <FilterMark passed={check.passed} />
                 <span>
                   <span className="font-semibold text-slate-900">{check.label}</span>
-                  <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-500">
+                  <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">
                     {check.detail}
                   </span>
                 </span>
               </li>
             )) ?? (
-              <li className="text-xs text-slate-500">
+              <li className="text-sm text-slate-500">
                 No priced Recommended Angle card on this slate yet.
               </li>
             )}
           </ul>
-          <p className="mt-3 border-t border-slate-200 pt-3 text-[11px] leading-relaxed text-slate-600">
+          <p className="mt-3 border-t border-slate-200 pt-3 text-xs leading-relaxed text-slate-600">
             <span className="font-semibold">Shape rules:</span> one market per
             fixture; different competitions and different teams across legs. A
             Moderate middle leg is only allowed after two High/Solid legs.
@@ -499,7 +529,7 @@ export function PickGuideView({
                 candidate.frameworkStatus === null ||
                 candidate.frameworkStatus === 'INSUFFICIENT_DATA'
             ) && (
-              <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-[11px] leading-relaxed text-amber-800">
+              <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs leading-relaxed text-amber-800">
                 Framework decisions are attached when a slate is fetched. If
                 every card shows “no decision”, refresh the slate from the
                 Matchday Slate tab — archived price files do not carry them.
@@ -510,7 +540,7 @@ export function PickGuideView({
         <div className="space-y-4">
           <EconomicsSummary shortlist={shortlistGuard} slate={slateGuard} />
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5">
-            <p className="flex items-start gap-2 text-xs leading-relaxed text-amber-900">
+            <p className="flex items-start gap-2 text-sm leading-relaxed text-amber-900">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>
                 A ticket is recommended only when its fair chance clears
@@ -532,7 +562,7 @@ export function PickGuideView({
             <button
               type="button"
               onClick={() => onApplyLegs(selection.guard.legs)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-800 cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800 cursor-pointer"
             >
               Review shortlist in Ticket Review
               <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
@@ -548,7 +578,7 @@ export function PickGuideView({
               <button
                 type="button"
                 onClick={onGoToSlate}
-                className="rounded-lg bg-emerald-700 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-800 cursor-pointer"
+                className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 cursor-pointer"
               >
                 Go to Matchday Slate
               </button>
@@ -564,7 +594,7 @@ export function PickGuideView({
         )}
       </DataCard>
 
-      <p className="text-[10px] leading-relaxed text-slate-400">
+      <p className="text-xs leading-relaxed text-slate-600">
         Grades use the Recommended Angle&apos;s fair chance; framework confidence is
         a separate evidence measure and must still clear its own gate.
       </p>

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import {
   Activity,
   BookOpen,
@@ -40,14 +40,66 @@ export function SideMenu({
   open,
   onClose,
 }: SideMenuProps) {
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
+  // App passes a fresh onClose each render; a ref keeps the modal effect from
+  // re-running (and stealing focus) while the menu stays open.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     if (!open) return;
+    const active = document.activeElement as HTMLElement | null;
+    openerRef.current =
+      active && active !== document.body
+        ? active
+        : document.querySelector<HTMLElement>('[aria-label="Open navigation menu"]');
+
+    const focusableElements = () =>
+      Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        ) ?? []
+      ).filter((element) => element.getAttribute('aria-hidden') !== 'true');
+
+    focusableElements()[0]?.focus();
+
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') {
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+
+      const elements = focusableElements();
+      if (elements.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      const current = document.activeElement;
+      if (
+        event.shiftKey &&
+        (current === first || !dialogRef.current?.contains(current))
+      ) {
+        event.preventDefault();
+        last.focus();
+      } else if (
+        !event.shiftKey &&
+        (current === last || !dialogRef.current?.contains(current))
+      ) {
+        event.preventDefault();
+        first.focus();
+      }
     };
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open, onClose]);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      openerRef.current?.focus();
+    };
+  }, [open]);
 
   const handleSelect = (tab: ActiveTab) => {
     onSelectTab(tab);
@@ -60,7 +112,7 @@ export function SideMenu({
         <div key={group.id} className="pb-3">
           <p
             title={group.description}
-            className="px-3 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400"
+            className="px-3 pb-1.5 pt-1 text-xs font-semibold uppercase tracking-wide text-slate-600"
           >
             {group.label}
           </p>
@@ -82,14 +134,14 @@ export function SideMenu({
                 >
                   <Icon
                     className={`h-4 w-4 shrink-0 ${
-                      isActive ? 'text-emerald-700' : 'text-slate-400'
+                      isActive ? 'text-emerald-700' : 'text-slate-600'
                     }`}
                     aria-hidden="true"
                   />
                   <span className="min-w-0 truncate">{item.label}</span>
                   {item.id === 'saved' && savedCount > 0 && (
                     <span
-                      className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums ${
+                      className={`ml-auto rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${
                         isActive
                           ? 'bg-emerald-100 text-emerald-800'
                           : 'bg-slate-100 text-slate-600'
@@ -122,6 +174,7 @@ export function SideMenu({
             className="absolute inset-0 bg-slate-900/50"
           />
           <div
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-label="Workspace navigation"

@@ -170,7 +170,7 @@ export function CuratedAccaView({
       {startedLeg && (
         <div
           role="status"
-          className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800"
+          className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800"
         >
           Save disabled — {startedLeg.homeTeam} vs {startedLeg.awayTeam} has
           already kicked off. Remove the started selection to save a pre-match
@@ -181,7 +181,7 @@ export function CuratedAccaView({
       {isWideSlip && (
         <div
           role="status"
-          className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs leading-relaxed text-emerald-900"
+          className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm leading-relaxed text-emerald-900"
         >
           <span className="font-semibold">{researchCopy.wideSlip}</span>{' '}
           All {fmtCount(legs.length)} picks were kept. Bookmaker margin compounds
@@ -192,23 +192,23 @@ export function CuratedAccaView({
       {/* Quantitative Summary Strip */}
       <div className="bg-white border border-slate-200 rounded-xl grid grid-cols-2 lg:grid-cols-5 divide-y lg:divide-y-0 lg:divide-x divide-slate-200">
         <div className="p-5">
-          <p className="text-xs text-slate-500">Total Acca Odds</p>
+          <p className="text-sm text-slate-500">Total Acca Odds</p>
           <p className="mt-1 text-2xl font-bold font-mono text-slate-900 tabular-nums">
             {fmtOdds(totalOdds)}
           </p>
         </div>
         <div className="p-5">
-          <p className="text-xs text-slate-500">Ticket Legs</p>
+          <p className="text-sm text-slate-500">Ticket Legs</p>
           <p className="mt-1 text-2xl font-bold font-mono text-slate-900 tabular-nums">
             {fmtCount(legs.length)} Matches
           </p>
         </div>
         <div className="p-5">
-          <p className="text-xs text-slate-500">Ticket Status</p>
+          <p className="text-sm text-slate-500">Ticket Status</p>
           <div className="mt-2">
             <SettlementLabel status={ticketSettlement.status} />
           </div>
-          <p className="mt-1 text-[11px] font-mono text-slate-500 tabular-nums">
+          <p className="mt-1 text-xs font-mono text-slate-500 tabular-nums">
             {fmtCount(ticketSettlement.winCount)}W ·{' '}
             {fmtCount(ticketSettlement.lostCount)}L ·{' '}
             {fmtCount(ticketSettlement.voidCount)}V
@@ -222,7 +222,7 @@ export function CuratedAccaView({
               : 'Chance every leg lands at the quoted prices (includes bookmaker margin).'
           }
         >
-          <p className="flex items-center text-xs text-slate-500">
+          <p className="flex items-center text-sm text-slate-500">
             {guard.economics.basis === 'fair'
               ? 'Combined Win Chance'
               : 'Combined Implied Prob'}
@@ -233,7 +233,7 @@ export function CuratedAccaView({
           </p>
         </div>
         <div className="p-5 col-span-2 lg:col-span-1">
-          <p className="text-xs text-slate-500">
+          <p className="text-sm text-slate-500">
             Est. Return ({fmtMwk(stake)} Stake)
           </p>
           <p className="mt-1 text-2xl font-bold font-mono text-emerald-700 tabular-nums">
@@ -258,7 +258,7 @@ export function CuratedAccaView({
             <button
               type="button"
               onClick={onAutoComplete}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
             >
               <Wand2 className="w-3.5 h-3.5" aria-hidden="true" />
               <span>Auto-complete from slate</span>
@@ -280,13 +280,13 @@ export function CuratedAccaView({
       {saveError && saveState === 'failed' && (
         <p
           role="alert"
-          className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700"
+          className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"
         >
           {saveError}
         </p>
       )}
       <footer className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-[11px] text-slate-500">Review only.</p>
+        <p className="text-xs text-slate-500">Review only.</p>
         <div
           role="group"
           aria-label="Ticket review actions"
@@ -296,7 +296,7 @@ export function CuratedAccaView({
             type="button"
             onClick={handleCopy}
             disabled={legs.length === 0 || isFetchingDate}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
           >
             {copied ? (
               <>
@@ -321,7 +321,7 @@ export function CuratedAccaView({
                 : 'Save this slip to your archive'
             }
             aria-live="polite"
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
           >
             {saveState === 'saving' ? (
               <>
@@ -349,7 +349,7 @@ export function CuratedAccaView({
           <button
             type="button"
             onClick={onGoToSlate}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
           >
             <span>Edit on Fixture Board</span>
             <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
@@ -362,6 +362,7 @@ export function CuratedAccaView({
         liveFixtures={fixtures}
         fixtureSnapshots={fixtureSnapshots}
         todayDate={todayDate}
+        selectedDate={selectedDate}
         onOpenArchive={onOpenArchive}
         onRefreshResults={onRefreshResults}
       />

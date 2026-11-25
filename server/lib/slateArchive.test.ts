@@ -58,6 +58,15 @@ test('a kicked-off fixture keeps the prices it was archived with', () => {
   const archived = priced('a', {
     recommendedPickId: 'a-ou-25',
     priceQuality: 'prematch',
+    modelXgHome: 1.1,
+    modelXgAway: 1.6,
+    leagueId: 123,
+    leagueSeason: 2026,
+    homeTeamId: 10,
+    awayTeamId: 11,
+    positionHome: 4,
+    positionAway: 11,
+    standingsAt: '2026-11-21T07:00:00.000Z',
   });
   const fresh = priced('a', {
     status: 'Finished',
@@ -78,6 +87,12 @@ test('a kicked-off fixture keeps the prices it was archived with', () => {
   assert.equal(merged.status, 'Finished');
   assert.equal(merged.score?.home, 1);
   assert.equal(merged.priceQuality, 'prematch');
+  assert.equal(merged.modelXgHome, 1.1);
+  assert.equal(merged.modelXgAway, 1.6);
+  assert.equal(merged.leagueId, 123);
+  assert.equal(merged.positionHome, 4);
+  assert.equal(merged.positionAway, 11);
+  assert.equal(merged.standingsAt, '2026-11-21T07:00:00.000Z');
 });
 
 test('an explicit recapture replaces kicked-off prices and restamps them', () => {
@@ -89,6 +104,15 @@ test('an explicit recapture replaces kicked-off prices and restamps them', () =>
     pricedAt: '2026-11-21T08:18:00.000Z',
     modelDataAt: '2026-11-21T08:00:00.000Z',
     modelAdvice: 'Home',
+    modelXgHome: 1.42,
+    modelXgAway: 0.87,
+    leagueId: 123,
+    leagueSeason: 2026,
+    homeTeamId: 10,
+    awayTeamId: 11,
+    positionHome: 2,
+    positionAway: 9,
+    standingsAt: '2026-11-21T07:00:00.000Z',
   });
   const fresh = priced('a', {
     status: 'Finished',
@@ -111,6 +135,12 @@ test('an explicit recapture replaces kicked-off prices and restamps them', () =>
   assert.equal(recaptured.modelDataAt, archived.modelDataAt);
   assert.equal(recaptured.modelAdvice, archived.modelAdvice);
   assert.equal(recaptured.formHome, archived.formHome);
+  assert.equal(recaptured.modelXgHome, 1.42);
+  assert.equal(recaptured.modelXgAway, 0.87);
+  assert.equal(recaptured.leagueId, 123);
+  assert.equal(recaptured.positionHome, 2);
+  assert.equal(recaptured.positionAway, 9);
+  assert.equal(recaptured.standingsAt, '2026-11-21T07:00:00.000Z');
 });
 
 test('recapture carries the captured pick history into the new price era', () => {

@@ -52,25 +52,34 @@ function collectKeys<T>(groups: ReadonlyArray<DateYearGroup<T>>): GroupKeys {
   };
 }
 
-/** The only path open before the user touches an accordion: today, if present. */
+/**
+ * The only path open before the user touches an accordion: the selected
+ * matchday when present, otherwise the newest date in the archive.
+ */
 function defaultKeys<T>(
   groups: ReadonlyArray<DateYearGroup<T>>,
-  todayDate: string
+  focusDate: string
 ): GroupKeys {
+  let newestDate = '';
+  let newest: GroupKeys | null = null;
+
   for (const year of groups) {
     for (const month of year.months) {
       for (const day of month.days) {
-        if (day.dateIso === todayDate) {
-          return {
-            years: [yearKey(year.year)],
-            months: [monthKey(year.year, month.month)],
-            days: [dayKey(day.dateIso)],
-          };
+        const keys = {
+          years: [yearKey(year.year)],
+          months: [monthKey(year.year, month.month)],
+          days: [dayKey(day.dateIso)],
+        };
+        if (day.dateIso === focusDate) return keys;
+        if (!newest || day.dateIso > newestDate) {
+          newestDate = day.dateIso;
+          newest = keys;
         }
       }
     }
   }
-  return { years: [], months: [], days: [] };
+  return newest ?? { years: [], months: [], days: [] };
 }
 
 function countRows<T>(group: DateYearGroup<T>): number {
@@ -99,18 +108,18 @@ export interface DateGroupExpansion {
  */
 export function useDateGroupExpansion<T>(
   groups: ReadonlyArray<DateYearGroup<T>>,
-  todayDate: string
+  focusDate: string
 ): DateGroupExpansion {
   const [overrides, setOverrides] = useState<ExpansionOverrides>(EMPTY_OVERRIDES);
   const keys = useMemo(() => collectKeys(groups), [groups]);
   const defaults = useMemo(
-    () => defaultKeys(groups, todayDate),
-    [groups, todayDate]
+    () => defaultKeys(groups, focusDate),
+    [groups, focusDate]
   );
 
   useEffect(() => {
     setOverrides(EMPTY_OVERRIDES);
-  }, [todayDate]);
+  }, [focusDate]);
 
   const defaultYears = useMemo(() => new Set(defaults.years), [defaults]);
   const defaultMonths = useMemo(() => new Set(defaults.months), [defaults]);
@@ -181,7 +190,13 @@ export function useDateGroupExpansion<T>(
 
 export interface DateGroupsProps<T> {
   groups: ReadonlyArray<DateYearGroup<T>>;
+  /** Reference for "Today"/"Yesterday" labels; never changes with selection. */
   todayDate: string;
+  /**
+   * Selected matchday, whose group opens by default. Falls back to todayDate
+   * when omitted, and to the newest group when that date has no rows.
+   */
+  focusDate?: string;
   /** Unique across the page so every aria-controls points at one panel. */
   idPrefix: string;
   /** Content for one open date. Table headers inside stay independently sortable. */
@@ -198,6 +213,7 @@ export interface DateGroupsProps<T> {
 export function DateGroups<T,>({
   groups,
   todayDate,
+  focusDate,
   idPrefix,
   renderDay,
   daySummary,
@@ -205,7 +221,7 @@ export function DateGroups<T,>({
   className = '',
   expansion,
 }: DateGroupsProps<T>) {
-  const internalExpansion = useDateGroupExpansion(groups, todayDate);
+  const internalExpansion = useDateGroupExpansion(groups, focusDate ?? todayDate);
   const expansionState = expansion ?? internalExpansion;
 
   if (groups.length === 0) return <>{empty ?? null}</>;
@@ -230,7 +246,7 @@ export function DateGroups<T,>({
               className="flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-left hover:bg-slate-50 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
             >
               <ChevronRight
-                className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${
+                className={`h-4 w-4 shrink-0 text-slate-600 transition-transform ${
                   yearOpen ? 'rotate-90' : ''
                 }`}
                 aria-hidden="true"
@@ -238,7 +254,7 @@ export function DateGroups<T,>({
               <span className="text-sm font-bold uppercase tracking-wide text-slate-500">
                 {formatDateYearLabel(yearGroup.year)}
               </span>
-              <span className="font-mono text-[11px] text-slate-400 tabular-nums">
+              <span className="font-mono text-xs text-slate-600 tabular-nums">
                 {fmtCount(countRows(yearGroup))} rows
               </span>
             </button>
@@ -271,15 +287,15 @@ export function DateGroups<T,>({
                         className="flex w-full items-center gap-2 rounded-lg pl-1 pr-2 py-1.5 text-left hover:bg-slate-50 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
                       >
                         <ChevronRight
-                          className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform ${
+                          className={`h-3.5 w-3.5 shrink-0 text-slate-600 transition-transform ${
                             monthOpen ? 'rotate-90' : ''
                           }`}
                           aria-hidden="true"
                         />
-                        <span className="text-xs font-semibold text-slate-500">
+                        <span className="text-sm font-semibold text-slate-500">
                           {formatDateMonthLabel(monthGroup.month)}
                         </span>
-                        <span className="font-mono text-[10px] text-slate-400 tabular-nums">
+                        <span className="font-mono text-xs text-slate-600 tabular-nums">
                           {fmtCount(monthRows)} rows
                         </span>
                       </button>
@@ -309,7 +325,7 @@ export function DateGroups<T,>({
                                 >
                                   <span className="flex min-w-0 items-center gap-2">
                                     <ChevronRight
-                                      className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${
+                                      className={`h-4 w-4 shrink-0 text-slate-600 transition-transform ${
                                         dayOpen ? 'rotate-90' : ''
                                       }`}
                                       aria-hidden="true"
@@ -324,7 +340,7 @@ export function DateGroups<T,>({
                                       {formatDateDayLabel(day.dateIso, todayDate)}
                                     </span>
                                   </span>
-                                  <span className="shrink-0 text-[11px] text-slate-500">
+                                  <span className="shrink-0 text-xs text-slate-500">
                                     {daySummary ? (
                                       daySummary(rows, day)
                                     ) : (

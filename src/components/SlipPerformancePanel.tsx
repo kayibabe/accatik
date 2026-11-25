@@ -22,6 +22,7 @@ interface SlipPerformancePanelProps {
   oddsBands: OddsBandPerformance[];
   marketTypes: MarketTypePerformance[];
   todayDate: string;
+  selectedDate: string;
 }
 
 /**
@@ -34,6 +35,7 @@ export function SlipPerformancePanel({
   oddsBands,
   marketTypes,
   todayDate,
+  selectedDate,
 }: SlipPerformancePanelProps) {
   const settled = analytics.won + analytics.lost + analytics.voided;
   const lastEquity = analytics.equity[analytics.equity.length - 1]?.value ?? 0;
@@ -45,12 +47,12 @@ export function SlipPerformancePanel({
           <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">
             Performance
           </h2>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-sm text-slate-500">
             Settled slips only. Void stakes are returned and kept out of ROI;
             open slips never enter the money metrics.
           </p>
         </div>
-        <p className="text-[11px] font-mono text-slate-500 tabular-nums">
+        <p className="text-xs font-mono text-slate-500 tabular-nums">
           {fmtCount(settled)} settled · {fmtCount(analytics.open)} open ·{' '}
           {fmtCount(analytics.total)} saved
         </p>
@@ -76,7 +78,11 @@ export function SlipPerformancePanel({
         <EquityCurve points={analytics.equity} />
       </DataCard>
 
-      <SlipDailyTable daily={daily} todayDate={todayDate} />
+      <SlipDailyTable
+        daily={daily}
+        todayDate={todayDate}
+        selectedDate={selectedDate}
+      />
 
       <div className="grid gap-3 lg:grid-cols-2">
         <SlipMarketTypesTable marketTypes={marketTypes} />

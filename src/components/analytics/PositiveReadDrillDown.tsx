@@ -106,7 +106,7 @@ export function PositiveReadDrillDown({
   }
 
   const selectClass =
-    'rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700';
+    'rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700';
 
   return (
     <div className="space-y-2">
@@ -118,7 +118,7 @@ export function PositiveReadDrillDown({
             <button
               type="button"
               onClick={onReset}
-              className="rounded-md px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50 hover:underline cursor-pointer"
+              className="rounded-md px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 hover:underline cursor-pointer"
             >
               Reset filters ({activeCount})
             </button>
@@ -129,7 +129,7 @@ export function PositiveReadDrillDown({
           <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
             <label
               htmlFor={`${idPrefix}-section`}
-              className="inline-flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500"
+              className="inline-flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500"
             >
               Section
               <select
@@ -161,7 +161,7 @@ export function PositiveReadDrillDown({
 
             <label
               htmlFor={`${idPrefix}-market`}
-              className="inline-flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500"
+              className="inline-flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500"
             >
               Market
               <select
@@ -196,7 +196,7 @@ export function PositiveReadDrillDown({
 
             <label
               htmlFor={`${idPrefix}-min-roi`}
-              className="inline-flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500"
+              className="inline-flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500"
             >
               Min ROI %
               <input
@@ -224,12 +224,12 @@ export function PositiveReadDrillDown({
 
             <label
               htmlFor={`${idPrefix}-query`}
-              className="inline-flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500"
+              className="inline-flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500"
             >
               Team or competition
               <span className="relative">
                 <Search
-                  className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"
+                  className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-600"
                   aria-hidden="true"
                 />
                 <input
@@ -244,7 +244,7 @@ export function PositiveReadDrillDown({
             </label>
           </div>
 
-          <p className="text-[11px] leading-relaxed text-slate-400">
+          <p className="text-xs leading-relaxed text-slate-600">
             Counts are faceted: each selector shows how many qualifying parameters
             remain with the other filters applied. Market choices follow the
             selected section and band. Qualified and Confirmed describe

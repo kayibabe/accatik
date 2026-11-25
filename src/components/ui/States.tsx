@@ -22,7 +22,7 @@ export function EmptyState({
       <Inbox className="mx-auto h-7 w-7 text-slate-300" aria-hidden="true" />
       <p className="text-base font-semibold text-slate-900">{title}</p>
       {description && (
-        <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+        <p className="text-sm text-slate-500 max-w-md mx-auto leading-relaxed">
           {description}
         </p>
       )}
@@ -55,7 +55,7 @@ export function ErrorState({
       />
       <p className="text-base font-semibold text-red-800">{title}</p>
       {description && (
-        <p className="text-xs text-red-700 max-w-xl mx-auto leading-relaxed">
+        <p className="text-sm text-red-700 max-w-xl mx-auto leading-relaxed">
           {description}
         </p>
       )}
@@ -65,7 +65,7 @@ export function ErrorState({
           <button
             type="button"
             onClick={onRetry}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-white px-4 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
           >
             <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
             {retryLabel}
@@ -105,7 +105,7 @@ export function InlineLoading({ label }: { label: string }) {
   return (
     <span
       role="status"
-      className="inline-flex items-center gap-2 text-[11px] text-slate-500"
+      className="inline-flex items-center gap-2 text-xs text-slate-500"
     >
       <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
       {label}

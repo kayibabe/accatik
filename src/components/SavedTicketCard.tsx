@@ -88,7 +88,7 @@ export function SavedTicketCard({
       {/* Ticket identity and actions are grouped; status is the only colour accent here. */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs text-slate-500 font-mono tabular-nums">
+          <p className="text-sm text-slate-500 font-mono tabular-nums">
             {fmtCount(ticket.legs.length)} Legs · Saved{' '}
             {savedTimeLabel(ticket.createdAt)} CAT
           </p>
@@ -116,7 +116,7 @@ export function SavedTicketCard({
               if (hasCurrentTicket) setConfirmLoad(true);
               else onLoad(ticket);
             }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
           >
             <FolderOpen className="w-3.5 h-3.5" aria-hidden="true" />
             <span>Load into Builder</span>
@@ -125,7 +125,7 @@ export function SavedTicketCard({
           <button
             type="button"
             onClick={() => onCopy(ticket)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
           >
             {copied ? (
               <>
@@ -147,7 +147,7 @@ export function SavedTicketCard({
               setConfirmDelete(true);
             }}
             aria-label={`Delete ${ticket.name}`}
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-sm font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
           >
             <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
             <span>Delete</span>
@@ -159,7 +159,7 @@ export function SavedTicketCard({
         <div
           role="alertdialog"
           aria-label={confirmDelete ? 'Confirm deletion' : 'Confirm replacement'}
-          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
         >
           <span>
             {confirmDelete
@@ -201,7 +201,7 @@ export function SavedTicketCard({
       {/* Figures and result counts stay in one neutral band. */}
       <div
         aria-label="Ticket figures"
-        className="grid grid-cols-2 gap-x-6 gap-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-mono tabular-nums sm:grid-cols-4"
+        className="grid grid-cols-2 gap-x-6 gap-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-mono tabular-nums sm:grid-cols-4"
       >
         <div>
           <span className="text-slate-500">Total odds: </span>
@@ -228,16 +228,18 @@ export function SavedTicketCard({
                   : 'text-slate-500'
             }`}
           >
-            {isSettled
-              ? fmtMwk(settlement.settledReturn)
-              : fmtMwk(potentialReturn)}
+            {settlement.status === 'Lost'
+              ? `Loss · ${fmtMwk(settlement.settledReturn)} returned`
+              : isSettled
+                ? `+${fmtMwk(settlement.settledReturn)}`
+                : fmtMwk(potentialReturn)}
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {legCounts(settlement).map((entry) => (
             <span
               key={entry.key}
-              className={`text-[11px] font-semibold ${entry.className}`}
+              className={`text-xs font-semibold ${entry.className}`}
             >
               {fmtCount(entry.count)} {entry.label}
             </span>
@@ -248,10 +250,10 @@ export function SavedTicketCard({
       {/* Selections and their results are grouped by match, one card per match. */}
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2 pt-1">
-          <h4 className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+          <h4 className="text-xs font-medium uppercase tracking-wide text-slate-600">
             Match legs &amp; results
           </h4>
-          <p className="text-[10px] text-slate-400">
+          <p className="text-xs text-slate-600">
             Multiple picks on one match are grouped · click for detail
           </p>
         </div>
@@ -275,14 +277,14 @@ export function SavedTicketCard({
                   onClick={() => onSelectMatch(ticket, group.legs)}
                   aria-haspopup="dialog"
                   title={`Open ${fixtureLabel} details`}
-                  className="group h-full w-full space-y-1 rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-2.5 text-left text-xs transition-colors hover:border-slate-300 hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-emerald-700 cursor-pointer"
+                  className="group h-full w-full space-y-1 rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-2.5 text-left text-sm transition-colors hover:border-slate-300 hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-emerald-700 cursor-pointer"
                 >
                   <span className="flex items-center justify-between gap-2">
-                    <span className="block font-mono text-[11px] text-slate-400 tabular-nums">
+                    <span className="block font-mono text-xs text-slate-600 tabular-nums">
                       {firstLeg.matchDate || ticket.date} · {firstLeg.kickoffTime}
                     </span>
                     {hasMultiplePicks && (
-                      <span className="shrink-0 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                      <span className="shrink-0 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-xs font-semibold text-slate-600">
                         {fmtCount(group.legs.length)} picks
                       </span>
                     )}
@@ -322,7 +324,7 @@ export function SavedTicketCard({
                               </span>
                               {typeof leg.fairProbability === 'number' && (
                                 <span
-                                  className="block font-mono text-[10px] text-slate-400 tabular-nums"
+                                  className="block font-mono text-xs text-slate-600 tabular-nums"
                                   title="Margin-adjusted win probability"
                                 >
                                   {fmtPercent(leg.fairProbability)}
@@ -335,11 +337,11 @@ export function SavedTicketCard({
                     })}
                   </span>
                   {resultText && (
-                    <span className="block font-mono text-[11px] text-slate-600 tabular-nums">
+                    <span className="block font-mono text-xs text-slate-600 tabular-nums">
                       Result: {resultText}
                     </span>
                   )}
-                  <span className="block text-[10px] font-medium text-slate-500 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+                  <span className="block text-xs font-medium text-slate-500 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
                     {hasMultiplePicks
                       ? `View all ${fmtCount(group.legs.length)} selections →`
                       : 'View match detail →'}

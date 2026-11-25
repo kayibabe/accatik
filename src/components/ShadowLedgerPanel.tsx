@@ -49,11 +49,11 @@ function SummaryItem({
 }) {
   return (
     <div className="flex items-baseline gap-1.5" title={detail}>
-      <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+      <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
         {label}
         {infoKey && <InfoHint infoKey={infoKey} />}
       </dt>
-      <dd className={`font-mono text-xs font-bold tabular-nums ${tone}`}>{value}</dd>
+      <dd className={`font-mono text-sm font-bold tabular-nums ${tone}`}>{value}</dd>
     </div>
   );
 }
@@ -190,7 +190,7 @@ export function ShadowLedgerPanel() {
       cell: (row) => (
         <span
           className={`font-semibold ${
-            row.roi === null ? 'text-slate-400' : pnlTone(row.roi)
+            row.roi === null ? 'text-slate-600' : pnlTone(row.roi)
           }`}
         >
           {fmtSignedPercent(row.roi)}
@@ -211,7 +211,7 @@ export function ShadowLedgerPanel() {
         />
       ),
       cell: (row) => (
-        <span className={row.avgClv === null ? 'text-slate-400' : pnlTone(row.avgClv)}>
+        <span className={row.avgClv === null ? 'text-slate-600' : pnlTone(row.avgClv)}>
           {fmtSignedPercent(row.avgClv)}
         </span>
       ),
@@ -273,7 +273,7 @@ export function ShadowLedgerPanel() {
             <BarChart3 className="h-4 w-4" aria-hidden="true" />
             Shadow Ticket Ledger
           </h2>
-          <p className="mt-0.5 max-w-2xl text-xs text-slate-500">
+          <p className="mt-0.5 max-w-2xl text-sm text-slate-500">
             Every ticket the engine would have built. {shadowLedgerNote()} Only
             prices captured before kickoff are used; tickets the EV gate would
             not recommend stay in the ledger so the gate itself can be graded.
@@ -283,18 +283,19 @@ export function ShadowLedgerPanel() {
           type="button"
           onClick={() => void load()}
           disabled={isLoading}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-60 cursor-pointer"
+          aria-label="Refresh Ledger"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-60 cursor-pointer"
         >
           <RefreshCw
             className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`}
             aria-hidden="true"
           />
-          <span>{isLoading ? 'Loading…' : 'Refresh'}</span>
+          <span>{isLoading ? 'Refreshing…' : 'Refresh Ledger'}</span>
         </button>
       </div>
 
       {error && (
-        <div className="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
+        <div className="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
           <span>{error}</span>
           <button
             type="button"
@@ -308,36 +309,41 @@ export function ShadowLedgerPanel() {
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/60 px-4 py-2.5">
         <div className="flex flex-wrap items-center gap-2">
-          <DatePickerControl
-            value={selectedDateIso}
-            onChange={setSelectedDateIso}
-            label="Filter ledger by matchday"
-            variant="field"
-            size="sm"
-            allowEmpty
-          />
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-semibold text-slate-700">
+              Ledger matchday
+            </span>
+            <DatePickerControl
+              value={selectedDateIso}
+              onChange={setSelectedDateIso}
+              label="Ledger matchday"
+              variant="field"
+              size="sm"
+              allowEmpty
+            />
+          </div>
           <button
             type="button"
             onClick={() => setSelectedDateIso('')}
             disabled={!selectedDateIso}
-            className="h-8 px-2.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg transition-colors hover:bg-slate-50 disabled:opacity-50 cursor-pointer"
+            className="h-8 px-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg transition-colors hover:bg-slate-50 disabled:opacity-50 cursor-pointer"
           >
             All days
           </button>
-          <span className="text-[11px] text-slate-500 font-mono tabular-nums">
+          <span className="text-xs text-slate-500 font-mono tabular-nums">
             {selectedDateIso
               ? `Scoped to ${selectedDateIso}`
               : `Inception to date${summary ? ` · ${fmtCount(summary.availableDates.length)} days recorded` : ''}`}
           </span>
         </div>
         {summary && summary.availableDates.length > 0 && (
-          <label className="flex items-center gap-1.5 text-[11px] text-slate-500">
+          <label className="flex items-center gap-1.5 text-xs text-slate-500">
             Recorded days
             <select
               value={selectedDateIso}
               onChange={(event) => setSelectedDateIso(event.target.value)}
               aria-label="Days with ledger tickets"
-              className="h-8 max-w-[11rem] px-2 text-xs font-mono text-slate-800 bg-white border border-slate-200 rounded-lg tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700 cursor-pointer"
+              className="h-8 max-w-[11rem] px-2 text-sm font-mono text-slate-800 bg-white border border-slate-200 rounded-lg tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700 cursor-pointer"
             >
               <option value="">All days</option>
               {selectedDateIso &&
@@ -357,7 +363,7 @@ export function ShadowLedgerPanel() {
       </div>
 
       {!summary ? (
-        <div className="px-4 py-8 text-center text-xs text-slate-400">
+        <div className="px-4 py-8 text-center text-sm text-slate-600">
           {isLoading ? 'Reading the ledger…' : 'No ledger data yet.'}
         </div>
       ) : selectedDateIso && summary.tickets === 0 ? (
@@ -385,7 +391,7 @@ export function ShadowLedgerPanel() {
         <>
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-100 bg-emerald-50/40 px-4 py-2.5">
             <label
-              className="flex flex-wrap items-center gap-2 text-xs text-slate-700 cursor-pointer"
+              className="flex flex-wrap items-center gap-2 text-sm text-slate-700 cursor-pointer"
               title="Monitoring aid only — small samples mean this is not a betting signal."
             >
               <input
@@ -396,11 +402,11 @@ export function ShadowLedgerPanel() {
               />
               <Filter className="h-3.5 w-3.5 text-emerald-700" aria-hidden="true" />
               <span className="font-semibold">Positive-ROI shortlist</span>
-              <span className="font-mono text-[11px] text-slate-500">
+              <span className="font-mono text-xs text-slate-500">
                 {SHORTLIST_RULE}
               </span>
             </label>
-            <span className="text-[11px] text-slate-500 font-mono tabular-nums">
+            <span className="text-xs text-slate-500 font-mono tabular-nums">
               {shortlistOnly
                 ? `${fmtCount(shortlistedVariants.length)} of ${fmtCount(summary.byVariant.length)} variants`
                 : `Showing all ${fmtCount(summary.byVariant.length)} variants`}
@@ -432,14 +438,14 @@ export function ShadowLedgerPanel() {
                 label="ROI"
                 value={fmtSignedPercent(summary.roi)}
                 detail="Flat stake · void excluded"
-                tone={summary.roi === null ? 'text-slate-400' : pnlTone(summary.roi)}
+                tone={summary.roi === null ? 'text-slate-600' : pnlTone(summary.roi)}
                 infoKey="roi"
               />
               <SummaryItem
                 label="Avg CLV"
                 value={fmtSignedPercent(summary.avgClv)}
                 detail="Placed price vs closing"
-                tone={summary.avgClv === null ? 'text-slate-400' : pnlTone(summary.avgClv)}
+                tone={summary.avgClv === null ? 'text-slate-600' : pnlTone(summary.avgClv)}
                 infoKey="clv"
               />
             </dl>
@@ -455,29 +461,29 @@ export function ShadowLedgerPanel() {
               minWidth="min-w-[720px]"
               compact
               details={(row) => (
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                   <div>
-                    <dt className="text-slate-400">Tickets</dt>
+                    <dt className="text-slate-600">Tickets</dt>
                     <dd className="font-mono text-slate-700">{fmtCount(row.tickets)}</dd>
                   </div>
                   <div>
-                    <dt className="text-slate-400">Record (W-L-V)</dt>
+                    <dt className="text-slate-600">Record (W-L-V)</dt>
                     <dd className="font-mono text-slate-700">
                       {recordLabel(row.won, row.lost, row.voided)}
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-slate-400">Hit rate</dt>
+                    <dt className="text-slate-600">Hit rate</dt>
                     <dd className="font-mono text-slate-700">{fmtPercent(row.hitRate)}</dd>
                   </div>
                   <div>
-                    <dt className="text-slate-400">Break-even</dt>
+                    <dt className="text-slate-600">Break-even</dt>
                     <dd className="font-mono text-slate-700">
                       {fmtPercent(row.breakEvenHitRate)}
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-slate-400">Avg odds</dt>
+                    <dt className="text-slate-600">Avg odds</dt>
                     <dd className="font-mono text-slate-700">
                       {fmtOdds(row.avgOdds > 0 ? row.avgOdds : null)}
                     </dd>
@@ -485,7 +491,7 @@ export function ShadowLedgerPanel() {
                 </dl>
               )}
               empty={
-                <div className="px-4 py-8 text-center text-xs text-slate-500">
+                <div className="px-4 py-8 text-center text-sm text-slate-500">
                   No variant currently meets {SHORTLIST_RULE}.
                   {shortlistOnly && (
                     <button
@@ -501,12 +507,12 @@ export function ShadowLedgerPanel() {
             />
           </div>
 
-          <div className="border-t border-amber-100 bg-amber-50/60 px-4 py-2 text-[11px] leading-relaxed text-amber-800">
+          <div className="border-t border-amber-100 bg-amber-50/60 px-4 py-2 text-xs leading-relaxed text-amber-800">
             Research only — these rankings are a monitoring aid, not betting
             signals.{shortlistOnly ? ' Small samples make the shortlist noisy.' : ''}
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50/70 px-4 py-2.5 text-[11px] text-slate-500">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50/70 px-4 py-2.5 text-xs text-slate-500">
             <span>
               {summary.byPriceQuality
                 .map((row) => `${row.label}: ${row.tickets}`)

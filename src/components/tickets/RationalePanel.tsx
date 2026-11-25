@@ -32,7 +32,7 @@ export function RationalePanel({
     >
       <div className="space-y-3">
         <div
-          className={`rounded-lg border px-3 py-2 text-xs leading-relaxed ${
+          className={`rounded-lg border px-3 py-2 text-sm leading-relaxed ${
             guard.recommended
               ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
               : 'border-amber-200 bg-amber-50 text-amber-800'
@@ -45,10 +45,10 @@ export function RationalePanel({
           </span>
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs leading-relaxed text-slate-600">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm leading-relaxed text-slate-600">
           <p className="font-semibold text-slate-800">Why this verdict</p>
           <p className="mt-1">{guard.reason}</p>
-          <p className="mt-1 text-[11px] text-slate-500">
+          <p className="mt-1 text-xs text-slate-500">
             {isFair
               ? `De-vigged prices, with ${fmtPercent(
                   (guard.economics.combinedOverround - 1) * 100

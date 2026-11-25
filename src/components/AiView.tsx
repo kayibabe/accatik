@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bot,
   Check,
@@ -16,12 +16,13 @@ import type { AccaStrategy } from '../types/fixtures.ts';
 import type {
   AiAccumulatorResponse,
   AiBriefingResponse,
+  AiPerformanceResponse,
   AiPick,
   AiRiskMode,
   AiTicketLeg,
 } from '../types/ai.ts';
 import { apiFetch } from '../utils/api.ts';
-import { fmtSignedPercent } from '../utils/format.ts';
+import { fmtSignedPercent, fmtUnits } from '../utils/format.ts';
 import { DataCard, InfoHint, MetricCard, MetricGrid } from './ui/DataCard.tsx';
 import { PageHeader } from './ui/PageHeader.tsx';
 import { EmptyState, ErrorState, InlineLoading, LoadingState } from './ui/States.tsx';
@@ -112,7 +113,7 @@ function DecisionChain({
       label: 'Stressed EV',
       value: pick ? pct(pick.evStress) : '—',
       detail: 'after uncertainty haircut',
-      tone: pick && pick.evStress > 0 ? 'text-emerald-700' : 'text-slate-400',
+      tone: pick && pick.evStress > 0 ? 'text-emerald-700' : 'text-slate-600',
       infoKey: 'ev',
     },
     {
@@ -128,7 +129,7 @@ function DecisionChain({
       label: 'Avg CLV',
       value: avgClv === null ? '—' : fmtSignedPercent(avgClv, 2),
       detail: 'settled shadow tickets',
-      tone: avgClv === null ? 'text-slate-400' : pnlTone(avgClv),
+      tone: avgClv === null ? 'text-slate-600' : pnlTone(avgClv),
       infoKey: 'clv',
     },
     {
@@ -154,7 +155,7 @@ function DecisionChain({
             key={cell.key}
             className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
           >
-            <p className="flex items-center text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            <p className="flex items-center text-xs font-semibold uppercase tracking-wide text-slate-500">
               {cell.label}
               {cell.infoKey && <InfoHint infoKey={cell.infoKey} />}
             </p>
@@ -162,7 +163,7 @@ function DecisionChain({
               {cell.value}
             </p>
             {cell.detail && (
-              <p className="mt-0.5 truncate text-[10px] text-slate-500" title={cell.detail}>
+              <p className="mt-0.5 truncate text-xs text-slate-500" title={cell.detail}>
                 {cell.detail}
               </p>
             )}
@@ -170,7 +171,7 @@ function DecisionChain({
         ))}
       </div>
       {!pick ? (
-        <div className="mt-3 flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-700">
+        <div className="mt-3 flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-relaxed text-slate-700">
           <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
           <span>
             <strong>No bet.</strong> No priced selection cleared the stressed-EV gate.
@@ -178,7 +179,7 @@ function DecisionChain({
           </span>
         </div>
       ) : (
-        <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
+        <p className="mt-3 text-xs leading-relaxed text-slate-500">
           CLV is measured after settlement. Calibration uses settled legs for this market;
           an empty record is shown as unavailable, never as a pass.
         </p>
@@ -208,6 +209,9 @@ export function AiView({
   const [briefing, setBriefing] = useState<AiBriefingResponse | null>(null);
   const [ticket, setTicket] = useState<AiAccumulatorResponse | null>(null);
   const [ticketScore, setTicketScore] = useState<number | null>(null);
+  const [performance, setPerformance] = useState<AiPerformanceResponse | null>(null);
+  const [performanceLoading, setPerformanceLoading] = useState(false);
+  const [performanceError, setPerformanceError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [building, setBuilding] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -215,6 +219,16 @@ export function AiView({
     scope: 'load' | 'generate';
     message: string;
   } | null>(null);
+  // Rapid date/strategy/filter changes can leave older requests in flight.
+  const loadRequestRef = useRef(0);
+  const generateRequestRef = useRef(0);
+  useEffect(
+    () => () => {
+      loadRequestRef.current += 1;
+      generateRequestRef.current += 1;
+    },
+    []
+  );
 
   const payload = useMemo(
     () => ({
@@ -228,23 +242,30 @@ export function AiView({
   );
 
   const load = useCallback(async () => {
+    const requestId = ++loadRequestRef.current;
+    // A ticket built from an older briefing is no longer valid.
+    generateRequestRef.current += 1;
+    setBuilding(false);
     setLoading(true);
     setError(null);
     setTicket(null);
     setTicketScore(null);
     try {
-      setBriefing(await apiFetch<AiBriefingResponse>('/api/ai/briefing', {
+      const result = await apiFetch<AiBriefingResponse>('/api/ai/briefing', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(payload),
-      }));
+      });
+      if (requestId !== loadRequestRef.current) return;
+      setBriefing(result);
     } catch (err) {
+      if (requestId !== loadRequestRef.current) return;
       setError({
         scope: 'load',
         message: err instanceof Error ? err.message : 'Could not build the AI briefing.',
       });
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestRef.current) setLoading(false);
     }
   }, [payload]);
 
@@ -254,6 +275,7 @@ export function AiView({
 
   const generate = useCallback(async () => {
     const bar = minScore;
+    const requestId = ++generateRequestRef.current;
     setBuilding(true);
     setError(null);
     try {
@@ -267,17 +289,33 @@ export function AiView({
           maxLegs,
         }),
       });
+      if (requestId !== generateRequestRef.current) return;
       setTicketScore(bar);
       setTicket(built);
     } catch (err) {
+      if (requestId !== generateRequestRef.current) return;
       setError({
         scope: 'generate',
         message: err instanceof Error ? err.message : 'Could not build the AI accumulator.',
       });
     } finally {
-      setBuilding(false);
+      if (requestId === generateRequestRef.current) setBuilding(false);
     }
   }, [payload, minScore, minOdds, maxLegs]);
+
+  const loadPerformance = useCallback(async () => {
+    setPerformanceLoading(true);
+    setPerformanceError(null);
+    try {
+      setPerformance(await apiFetch<AiPerformanceResponse>('/api/ai/performance'));
+    } catch (err) {
+      setPerformanceError(
+        err instanceof Error ? err.message : 'Could not load AI Desk history.'
+      );
+    } finally {
+      setPerformanceLoading(false);
+    }
+  }, []);
 
   const competitions = useMemo(() => {
     const names = new Set((briefing?.picks ?? []).map((pick) => pick.competition));
@@ -343,7 +381,7 @@ export function AiView({
               type="button"
               onClick={() => void load()}
               disabled={loading}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 cursor-pointer"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
               Refresh analysis
@@ -351,7 +389,7 @@ export function AiView({
             <button
               type="button"
               onClick={onGoToSlate}
-              className="rounded-lg bg-emerald-700 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-800 cursor-pointer"
+              className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 cursor-pointer"
             >
               Back to Today&apos;s Slate
             </button>
@@ -359,7 +397,7 @@ export function AiView({
         }
       />
 
-      <div className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-relaxed text-amber-900">
+      <div className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-900">
         <ShieldAlert className="h-5 w-5 shrink-0 text-amber-600" aria-hidden="true" />
         <p>
           <strong>Estimates, not certainty.</strong> No model can know a result; the accumulator
@@ -379,11 +417,11 @@ export function AiView({
               title={input.detail}
               className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5"
             >
-              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
                 {input.page}
               </p>
-              <p className="mt-1 text-[11px] font-semibold text-slate-800">{input.label}</p>
-              <p className="mt-0.5 font-mono text-[10px] text-slate-500">{input.records} records</p>
+              <p className="mt-1 text-xs font-semibold text-slate-800">{input.label}</p>
+              <p className="mt-0.5 font-mono text-xs text-slate-500">{input.records} records</p>
             </div>
           ))}
           {!briefing && loading && <LoadingState label="Reading workbench data…" count={6} />}
@@ -400,13 +438,13 @@ export function AiView({
       >
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <label className="block">
-            <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
               Market
             </span>
             <select
               value={marketFilter}
               onChange={(event) => setMarketFilter(event.target.value)}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800"
             >
               {MARKET_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
@@ -414,13 +452,13 @@ export function AiView({
             </select>
           </label>
           <label className="block">
-            <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
               Competition
             </span>
             <select
               value={competitionFilter}
               onChange={(event) => setCompetitionFilter(event.target.value)}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800"
             >
               <option value="all">All competitions</option>
               {competitions.map((competition) => (
@@ -429,13 +467,13 @@ export function AiView({
             </select>
           </label>
           <label className="block">
-            <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
               Risk mode · ticket
             </span>
             <select
               value={riskMode}
               onChange={(event) => setRiskMode(event.target.value as AiRiskMode)}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800"
             >
               {RISK_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
@@ -443,7 +481,7 @@ export function AiView({
             </select>
           </label>
           <label className="block">
-            <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
               Min model score · {minScore}
             </span>
             <input
@@ -460,13 +498,96 @@ export function AiView({
               type="button"
               onClick={() => void generate()}
               disabled={building || picks.length === 0}
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-60 cursor-pointer"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60 cursor-pointer"
             >
               <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
               {building ? 'Building…' : 'Build AI accumulator'}
             </button>
           </div>
         </div>
+      </DataCard>
+
+      <DataCard
+        title="Historical performance"
+        subtitle="Archived AI Desk picks graded against settled results · flat 1u stake"
+        actions={
+          <button
+            type="button"
+            onClick={() => void loadPerformance()}
+            disabled={performanceLoading}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 cursor-pointer"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${performanceLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
+            {performance ? 'Refresh history' : 'Load history'}
+          </button>
+        }
+      >
+        {performanceError ? (
+          <p className="text-sm text-rose-700">{performanceError}</p>
+        ) : performanceLoading ? (
+          <InlineLoading label="Grading archived picks…" />
+        ) : !performance ? (
+          <p className="text-sm text-slate-600">
+            Load the archive to see hit rate and flat-stake ROI by model-score band.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-600">
+              {performance.sample.dates} dates · {performance.sample.dedupedPicks} graded picks ·{' '}
+              {performance.sample.settled} settled · {performance.sample.pending} pending ·{' '}
+              {performance.sample.voids} void · {performance.sample.reconstructed} reconstructed
+            </p>
+            {performance.sample.dedupedPicks === 0 ? (
+              <p className="text-sm text-slate-500">
+                No AI Desk snapshots have been archived yet. Generate a briefing to start the record.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[520px] text-left text-sm">
+                  <caption className="sr-only">
+                    Archived AI Desk performance by model-score band
+                  </caption>
+                  <thead>
+                    <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                      <th scope="col" className="py-2 pr-3 font-semibold">Model score</th>
+                      <th scope="col" className="py-2 pr-3 text-right font-semibold">Settled</th>
+                      <th scope="col" className="py-2 pr-3 text-right font-semibold">Hit rate</th>
+                      <th scope="col" className="py-2 pr-3 text-right font-semibold">ROI</th>
+                      <th scope="col" className="py-2 pr-3 text-right font-semibold">Profit</th>
+                      <th scope="col" className="py-2 text-right font-semibold">Avg score</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {performance.rows.map((row) => (
+                      <tr key={row.key} className="border-b border-slate-100 last:border-0">
+                        <td className={`py-2 pr-3 ${row.key === 'overall' ? 'font-semibold text-slate-800' : 'text-slate-600'}`}>
+                          {row.label}
+                        </td>
+                        <td className="py-2 pr-3 text-right font-mono text-slate-700">{row.settled}</td>
+                        <td className="py-2 pr-3 text-right font-mono text-slate-700">
+                          {row.hitRate === null ? '—' : `${row.hitRate.toFixed(1)}%`}
+                        </td>
+                        <td className={`py-2 pr-3 text-right font-mono ${pnlTone(row.roiPct ?? 0)}`}>
+                          {fmtSignedPercent(row.roiPct)}
+                        </td>
+                        <td className={`py-2 pr-3 text-right font-mono ${pnlTone(row.profitUnits)}`}>
+                          {fmtUnits(row.profitUnits)}
+                        </td>
+                        <td className="py-2 text-right font-mono text-slate-700">
+                          {row.avgAiScore === null ? '—' : row.avgAiScore.toFixed(1)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <p className="text-xs leading-relaxed text-slate-500">
+              Each fixture/market is counted once per matchday using the newest archived snapshot.
+              Void markets are excluded from hit rate and ROI. Research record only, not a staking guarantee.
+            </p>
+          </div>
+        )}
       </DataCard>
 
       {error && (
@@ -522,7 +643,7 @@ export function AiView({
                           ? `Add all ${picks.length} visible picks to a wide research slip; the five-leg cap is not applied`
                           : 'Load the matchday slate first'
                       }
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50 cursor-pointer"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50 cursor-pointer"
                     >
                       <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                       Add all to slip
@@ -538,7 +659,7 @@ export function AiView({
                       <button
                         type="button"
                         onClick={() => setMinScore(40)}
-                        className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
                       >
                         Lower threshold to 40
                       </button>
@@ -553,21 +674,21 @@ export function AiView({
                       >
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div className="min-w-0">
-                            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
                               #{index + 1} · {pick.competition} · {pick.kickoffTime}
                             </p>
                             <p className="truncate text-sm font-bold text-slate-900">
-                              {pick.homeTeam} <span className="text-slate-400">vs</span> {pick.awayTeam}
+                              {pick.homeTeam} <span className="text-slate-600">vs</span> {pick.awayTeam}
                             </p>
-                            <p className="mt-0.5 text-xs text-slate-600">
+                            <p className="mt-0.5 text-sm text-slate-600">
                               {pick.label} <span className="font-mono font-semibold text-slate-900">@ {pick.odds.toFixed(2)}</span>
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${frameworkTone(pick.frameworkStatus)}`}>
+                            <span className={`rounded-full border px-2 py-0.5 text-xs font-bold uppercase ${frameworkTone(pick.frameworkStatus)}`}>
                               {pick.band}
                             </span>
-                            <span className="rounded-lg bg-slate-900 px-2.5 py-1 font-mono text-xs font-bold text-white">
+                            <span className="rounded-lg bg-slate-900 px-2.5 py-1 font-mono text-sm font-bold text-white">
                               {pick.aiScore}
                             </span>
                           </div>
@@ -575,27 +696,27 @@ export function AiView({
 
                         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                           <div className="rounded-lg bg-slate-50 px-2.5 py-2">
-                            <p className="text-[10px] text-slate-500">Model</p>
+                            <p className="text-xs text-slate-500">Model</p>
                             <p className="font-mono text-sm font-bold text-slate-900">{pct(pick.pModel)}</p>
                           </div>
                           <div className="rounded-lg bg-slate-50 px-2.5 py-2">
-                            <p className="text-[10px] text-slate-500">Fair price</p>
+                            <p className="text-xs text-slate-500">Fair price</p>
                             <p className="font-mono text-sm font-bold text-slate-900">{pct(pick.pFair)}</p>
                           </div>
                           <div className="rounded-lg bg-emerald-50 px-2.5 py-2">
-                            <p className="text-[10px] text-emerald-700">Model edge (pp)</p>
+                            <p className="text-xs text-emerald-700">Model edge (pp)</p>
                             <p className="font-mono text-sm font-bold text-emerald-800">
                               {pick.edge >= 0 ? '+' : ''}
                               {(pick.edge * 100).toFixed(1)} pp
                             </p>
                           </div>
                           <div className="rounded-lg bg-emerald-50 px-2.5 py-2">
-                            <p className="text-[10px] text-emerald-700">EV %</p>
+                            <p className="text-xs text-emerald-700">EV %</p>
                             <p className="font-mono text-sm font-bold text-emerald-800">{pct(pick.evStress)}</p>
                           </div>
                         </div>
 
-                        <ul className="mt-3 space-y-1 text-[11px] leading-relaxed text-slate-600">
+                        <ul className="mt-3 space-y-1 text-xs leading-relaxed text-slate-600">
                           {pick.narrative && (
                             <li className="flex gap-1.5 font-medium text-slate-800">
                               <Bot className="mt-0.5 h-3 w-3 shrink-0 text-indigo-500" aria-hidden="true" />
@@ -615,7 +736,7 @@ export function AiView({
                             {pick.risks.slice(0, 4).map((risk) => (
                               <span
                                 key={risk}
-                                className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800"
+                                className="rounded bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-800"
                               >
                                 {risk}
                               </span>
@@ -624,7 +745,7 @@ export function AiView({
                         )}
 
                         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
-                          <span className="text-[10px] text-slate-500">
+                          <span className="text-xs text-slate-500">
                             Suggested stake {pct(pick.stakePct, 2)} of bankroll · {pick.signals.poisson !== null ? '5' : '4'} signals
                           </span>
                           <button
@@ -632,7 +753,7 @@ export function AiView({
                             onClick={() => onApplyTicket([toLeg(pick)])}
                             disabled={!canApplyTicket}
                             title={canApplyTicket ? 'Add to a wide research slip; the five-leg cap is not applied' : 'Load the matchday slate first'}
-                            className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50 cursor-pointer"
+                            className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50 cursor-pointer"
                           >
                             Add to slip
                           </button>
@@ -654,7 +775,7 @@ export function AiView({
                       type="button"
                       onClick={() => void generate()}
                       disabled={building}
-                      className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 cursor-pointer"
+                      className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 cursor-pointer"
                     >
                       Regenerate
                     </button>
@@ -670,7 +791,7 @@ export function AiView({
                         type="button"
                         onClick={() => void generate()}
                         disabled={building || picks.length === 0}
-                        className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-60 cursor-pointer"
+                        className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60 cursor-pointer"
                       >
                         {building ? 'Building…' : 'Generate with AI'}
                       </button>
@@ -684,34 +805,34 @@ export function AiView({
                 ) : (
                   <div className="space-y-4">
                     <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3.5">
-                      <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-800">
+                      <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">
                         Combined quote
                       </p>
                       <p className="mt-1 font-mono text-3xl font-bold tabular-nums text-emerald-900">
                         {visibleTicket.totalOdds.toFixed(2)}
                       </p>
-                      <p className="mt-1 text-[11px] text-emerald-800">
+                      <p className="mt-1 text-xs text-emerald-800">
                         {visibleTicket.legs.length} legs · {visibleTicket.targetReached ? 'target reached' : 'below target'}
                       </p>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2">
                       <div className="rounded-lg border border-slate-200 p-2.5">
-                        <p className="text-[10px] text-slate-500">Model hit chance</p>
+                        <p className="text-xs text-slate-500">Model hit chance</p>
                         <p className="font-mono text-lg font-bold text-slate-900">{pct(visibleTicket.hitProbability)}</p>
                       </div>
                       <div className="rounded-lg border border-slate-200 p-2.5">
-                        <p className="text-[10px] text-slate-500">Break-even</p>
+                        <p className="text-xs text-slate-500">Break-even</p>
                         <p className="font-mono text-lg font-bold text-slate-900">{pct(visibleTicket.breakEvenProbability)}</p>
                       </div>
                       <div className="rounded-lg border border-slate-200 p-2.5">
-                        <p className="text-[10px] text-slate-500">Stressed EV</p>
+                        <p className="text-xs text-slate-500">Stressed EV</p>
                         <p className={`font-mono text-lg font-bold ${visibleTicket.evStress > 0 ? 'text-emerald-700' : 'text-red-600'}`}>
                           {pct(visibleTicket.evStress)}
                         </p>
                       </div>
                       <div className="rounded-lg border border-slate-200 p-2.5">
-                        <p className="text-[10px] text-slate-500">Kelly stake</p>
+                        <p className="text-xs text-slate-500">Kelly stake</p>
                         <p className="font-mono text-lg font-bold text-slate-900">{pct(visibleTicket.stakePct, 2)}</p>
                       </div>
                     </div>
@@ -719,12 +840,12 @@ export function AiView({
                     <ol className="space-y-2">
                       {visibleTicket.legs.map((leg, index) => (
                         <li key={`${leg.fixtureId}:${leg.marketId}`} className="flex gap-2 rounded-lg border border-slate-200 p-2.5">
-                          <span className="font-mono text-[11px] font-bold text-slate-400">{index + 1}</span>
+                          <span className="font-mono text-xs font-bold text-slate-600">{index + 1}</span>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-semibold text-slate-800">
+                            <p className="truncate text-sm font-semibold text-slate-800">
                               {leg.homeTeam} v {leg.awayTeam}
                             </p>
-                            <p className="text-[11px] text-slate-500">
+                            <p className="text-xs text-slate-500">
                               {leg.label} · <span className="font-mono">{leg.odds.toFixed(2)}</span> · {leg.band}
                             </p>
                           </div>
@@ -732,10 +853,10 @@ export function AiView({
                       ))}
                     </ol>
 
-                    <p className="text-[11px] leading-relaxed text-slate-600">{visibleTicket.reason}</p>
+                    <p className="text-xs leading-relaxed text-slate-600">{visibleTicket.reason}</p>
 
                     {visibleTicket.risks.length > 0 && (
-                      <ul className="space-y-1 rounded-lg bg-amber-50 p-2.5 text-[11px] text-amber-900">
+                      <ul className="space-y-1 rounded-lg bg-amber-50 p-2.5 text-xs text-amber-900">
                         {visibleTicket.risks.map((risk) => (
                           <li key={risk}>· {risk}</li>
                         ))}
@@ -748,7 +869,7 @@ export function AiView({
                         onClick={() => onApplyTicket(visibleTicket.legs)}
                         disabled={!canApplyTicket}
                         title={canApplyTicket ? 'Load into a wide research slip; the five-leg cap is not applied' : 'Load the matchday slate first'}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-60 cursor-pointer"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60 cursor-pointer"
                       >
                         <Ticket className="h-3.5 w-3.5" aria-hidden="true" />
                         Load into slip
@@ -756,7 +877,7 @@ export function AiView({
                       <button
                         type="button"
                         onClick={() => void copyTicket()}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
                       >
                         {copied ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <Clipboard className="h-3.5 w-3.5" aria-hidden="true" />}
                         {copied ? 'Copied' : 'Copy ticket'}
@@ -767,21 +888,21 @@ export function AiView({
               </DataCard>
 
               <DataCard title="How the free models work" subtitle="Why picks rank the way they do">
-                <div className="space-y-2 text-[11px] leading-relaxed text-slate-600">
+                <div className="space-y-2 text-xs leading-relaxed text-slate-600">
                   <p className="flex gap-2">
-                    <Filter className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+                    <Filter className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-600" aria-hidden="true" />
                     When signals disagree, the estimate is pulled toward the market and the confidence
                     band falls. Ranking uses <strong>stressed EV</strong>, not hit rate, because a high
                     win rate at short odds can still lose money.
                   </p>
                   <p className="flex gap-2">
-                    <Layers3 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+                    <Layers3 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-600" aria-hidden="true" />
                     The generated accumulator is capped at five legs from separate matches, penalises
                     shared competitions, and sizes stakes with quarter-Kelly capped at 2% per pick and
                     1% per ticket.
                   </p>
                   <p className="flex gap-2">
-                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-600" aria-hidden="true" />
                     {briefing.narrativeNote}
                   </p>
                 </div>

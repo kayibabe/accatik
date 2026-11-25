@@ -66,7 +66,7 @@ export function DatePickerControl({
         title={label}
         className={`${
           size === 'sm' ? 'h-8' : 'h-9'
-        } pl-8 pr-2.5 text-xs font-mono font-medium tabular-nums text-slate-800 bg-white border border-slate-200 rounded-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700`}
+        } pl-8 pr-2.5 text-sm font-mono font-medium tabular-nums text-slate-800 bg-white border border-slate-200 rounded-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700`}
       />
     </label>
   );

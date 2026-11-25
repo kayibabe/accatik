@@ -123,6 +123,11 @@ export interface Fixture {
     halftimeAway?: number | null;
   };
   venue: string;
+  /** Upstream competition and team ids, kept for durable standings lookups. */
+  leagueId?: number;
+  leagueSeason?: number;
+  homeTeamId?: number;
+  awayTeamId?: number;
   formHome: string;
   formAway: string;
   tacticalSummary: string;
@@ -165,6 +170,22 @@ export interface Fixture {
   featuredPickSnapshots?: FeaturedPickSnapshot[];
   /** Framework decision for this fixture. Stripped before archival. */
   framework?: FixtureFrameworkSummary;
+  /**
+   * Framework expected goals captured at assessment time. Kept as stable
+   * fields because the full framework decision is stripped before archival,
+   * so settled matches still show the projection the user saw pre-match.
+   */
+  modelXgHome?: number;
+  modelXgAway?: number;
+  /**
+   * League-table positions captured with the pick, from API-Football
+   * standings. Stable fields survive the archive even though the raw
+   * standings response is not stored.
+   */
+  positionHome?: number | null;
+  positionAway?: number | null;
+  /** ISO timestamp when the standings snapshot was captured. */
+  standingsAt?: string;
 }
 
 /**

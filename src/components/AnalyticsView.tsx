@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowRight } from 'lucide-react';
 import type {
   AnalyticsRefreshResult,
   MarketAnalyticsRow,
@@ -14,7 +15,6 @@ import {
   type SortState,
 } from '../utils/tableSort.ts';
 import { TicketReplayPanel } from './TicketReplayPanel.tsx';
-import { CombinationRoiView } from './CombinationRoiView.tsx';
 import { AnalyticsHeader } from './analytics/AnalyticsHeader.tsx';
 import {
   AnalyticsSectionNav,
@@ -25,7 +25,6 @@ import { GradeFilterPanel } from './analytics/GradeFilterPanel.tsx';
 import { FeaturedPicksTable } from './analytics/FeaturedPicksTable.tsx';
 import { MarketAnalyticsTable } from './analytics/MarketAnalyticsTable.tsx';
 import { CumulativePnlSection } from './analytics/CumulativePnlSection.tsx';
-import { PositiveReadMatches } from './analytics/PositiveReadMatches.tsx';
 import { EmptyState, LoadingState } from './ui/States.tsx';
 import {
   FEATURED_ACCESSORS,
@@ -46,12 +45,16 @@ interface AnalyticsViewProps {
   /** Current slip controls, so the ticket replay can describe this shape too. */
   minOdds: number;
   maxLegs: number;
-  /** Client-local matchday, used by the daily feed's date navigator. */
+  /** Client-local matchday, used for "Today"/"Yesterday" labels. */
   todayDate: string;
+  /** Matchday selected in the date bar, whose group opens by default. */
+  selectedDate: string;
   /** Deep-linkable page selected in the analytics tab strip. */
   activeSection?: string;
   onSectionChange: (id: string) => void;
   onGoToSlate: () => void;
+  /** Opens the top-level tab that owns daily reads and the ROI study. */
+  onGoToPositiveReads?: () => void;
 }
 
 export function AnalyticsView({
@@ -60,9 +63,11 @@ export function AnalyticsView({
   minOdds,
   maxLegs,
   todayDate,
+  selectedDate,
   activeSection,
   onSectionChange,
   onGoToSlate,
+  onGoToPositiveReads,
 }: AnalyticsViewProps) {
   const currentSection = resolveAnalyticsSection(activeSection);
   const [data, setData] = useState<PickAnalyticsResponse | null>(null);
@@ -332,6 +337,30 @@ export function AnalyticsView({
 
   const refreshNow = () => void refreshTables(true);
 
+  const openPositiveReads = () => {
+    if (onGoToPositiveReads) {
+      onGoToPositiveReads();
+      return;
+    }
+    // Fallback for callers that have not wired the callback yet: the app has no
+    // router, but its popstate handler reads the tab straight from the URL.
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    params.set('tab', 'positive-reads');
+    params.set('section', 'combination-roi');
+    window.history.pushState(
+      null,
+      '',
+      `${window.location.pathname}?${params.toString()}`
+    );
+    window.dispatchEvent(new Event('popstate'));
+  };
+
+  const detailSection =
+    currentSection === 'positive-reads' || currentSection === 'research'
+      ? currentSection
+      : null;
+
   return (
     <section aria-label="Analytics" className="space-y-6">
       <AnalyticsHeader
@@ -351,6 +380,31 @@ export function AnalyticsView({
         onSelect={onSectionChange}
       />
 
+      {detailSection && (
+        <section
+          id={detailSection}
+          aria-label={detailSection === 'research' ? 'Combination ROI' : 'Positive Reads'}
+          className="rounded-xl border border-slate-200 bg-white px-4 py-4"
+        >
+          <h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">
+            {detailSection === 'research' ? 'Combination ROI' : 'Positive Reads'}
+          </h2>
+          <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-700">
+            Daily qualifying picks and the Combination ROI study live under the
+            top-level Positive Reads tab. Analytics here stays focused on
+            aggregate and archive views.
+          </p>
+          <button
+            type="button"
+            onClick={openPositiveReads}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
+          >
+            Open Positive Reads
+            <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        </section>
+      )}
+
       {loading && !data ? (
         <LoadingState label="Loading global analytics archive…" count={6} />
       ) : !data ? (
@@ -361,7 +415,7 @@ export function AnalyticsView({
             <button
               type="button"
               onClick={refreshNow}
-              className="rounded-lg bg-emerald-700 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-800 cursor-pointer"
+              className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 cursor-pointer"
             >
               Refresh archive
             </button>
@@ -375,7 +429,7 @@ export function AnalyticsView({
             <button
               type="button"
               onClick={refreshNow}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
             >
               Refresh archive
             </button>
@@ -467,30 +521,11 @@ export function AnalyticsView({
                 strategy={strategy}
                 refreshKey={refreshKey}
                 todayDate={todayDate}
+                selectedDate={selectedDate}
               />
             </section>
           )}
 
-          {currentSection === 'positive-reads' && (
-            <section id="positive-reads" aria-label="Daily qualifying reads">
-              <PositiveReadMatches
-                strategy={strategy}
-                todayDate={todayDate}
-                refreshKey={refreshKey}
-              />
-            </section>
-          )}
-
-          {currentSection === 'research' && (
-            <section id="research" aria-label="Combination ROI research">
-              <CombinationRoiView
-                strategy={strategy}
-                refreshKey={refreshKey}
-                force={forceRefresh}
-                onReload={refreshNow}
-              />
-            </section>
-          )}
         </>
       )}
     </section>

@@ -147,7 +147,7 @@ function ComboChip({
         expand: 'text-emerald-700 hover:bg-emerald-100',
         detailBorder: 'border-emerald-200/70',
       };
-  const containerClass = `max-w-full rounded-lg border px-2.5 py-1.5 text-[11px] ${accent.container} ${
+  const containerClass = `max-w-full rounded-lg border px-2.5 py-1.5 text-xs ${accent.container} ${
     block ? 'w-full' : 'inline-flex flex-col'
   }`;
 
@@ -179,7 +179,7 @@ function ComboChip({
         </span>
       )}
       <span
-        className={`shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold uppercase ${
+        className={`shrink-0 rounded px-1 py-0.5 text-xs font-semibold uppercase ${
           tier.className
         } ${block ? 'w-[84px] text-center' : ''}`}
       >
@@ -187,7 +187,7 @@ function ComboChip({
       </span>
       {pick?.bandDrift && (
         <span
-          className="shrink-0 rounded bg-amber-100 px-1 py-0.5 text-[9px] font-semibold uppercase text-amber-800"
+          className="shrink-0 rounded bg-amber-100 px-1 py-0.5 text-xs font-semibold uppercase text-amber-800"
           title={`Live ${pick.band} vs study ${combo.band}`}
         >
           Band drift
@@ -195,7 +195,7 @@ function ComboChip({
       )}
       {pick && pick.status !== 'Pending' && (
         <span
-          className={`shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold uppercase ${PICK_STATUS_STYLES[pick.status]}`}
+          className={`shrink-0 rounded px-1 py-0.5 text-xs font-semibold uppercase ${PICK_STATUS_STYLES[pick.status]}`}
         >
           {pick.status}
         </span>
@@ -217,7 +217,7 @@ function ComboChip({
   );
 
   const details = expanded ? (
-    <div className={`mt-2 w-full border-t ${accent.detailBorder} pt-2 text-[11px] text-slate-700 whitespace-normal`}>
+    <div className={`mt-2 w-full border-t ${accent.detailBorder} pt-2 text-xs text-slate-700 whitespace-normal`}>
       <dl className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
         {detailRows.map(([label, value]) => (
           <div key={label} className="flex gap-2">
@@ -263,7 +263,7 @@ function ComboChip({
           <button
             type="button"
             onClick={() => onAdd?.(pick!)}
-            className="inline-flex shrink-0 items-center gap-0.5 rounded bg-emerald-700 px-1.5 py-0.5 text-[10px] font-semibold text-white hover:bg-emerald-800 cursor-pointer"
+            className="inline-flex shrink-0 items-center gap-0.5 rounded bg-emerald-700 px-1.5 py-0.5 text-xs font-semibold text-white hover:bg-emerald-800 cursor-pointer"
           >
             <Plus className="h-3 w-3" aria-hidden="true" />
             Add
@@ -442,17 +442,17 @@ export function PositiveReadMatches({
     <section aria-label="Daily qualifying reads" className="space-y-3">
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-medium text-slate-500">
+          <p className="text-sm font-medium text-slate-500">
             {positiveReadEyebrow({ strategy, mode: surface, source: live ? 'live' : 'archive' })}
           </p>
           <h2 className="mt-1 flex items-center gap-2 text-xl font-bold tracking-tight text-slate-900">
             <CalendarDays className="h-5 w-5 text-emerald-700" aria-hidden="true" />
             {POSITIVE_READ_TITLE}
           </h2>
-          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-slate-600">
+          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-600">
             {positiveReadIntroduction(fmtShortDate(displayedDate))}
           </p>
-          <p className="mt-1 max-w-3xl text-[11px] leading-relaxed text-slate-500">
+          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-slate-500">
             {positiveReadModeNote(surface)}
           </p>
         </div>
@@ -469,7 +469,7 @@ export function PositiveReadMatches({
               type="button"
               onClick={() => setLive(false)}
               aria-pressed={!live}
-              className={`px-2.5 py-1 text-xs font-medium rounded-md cursor-pointer ${
+              className={`px-2.5 py-1 text-sm font-medium rounded-md cursor-pointer ${
                 !live ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
@@ -479,7 +479,7 @@ export function PositiveReadMatches({
               type="button"
               onClick={() => setLive(true)}
               aria-pressed={live}
-              className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md cursor-pointer ${
+              className={`inline-flex items-center gap-1 px-2.5 py-1 text-sm font-medium rounded-md cursor-pointer ${
                 live ? 'bg-emerald-700 text-white' : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
@@ -491,7 +491,7 @@ export function PositiveReadMatches({
             type="button"
             onClick={reload}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 cursor-pointer"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
             Refresh
@@ -500,7 +500,7 @@ export function PositiveReadMatches({
             <button
               type="button"
               onClick={onOpenTicket}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-2.5 py-1.5 text-sm font-semibold text-white hover:bg-slate-800 cursor-pointer"
             >
               Open ticket
               <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
@@ -512,7 +512,7 @@ export function PositiveReadMatches({
       {isBuild && lastAdded !== null && (
         <p
           role="status"
-          className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"
+          className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"
         >
           {fmtCount(lastAdded)} {lastAdded === 1 ? 'pick' : 'picks'} sent to your slip. Open the
           ticket to check the final shape — qualifying reads keep every pending pick, one per
@@ -523,7 +523,7 @@ export function PositiveReadMatches({
       {isBuild && !live && filtered && filtered.matches.length > 0 && pendingPicks.length === 0 && (
         <p
           role="status"
-          className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"
+          className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
         >
           These archived picks are already settled, so they cannot join a slip.{' '}
           <button
@@ -550,7 +550,7 @@ export function PositiveReadMatches({
         />
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-x-1 gap-y-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
+          <div className="flex flex-wrap items-center gap-x-1 gap-y-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
             <span>
               Study as of <strong className="font-semibold">{fmtShortDate(data.studyGeneratedAt)}</strong>
             </span>
@@ -613,7 +613,7 @@ export function PositiveReadMatches({
                     type="button"
                     onClick={() => addPicks(pendingPicks)}
                     title="Add every currently filtered, pending pick without the five-leg cut"
-                    className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-800 hover:bg-emerald-100 cursor-pointer"
+                    className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 cursor-pointer"
                   >
                     Add all pending picks
                   </button>
@@ -631,7 +631,7 @@ export function PositiveReadMatches({
                     <button
                       type="button"
                       onClick={resetFilters}
-                      className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                      className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
                     >
                       Reset filters
                     </button>
@@ -640,7 +640,7 @@ export function PositiveReadMatches({
               </div>
             ) : (
               <div className="space-y-4 p-4">
-                <p className="text-[11px] text-slate-400">
+                <p className="text-xs text-slate-600">
                   Select a section or parameter to jump to its fixtures on{' '}
                   {fmtShortDate(displayedDate)}.
                 </p>
@@ -657,14 +657,14 @@ export function PositiveReadMatches({
                         title={`Jump to a fixture matched by ${group.sectionLabel}`}
                         className="mb-2 flex w-full items-center gap-2 rounded-lg px-1 py-1 text-left transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-emerald-700 disabled:cursor-default disabled:hover:bg-transparent cursor-pointer"
                       >
-                        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                           {group.sectionLabel}
                         </span>
                         <span className="h-px flex-1 bg-slate-200" aria-hidden="true" />
-                        <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-slate-600">
+                        <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs tabular-nums text-slate-600">
                           {fmtCount(group.combos.length)} params
                         </span>
-                        <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-emerald-700">
+                        <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 font-mono text-xs tabular-nums text-emerald-700">
                           {fmtCount(sectionFixtureIds.length)} fixtures
                         </span>
                         <ArrowRight className="h-3 w-3 shrink-0 text-emerald-700" aria-hidden="true" />
@@ -707,7 +707,7 @@ export function PositiveReadMatches({
                   <button
                     type="button"
                     onClick={() => setLive(!live)}
-                    className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                    className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
                   >
                     {live ? 'View archive' : 'View live slate'}
                   </button>
@@ -721,7 +721,7 @@ export function PositiveReadMatches({
                   <button
                     type="button"
                     onClick={resetFilters}
-                    className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                    className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
                   >
                     Reset filters
                   </button>
@@ -747,11 +747,11 @@ export function PositiveReadMatches({
                       bodyClassName="hidden"
                       title={
                         <span className="text-sm font-semibold normal-case tracking-normal text-slate-900">
-                          {match.homeTeam} <span className="text-slate-400">vs</span> {match.awayTeam}
+                          {match.homeTeam} <span className="text-slate-600">vs</span> {match.awayTeam}
                         </span>
                       }
                       subtitle={
-                        <span className="text-[11px] font-normal text-slate-500">
+                        <span className="text-xs font-normal text-slate-500">
                           {match.competition} · {match.country} · {match.kickoffTime}
                           {match.score ? ` · ${match.score}` : ` · ${match.status}`}
                         </span>
@@ -777,7 +777,7 @@ export function PositiveReadMatches({
             </div>
           )}
 
-          <ul className="space-y-1 rounded-xl border border-slate-200 bg-slate-50 p-4 text-[11px] leading-relaxed text-slate-600">
+          <ul className="space-y-1 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-relaxed text-slate-600">
             {data.caveats.map((caveat) => (
               <li key={caveat}>· {caveat}</li>
             ))}

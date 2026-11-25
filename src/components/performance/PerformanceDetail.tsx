@@ -9,7 +9,7 @@ import { signedMwk } from './format.ts';
 function DetailRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
-      <dt className="text-slate-400">{label}</dt>
+      <dt className="text-slate-600">{label}</dt>
       <dd className="font-mono font-semibold text-slate-800 tabular-nums">
         {children}
       </dd>
@@ -43,7 +43,7 @@ export function PerformanceDetail({ analytics }: { analytics: SlipAnalytics }) {
   return (
     <div className="grid gap-3 lg:grid-cols-3">
       <DataCard title="Bankroll detail" bodyClassName="px-4 py-3">
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
           {/* Constant rows keep the two columns aligned. */}
           <DetailRow label="Total staked">
             {formatMwk(analytics.totalStaked)}
@@ -89,7 +89,7 @@ export function PerformanceDetail({ analytics }: { analytics: SlipAnalytics }) {
       </DataCard>
 
       <DataCard title="Ticket profile" bodyClassName="px-4 py-3">
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
           <DetailRow label="Avg stake (W/L)">
             {formatMwk(analytics.avgStake)}
           </DetailRow>
@@ -115,7 +115,7 @@ export function PerformanceDetail({ analytics }: { analytics: SlipAnalytics }) {
             <span className={pnlTone(-1)}>{analytics.longestLossStreak}L</span>
           </DetailRow>
         </dl>
-        <p className="mt-2 border-t border-slate-100 pt-2 text-[11px] text-slate-500">
+        <p className="mt-2 border-t border-slate-100 pt-2 text-xs text-slate-500">
           Current streak:{' '}
           <span className={`font-semibold ${streakTone}`}>{streakText}</span>
         </p>

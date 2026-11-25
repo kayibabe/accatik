@@ -38,7 +38,8 @@ function candidateMarketId(decisionMarketId: string, fallback: string): string {
 export async function applyFrameworkSlateControls(
   fixtures: Fixture[],
   dateIso: string,
-  nowMs: number = Date.now()
+  nowMs: number = Date.now(),
+  persist: boolean = true
 ): Promise<FrameworkSlateControlResult> {
   const candidates: SlateCandidate[] = [];
   for (const fixture of fixtures) {
@@ -101,14 +102,18 @@ export async function applyFrameworkSlateControls(
   }));
 
   // Bookkeeping is best-effort: a failed log write must never block a slate.
-  try {
-    await writeDecisionRecords(
-      dateIso,
-      buildDecisionRecords(controlledFixtures, nowMs),
-      nowMs
-    );
-  } catch (error) {
-    console.warn('Framework decision log unavailable:', error);
+  // Replay/backfill calls pass persist=false so historical reconstruction never
+  // rewrites the durable decision log with synthetic decision times.
+  if (persist) {
+    try {
+      await writeDecisionRecords(
+        dateIso,
+        buildDecisionRecords(controlledFixtures, nowMs),
+        nowMs
+      );
+    } catch (error) {
+      console.warn('Framework decision log unavailable:', error);
+    }
   }
 
   return { fixtures: controlledFixtures, caps: controlled.summary, weekKey: weekly.weekKey };

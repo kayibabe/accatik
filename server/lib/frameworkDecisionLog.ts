@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { writeJsonAtomic } from './atomicWrite.ts';
 import type { Fixture } from '../../src/types/fixtures.ts';
 import type {
   ConfidenceClass,
@@ -203,10 +204,7 @@ export async function writeDecisionRecords(
 
   const dir = decisionLogDir();
   await fs.mkdir(dir, { recursive: true });
-  const target = fileFor(dateIso);
-  const temp = `${target}.${process.pid}.tmp`;
-  await fs.writeFile(temp, JSON.stringify(file), 'utf8');
-  await fs.rename(temp, target);
+  await writeJsonAtomic(fileFor(dateIso), file);
   cache.set(dateIso, { loadedAt: nowMs, file });
 }
 

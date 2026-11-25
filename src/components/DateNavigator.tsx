@@ -33,7 +33,7 @@ export function DateNavigator({
   );
 
   const arrowClass =
-    'grid h-8 w-7 shrink-0 place-items-center rounded-lg text-slate-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 cursor-pointer';
+    'grid h-11 w-11 shrink-0 place-items-center rounded-lg text-slate-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 cursor-pointer';
 
   return (
     <div className="flex max-w-full shrink-0 flex-wrap items-center gap-2">
@@ -56,35 +56,38 @@ export function DateNavigator({
             const tile = formatDateStripTile(dateIso, todayDate);
             const isSelected = dateIso === selectedDate;
             const isTodayTile = dateIso === todayDate;
+            // Weekday labels are now 14px and may read "Today", so each tile
+            // needs room to wrap without clipping. An inset ring keeps the
+            // selection edge off the text, and the accessible name repeats the
+            // visible label in the same upper case and line break so
+            // voice-control users can say what they see and WCAG 2.5.3 is met.
+            const accessibleLabel = `${tile.weekday.toUpperCase()}\n${tile.day} · ${tile.ariaLabel}`;
             return (
               <button
                 key={`${dateIso}-${STRIP_OFFSETS[index]}`}
                 type="button"
                 onClick={() => onChangeDate(dateIso)}
-                aria-label={tile.ariaLabel}
+                aria-label={accessibleLabel}
                 aria-pressed={isSelected}
                 aria-current={isTodayTile ? 'date' : undefined}
                 title={tile.ariaLabel}
-                className={`grid h-8 w-10 shrink-0 place-items-center gap-0.5 rounded-lg border text-center leading-none transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 cursor-pointer ${
+                className={`grid h-12 min-w-14 shrink-0 place-items-center gap-0.5 rounded-lg border border-transparent px-1 py-1.5 text-center leading-tight transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 cursor-pointer ${
                   isSelected
-                    ? 'border-emerald-700 bg-emerald-50 text-emerald-700'
-                    : 'border-transparent text-slate-500 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900'
+                    ? 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-700'
+                    : 'text-slate-500 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900'
                 }`}
               >
                 <span
-                  className={`text-[10px] font-medium uppercase tracking-wide ${
-                    isTodayTile && !isSelected ? 'text-emerald-700' : ''
+                  className={`whitespace-pre-line text-center text-sm font-semibold tabular-nums leading-tight tracking-wide ${
+                    isSelected
+                      ? 'text-emerald-700'
+                      : isTodayTile
+                        ? 'text-emerald-700'
+                        : 'text-slate-800'
                   }`}
                 >
-                  {tile.weekday}
+                  {`${tile.weekday.toUpperCase()}\n${tile.day}`}
                 </span>
-                <strong
-                  className={`text-xs font-semibold tabular-nums ${
-                    isSelected ? 'text-emerald-700' : 'text-slate-800'
-                  }`}
-                >
-                  {tile.day}
-                </strong>
               </button>
             );
           })}
@@ -105,7 +108,7 @@ export function DateNavigator({
           <button
             type="button"
             onClick={() => onChangeDate(todayDate)}
-            className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 transition-colors hover:border-emerald-700 hover:bg-emerald-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 cursor-pointer"
+            className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold uppercase tracking-wide text-emerald-700 transition-colors hover:border-emerald-700 hover:bg-emerald-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 cursor-pointer"
           >
             Today
           </button>

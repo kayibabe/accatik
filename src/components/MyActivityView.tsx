@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { Info } from 'lucide-react';
 import type { Fixture, SavedTicket } from '../types/fixtures.ts';
 import type { FixtureSnapshots } from '../utils/fixtureSnapshots.ts';
 import { buildSlipActivityData } from '../utils/slipActivity.ts';
@@ -13,7 +12,10 @@ interface MyActivityViewProps {
   savedTickets: SavedTicket[];
   fixtures: Fixture[];
   fixtureSnapshots: FixtureSnapshots;
+  /** CAT calendar date, used for "Today"/"Yesterday" labels. */
   todayDate: string;
+  /** Matchday selected in the date bar, whose group opens by default. */
+  selectedDate: string;
   onGoToSlate: () => void;
 }
 
@@ -26,13 +28,14 @@ const RECENT_LIMIT = 12;
  * separate from the global Shadow Ticket Ledger (the engine's append-only
  * proof), and shares its settlement math with the Saved Slips screen through
  * buildSlipActivityData so the two views never disagree. This is the only
- * screen that renders the full performance panels.
+ * screen that renders the full performance breakdown.
  */
 export function MyActivityView({
   savedTickets,
   fixtures,
   fixtureSnapshots,
   todayDate,
+  selectedDate,
   onGoToSlate,
 }: MyActivityViewProps) {
   const activity = useMemo(
@@ -54,25 +57,14 @@ export function MyActivityView({
   );
 
   return (
-    <section aria-label="My Activity" className="space-y-6">
+    <section aria-label="My Performance" className="space-y-6">
       <PageHeader
         eyebrow="This Browser’s Record"
-        title="My Activity"
-        description={`Your saved slips, settlements and full performance breakdown. ${researchCopy.ledgerBoundary}`}
+        title="My Performance"
+        description={`Settlement, equity, daily, market and odds-band analysis for your saved slips. ${researchCopy.ledgerBoundary}`}
         scope="personal"
         onBack={onGoToSlate}
       />
-
-      <div className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600">
-        <Info
-          className="mt-0.5 h-4 w-4 shrink-0 text-slate-400"
-          aria-hidden="true"
-        />
-        <p className="leading-relaxed">
-          Saved slips and preferences stay in this browser. The breakdown below
-          is the full version of the snapshot on Saved Slips.
-        </p>
-      </div>
 
       {savedTickets.length === 0 ? (
         <EmptyState
@@ -82,7 +74,7 @@ export function MyActivityView({
             <button
               type="button"
               onClick={onGoToSlate}
-              className="px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
+              className="px-4 py-2 text-sm font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
             >
               Build First Slip
             </button>
@@ -96,12 +88,14 @@ export function MyActivityView({
             oddsBands={oddsBands}
             marketTypes={marketTypes}
             todayDate={todayDate}
+            selectedDate={selectedDate}
           />
 
           <RecentActivityList
             rows={recent}
             total={savedTickets.length}
             todayDate={todayDate}
+            selectedDate={selectedDate}
           />
         </>
       )}

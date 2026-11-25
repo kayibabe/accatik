@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { Fixture } from '../../src/types/fixtures.ts';
+import { writeJsonAtomic } from './atomicWrite.ts';
 
 /**
  * Permanent, on-disk slate archive.
@@ -77,10 +78,7 @@ export async function readArchivedSlate(
 export async function writeArchivedSlate(slate: ArchivedSlate): Promise<void> {
   const dir = archiveDir();
   await fs.mkdir(dir, { recursive: true });
-  const target = fileFor(slate.dateIso);
-  const temp = `${target}.${process.pid}.tmp`;
-  await fs.writeFile(temp, JSON.stringify(slate), 'utf8');
-  await fs.rename(temp, target);
+  await writeJsonAtomic(fileFor(slate.dateIso), slate);
 }
 
 export function isFixtureFinal(fixture: Fixture, nowMs: number): boolean {
@@ -121,6 +119,15 @@ export function recaptureFixturePrices(
             fixture.analystNoteMarketId ?? saved.analystNoteMarketId,
           formHome: fixture.formHome === '—' ? saved.formHome : fixture.formHome,
           formAway: fixture.formAway === '—' ? saved.formAway : fixture.formAway,
+          modelXgHome: fixture.modelXgHome ?? saved.modelXgHome,
+          modelXgAway: fixture.modelXgAway ?? saved.modelXgAway,
+          leagueId: fixture.leagueId ?? saved.leagueId,
+          leagueSeason: fixture.leagueSeason ?? saved.leagueSeason,
+          homeTeamId: fixture.homeTeamId ?? saved.homeTeamId,
+          awayTeamId: fixture.awayTeamId ?? saved.awayTeamId,
+          positionHome: fixture.positionHome ?? saved.positionHome,
+          positionAway: fixture.positionAway ?? saved.positionAway,
+          standingsAt: fixture.standingsAt ?? saved.standingsAt,
           // Pick history spans price eras: a recapture appends, never replaces.
           featuredPickSnapshots:
             fixture.featuredPickSnapshots ?? saved.featuredPickSnapshots,
@@ -173,6 +180,15 @@ export function mergeArchivedPrices(
       pricedAt: saved.pricedAt,
       priceQuality: saved.priceQuality,
       featuredPickSnapshots,
+      modelXgHome: fixture.modelXgHome ?? saved.modelXgHome,
+      modelXgAway: fixture.modelXgAway ?? saved.modelXgAway,
+      leagueId: fixture.leagueId ?? saved.leagueId,
+      leagueSeason: fixture.leagueSeason ?? saved.leagueSeason,
+      homeTeamId: fixture.homeTeamId ?? saved.homeTeamId,
+      awayTeamId: fixture.awayTeamId ?? saved.awayTeamId,
+      positionHome: fixture.positionHome ?? saved.positionHome,
+      positionAway: fixture.positionAway ?? saved.positionAway,
+      standingsAt: fixture.standingsAt ?? saved.standingsAt,
     };
   });
 }

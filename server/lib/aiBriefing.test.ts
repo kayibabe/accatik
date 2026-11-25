@@ -240,6 +240,25 @@ test('provider 1X2 percentages map onto priced cover selections', () => {
   assert.equal(providerSelectionProbability(invalid, '1X2-H'), null);
 });
 
+test('an injected decision time replays a historical pre-match view', () => {
+  const nowMs = Date.parse('2026-11-22T10:00:00.000Z');
+  const before = {
+    ...assessedFixture('started-by-then'),
+    kickoffTimestamp: nowMs - 60_000,
+  };
+  const after = {
+    ...assessedFixture('still-upcoming'),
+    kickoffTimestamp: nowMs + 60 * 60_000,
+  };
+
+  const replay = buildBriefing({ ...briefingBase([before, after]), nowMs });
+
+  assert.equal(replay.generatedAt, '2026-11-22T10:00:00.000Z');
+  assert.equal(replay.picks.length, 1);
+  assert.equal(replay.picks[0].fixtureId, 'still-upcoming');
+  assert.equal(replay.diagnostics.excludedStarted, 1);
+});
+
 test('briefing scores only eligible pre-match selections and keeps provenance', () => {
   const briefing = buildBriefing({
     fixtures: [

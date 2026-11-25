@@ -28,6 +28,7 @@ interface GradeFilterPanelProps {
   strategy: string;
   refreshKey: number;
   todayDate: string;
+  selectedDate: string;
 }
 
 const LEG_OPTIONS = [2, 3, 4, 5] as const;
@@ -80,6 +81,7 @@ export function GradeFilterPanel({
   strategy,
   refreshKey,
   todayDate,
+  selectedDate,
 }: GradeFilterPanelProps) {
   const [legs, setLegs] = useState<number>(2);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('All');
@@ -153,7 +155,7 @@ export function GradeFilterPanel({
 
   if (unavailable) {
     return (
-      <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-3 text-xs text-slate-500">
+      <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-3 text-sm text-slate-500">
         <p className="font-semibold text-slate-700">Grade filter unavailable</p>
         <p className="mt-1">
           The archived High + Solid filter is not available on the connected API
@@ -171,7 +173,7 @@ export function GradeFilterPanel({
           />
           Retry
         </button>
-        {error && <p className="mt-1 text-[11px] text-slate-400">{error}</p>}
+        {error && <p className="mt-1 text-xs text-slate-600">{error}</p>}
       </div>
     );
   }
@@ -210,7 +212,7 @@ export function GradeFilterPanel({
           <span className="font-medium text-slate-800">
             {row.homeTeam} vs {row.awayTeam}
           </span>
-          <span className="block truncate text-[10px] text-slate-400">
+          <span className="block truncate text-xs text-slate-600">
             {row.competition}
           </span>
         </div>
@@ -223,7 +225,7 @@ export function GradeFilterPanel({
       header: 'Grade',
       cell: (row) => (
         <span
-          className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold ${gradeTone(row.grade)}`}
+          className={`inline-flex rounded border px-1.5 py-0.5 text-xs font-semibold ${gradeTone(row.grade)}`}
         >
           {row.grade}
         </span>
@@ -273,7 +275,7 @@ export function GradeFilterPanel({
       cell: (row) => (
         <div className="max-w-[320px] space-y-0.5">
           {row.picks.map((leg) => (
-            <div key={leg.fixtureId} className="truncate text-[11px] text-slate-600">
+            <div key={leg.fixtureId} className="truncate text-xs text-slate-600">
               <span className={`font-semibold ${leg.grade === 'High' ? 'text-emerald-700' : 'text-sky-700'}`}>
                 {leg.grade}
               </span>
@@ -336,16 +338,16 @@ export function GradeFilterPanel({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-1.5 text-sm font-bold uppercase tracking-wide text-slate-500">
-            <Filter className="h-4 w-4 text-slate-400" aria-hidden="true" />
+            <Filter className="h-4 w-4 text-slate-600" aria-hidden="true" />
             High + Solid archive filter
           </h2>
-          <p className="mt-0.5 text-[11px] text-slate-400">
+          <p className="mt-0.5 text-xs text-slate-600">
             {data.firstDateIso ?? '—'} → {data.lastDateIso ?? '—'} · prematch prices
             only · {data.matchdays} matchdays · one-unit stakes
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-semibold text-slate-500">
+          <span className="text-xs font-semibold text-slate-500">
             ACCA legs
           </span>
           <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
@@ -355,7 +357,7 @@ export function GradeFilterPanel({
                 type="button"
                 aria-pressed={legs === option}
                 onClick={() => setLegs(option)}
-                className={`rounded-md px-2 py-1 text-[11px] font-semibold cursor-pointer ${
+                className={`rounded-md px-2 py-1 text-xs font-semibold cursor-pointer ${
                   legs === option
                     ? 'bg-emerald-700 text-white shadow-sm'
                     : 'text-slate-600 hover:bg-white'
@@ -411,7 +413,7 @@ export function GradeFilterPanel({
                 type="button"
                 aria-pressed={statusFilter === option}
                 onClick={() => setStatusFilter(option)}
-                className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold cursor-pointer ${statusTone(option)} ${
+                className={`rounded-full border px-2 py-0.5 text-xs font-semibold cursor-pointer ${statusTone(option)} ${
                   statusFilter === option ? 'ring-1 ring-slate-400' : ''
                 }`}
               >
@@ -424,6 +426,7 @@ export function GradeFilterPanel({
         <DateGroups
           groups={matchGroups}
           todayDate={todayDate}
+          focusDate={selectedDate}
           idPrefix="grade-filter-matches"
           renderDay={(rows) => (
             <DataTable
@@ -436,7 +439,7 @@ export function GradeFilterPanel({
             />
           )}
           empty={
-            <p className="py-6 text-center text-xs text-slate-500">
+            <p className="py-6 text-center text-sm text-slate-500">
               No High + Solid matches with this result in the archive.
             </p>
           }
@@ -447,7 +450,7 @@ export function GradeFilterPanel({
         title="Simulated accumulator tickets"
         subtitle={`One ${data.targetLegs}-leg ticket per matchday built from the filtered pool, by the app's accumulator engine`}
         actions={
-          <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
+          <span className="inline-flex items-center gap-1 text-xs text-slate-600">
             <Layers3 className="h-3.5 w-3.5" aria-hidden="true" />
             {fmtCount(ticket.tickets)} reconstruct
             {ticket.tickets === 1 ? '' : 'ed'} tickets
@@ -457,6 +460,7 @@ export function GradeFilterPanel({
         <DateGroups
           groups={ticketGroups}
           todayDate={todayDate}
+          focusDate={selectedDate}
           idPrefix="grade-filter-tickets"
           renderDay={(rows) => (
             <DataTable
@@ -467,7 +471,7 @@ export function GradeFilterPanel({
               minWidth="min-w-[760px]"
               compact
               details={(row) => (
-                <ul className="space-y-1 text-[11px] text-slate-600">
+                <ul className="space-y-1 text-xs text-slate-600">
                   {row.picks.map((leg) => (
                     <li key={leg.fixtureId} className="flex flex-wrap items-center gap-2">
                       <span className={`font-semibold ${leg.grade === 'High' ? 'text-emerald-700' : 'text-sky-700'}`}>
@@ -491,7 +495,7 @@ export function GradeFilterPanel({
             />
           }
         />
-        <p className="mt-3 flex items-start gap-1 text-[11px] leading-relaxed text-slate-400">
+        <p className="mt-3 flex items-start gap-1 text-xs leading-relaxed text-slate-600">
           <InfoHint
             label="Research-only simulation"
             definition="These are hypothetical tickets rebuilt from archived prematch prices, not saved slips. Grade comes from the book's de-vigged probability, not an independent edge model."
@@ -503,7 +507,7 @@ export function GradeFilterPanel({
             ticket sizes.
           </span>
         </p>
-        <ul className="mt-2 list-disc space-y-0.5 pl-4 text-[11px] leading-relaxed text-amber-700">
+        <ul className="mt-2 list-disc space-y-0.5 pl-4 text-xs leading-relaxed text-amber-700">
           {data.caveats.map((caveat) => (
             <li key={caveat}>{caveat}</li>
           ))}

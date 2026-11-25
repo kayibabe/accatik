@@ -126,7 +126,7 @@ export function MarketAnalyticsTable({
       return (
         <span className="flex items-center gap-2">
           All markets
-          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700">
+          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-bold uppercase tracking-wide text-emerald-700">
             overall
           </span>
         </span>
@@ -148,7 +148,7 @@ export function MarketAnalyticsTable({
             aria-hidden="true"
           />
           <span>{row.data.label}</span>
-          <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-500">
+          <span className="rounded bg-slate-200 px-1.5 py-0.5 text-xs font-bold uppercase tracking-wide text-slate-500">
             {row.lineCount} lines
           </span>
         </button>
@@ -277,12 +277,12 @@ export function MarketAnalyticsTable({
             >
               Individual markets
             </h2>
-            <p className="mt-0.5 text-[11px] text-slate-400">
+            <p className="mt-0.5 text-xs text-slate-600">
               Every priced selection, rolled up by market then broken into
               Home/Away, goal lines, BTTS sides, Double Chance and DNB.
             </p>
             {insight && (
-              <p className="mt-1 text-[11px] text-slate-500">
+              <p className="mt-1 text-xs text-slate-500">
                 Best ROI (min 20 picks):{' '}
                 <span className="font-semibold text-emerald-700">
                   {insight.best.label} {fmtSignedPercent(insight.best.roi)}
@@ -296,7 +296,7 @@ export function MarketAnalyticsTable({
             )}
           </div>
           <div className="flex flex-wrap items-center gap-4">
-            <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 cursor-pointer">
+            <label className="inline-flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer">
               <input
                 type="checkbox"
                 checked={showEmpty}
@@ -308,14 +308,14 @@ export function MarketAnalyticsTable({
             <button
               type="button"
               onClick={onToggleAll}
-              className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 cursor-pointer"
+              className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 cursor-pointer"
             >
               {allExpanded ? 'Collapse all' : 'Expand all'}
             </button>
           </div>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
-          <span className="text-[11px] font-semibold text-slate-500">
+          <span className="text-xs font-semibold text-slate-500">
             Market win probability
           </span>
           <div
@@ -333,7 +333,7 @@ export function MarketAnalyticsTable({
             ))}
           </div>
           {minProbability > 0 && (
-            <span className="text-[11px] text-slate-400">
+            <span className="text-xs text-slate-600">
               {fmtCount(matchingSelectionCount)} matching selection
               {matchingSelectionCount === 1 ? '' : 's'}
             </span>
@@ -349,7 +349,7 @@ export function MarketAnalyticsTable({
             <button
               type="button"
               onClick={() => onMinProbabilityChange(0)}
-              className="text-xs font-semibold text-emerald-700 underline cursor-pointer"
+              className="text-sm font-semibold text-emerald-700 underline cursor-pointer"
             >
               Show all probabilities
             </button>
@@ -382,12 +382,12 @@ export function MarketAnalyticsTable({
                   <p className={`font-mono text-sm font-bold ${pnlTone(row.data.netPnl)}`}>
                     {fmtUnits(row.data.netPnl)}
                   </p>
-                  <p className={`font-mono text-xs ${pnlTone(row.data.roi)}`}>
+                  <p className={`font-mono text-sm ${pnlTone(row.data.roi)}`}>
                     {fmtSignedPercent(row.data.roi)} ROI
                   </p>
                 </div>
               </div>
-              <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-500">
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-500">
                 <div>
                   <dt className="inline">Picks: </dt>
                   <dd className="inline font-mono text-slate-700">
@@ -430,7 +430,7 @@ export function MarketAnalyticsTable({
         />
       )}
 
-      <p className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-[11px] text-slate-400">
+      <p className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs text-slate-600">
         Roll-up rows repeat their selections&apos; totals. Voids return the stake
         and stay out of hit rate and ROI. Groups are collapsed by default —
         click a heading to drill down. Click a column heading to sort. These are

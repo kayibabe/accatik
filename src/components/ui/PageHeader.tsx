@@ -16,8 +16,8 @@ export function BackToSlateButton({
 }: BackToSlateButtonProps) {
   const className =
     variant === 'primary'
-      ? 'px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer'
-      : 'inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer';
+      ? 'px-4 py-2 text-sm font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer'
+      : 'inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer';
 
   return (
     <button type="button" onClick={onClick} className={className}>
@@ -34,7 +34,7 @@ export function ScopeBadge({ scope }: { scope: PageScope }) {
   return (
     <span
       title={meta.description}
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${meta.className}`}
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-bold uppercase tracking-wide ${meta.className}`}
     >
       {meta.label}
     </span>
@@ -76,7 +76,7 @@ export function PageHeader({
         {(eyebrow || scope) && (
           <div className="flex flex-wrap items-center gap-2">
             {eyebrow && (
-              <p className="text-xs font-medium text-slate-500">{eyebrow}</p>
+              <p className="text-sm font-medium text-slate-500">{eyebrow}</p>
             )}
             {scope && <ScopeBadge scope={scope} />}
           </div>
@@ -84,10 +84,10 @@ export function PageHeader({
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
           {title}
         </h1>
-        {meta && <div className="text-xs text-slate-500">{meta}</div>}
+        {meta && <div className="text-sm text-slate-500">{meta}</div>}
         {description && (
           <p
-            className={`text-xs leading-relaxed text-slate-600 ${descriptionClassName}`}
+            className={`text-sm leading-relaxed text-slate-600 ${descriptionClassName}`}
           >
             {description}
           </p>

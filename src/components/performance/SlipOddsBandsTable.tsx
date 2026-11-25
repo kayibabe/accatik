@@ -9,7 +9,7 @@ import {
   type SortAccessors,
   type SortState,
 } from '../../utils/tableSort.ts';
-import { pnlTone } from '../../utils/uiTone.ts';
+import { EMPTY_COPY, pnlTone } from '../../utils/uiTone.ts';
 import { DataTable, type DataTableColumn } from '../ui/DataTable.tsx';
 import { EmptyState } from '../ui/States.tsx';
 import { recordLabel, signedMwk } from './format.ts';
@@ -80,7 +80,7 @@ export function SlipOddsBandsTable({
       cell: (row) => (
         <span
           className={`font-semibold ${
-            row.roi === null ? 'text-slate-400' : pnlTone(row.roi)
+            row.roi === null ? 'text-slate-600' : pnlTone(row.roi)
           }`}
         >
           {fmtSignedPercent(row.roi)}
@@ -103,10 +103,10 @@ export function SlipOddsBandsTable({
   return (
     <div className="space-y-2">
       <div className="px-1">
-        <h3 className="text-xs font-semibold text-slate-700">
+        <h3 className="text-sm font-semibold text-slate-700">
           P&amp;L by odds band
         </h3>
-        <p className="mt-0.5 text-[11px] text-slate-400">
+        <p className="mt-0.5 text-xs text-slate-600">
           Settled slips grouped by their void-adjusted total odds.
         </p>
       </div>
@@ -119,30 +119,30 @@ export function SlipOddsBandsTable({
         minWidth="min-w-[560px]"
         compact
         details={(row) => (
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
             <div>
-              <dt className="text-slate-400">Slips</dt>
+              <dt className="text-slate-600">Slips</dt>
               <dd className="font-mono text-slate-700">{row.slips}</dd>
             </div>
             <div>
-              <dt className="text-slate-400">Record (W-L-V)</dt>
+              <dt className="text-slate-600">Record (W-L-V)</dt>
               <dd className="font-mono text-slate-700">
                 {recordLabel(row.won, row.lost, row.voided)}
               </dd>
             </div>
             <div>
-              <dt className="text-slate-400">Settled stake</dt>
+              <dt className="text-slate-600">Settled stake</dt>
               <dd className="font-mono text-slate-700">{formatMwk(row.settledStake)}</dd>
             </div>
             <div>
-              <dt className="text-slate-400">Hit rate</dt>
+              <dt className="text-slate-600">Hit rate</dt>
               <dd className="font-mono text-slate-700">{fmtPercent(row.hitRate)}</dd>
             </div>
           </dl>
         )}
-        empty={<EmptyState title="No settled slips in these bands" />}
+        empty={<EmptyState title={EMPTY_COPY.settledSlipsInBands} />}
       />
-      <p className="border-t border-slate-100 px-1 pt-2 text-[11px] text-slate-400">
+      <p className="border-t border-slate-100 px-1 pt-2 text-xs text-slate-600">
         Hit rate counts wins against Win/Lost slips only. Void and open slips stay
         out of both ratios.
       </p>

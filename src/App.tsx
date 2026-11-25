@@ -214,12 +214,17 @@ export default function App() {
   const [stake, setStake] = useState<number>(1);
 
   const [slate, setSlate] = useState<DailySlateResponse | null>(null);
+  // A response for a different matchday must never reach a view, the date bar
+  // or a slip handler while the newly selected date is still loading.
+  const viewSlate = slate?.date === selectedDate ? slate : null;
   const [selectedLegs, setSelectedLegs] = useState<AccaLeg[]>([]);
   /** Carried into the saved ticket name so research slips stay traceable. */
   const [slipOrigin, setSlipOrigin] = useState<SlipOrigin>('slate');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRecapturing, setIsRecapturing] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  /** Bumped whenever a slate is applied so price-dependent research views refetch. */
+  const [slateRefreshKey, setSlateRefreshKey] = useState(0);
 
   const [deepAnalyses, setDeepAnalyses] = useState<
     Record<string, DeepAnalysisResponse>
@@ -229,6 +234,15 @@ export default function App() {
     {}
   );
   const [extraSources, setExtraSources] = useState<GroundingSource[]>([]);
+  // Deep analyses and their sources belong to one matchday only.
+  const analysisDateRef = useRef(selectedDate);
+  analysisDateRef.current = selectedDate;
+  useEffect(() => {
+    setDeepAnalyses({});
+    setAnalyzingIds({});
+    setAnalysisErrors({});
+    setExtraSources([]);
+  }, [selectedDate]);
   const requestIdRef = useRef(0);
   const slateAbortRef = useRef<AbortController | null>(null);
   // Slate requests can start before saved controls arrive; this marks which
@@ -257,18 +271,21 @@ export default function App() {
   // Navigation writes history entries; date/preset changes only replace the
   // current one so typing or chip-clicking does not flood the back stack.
   const scrollPositionsRef = useRef<Partial<Record<ActiveTab, number>>>({});
+  // Navigation still gets a history entry, but the URL is written in one place
+  // (the sync effect below) rather than twice per click.
+  const pendingHistoryPushRef = useRef(false);
   const navigate = useCallback(
     (tab: ActiveTab) => {
       if (tab === activeTab) return;
       scrollPositionsRef.current[activeTab] = window.scrollY;
-      writeAppUrl({ tab, date: selectedDate, preset: filterPreset });
+      pendingHistoryPushRef.current = true;
       setActiveSection(undefined);
       pendingSectionRef.current = null;
       setActiveTab(tab);
       const target = scrollPositionsRef.current[tab] ?? 0;
       window.requestAnimationFrame(() => window.scrollTo({ top: target }));
     },
-    [activeTab, selectedDate, filterPreset]
+    [activeTab]
   );
 
   /** Section tabs swap the visible page, so start each one at the top. */
@@ -278,9 +295,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const shouldPush = pendingHistoryPushRef.current;
+    pendingHistoryPushRef.current = false;
     writeAppUrl(
       { tab: activeTab, date: selectedDate, preset: filterPreset, section: activeSection },
-      { replace: true }
+      shouldPush ? undefined : { replace: true }
     );
   }, [activeTab, selectedDate, filterPreset, activeSection]);
 
@@ -442,6 +461,7 @@ export default function App() {
     ) => {
       prefRecomputedSlateRef.current = '';
       setSlate(typed);
+      setSlateRefreshKey((key) => key + 1);
       setSlipOrigin('slate');
       setFixtureSnapshots((prev) =>
         withSnapshot(
@@ -485,9 +505,16 @@ export default function App() {
       slateAbortRef.current?.abort();
       setIsRecapturing(recapturePrices);
 
-      // The response is keyed by date only; applySlateResponse rebuilds the
-      // legs for whatever strategy and odds are active at render time.
-      const cached = forceRefresh ? null : readCachedSlate(targetDate);
+      // The response carries control-derived picks, so the cache key includes
+      // the controls that produced it (as well as the matchday).
+      const cacheControls = {
+        strategy: targetStrategy,
+        minOdds: targetMinOdds,
+        maxLegs: targetMaxLegs,
+      };
+      const cached = forceRefresh
+        ? null
+        : readCachedSlate(targetDate, cacheControls);
       if (cached) {
         ++requestIdRef.current;
         setErrorMessage(null);
@@ -524,7 +551,7 @@ export default function App() {
         });
         if (requestId !== requestIdRef.current) return;
 
-        writeCachedSlate(targetDate, typed);
+        writeCachedSlate(targetDate, typed, cacheControls);
         applySlateResponse(typed, targetStrategy, targetMinOdds, targetMaxLegs);
       } catch (err) {
         if (requestId === requestIdRef.current) {
@@ -559,19 +586,22 @@ export default function App() {
     );
   }, [fetchSlateForDate, todayDate]);
 
-  // Rebuild legs from the slate we already have when a cached response lands.
+  // Rebuild legs from the current matchday's slate when a cached response lands.
   useEffect(() => {
-    if (!slate) return;
-    const key = slate.cachedAt;
+    if (!viewSlate) return;
+    const key = `${viewSlate.date}:${viewSlate.cachedAt}`;
     if (prefRecomputedSlateRef.current === key) return;
     prefRecomputedSlateRef.current = key;
     setSlipOrigin('slate');
 
-    const initialLegs = buildLegsFromRefs(slate.fixtures, slate.recommendedLegIds);
+    const initialLegs = buildLegsFromRefs(
+      viewSlate.fixtures,
+      viewSlate.recommendedLegIds
+    );
     setSelectedLegs(
       guardLegs(
         completeAccaToTargetOdds(
-          slate.fixtures,
+          viewSlate.fixtures,
           initialLegs,
           minOdds,
           strategy,
@@ -579,7 +609,7 @@ export default function App() {
         )
       )
     );
-  }, [slate, strategy, minOdds, maxLegs]);
+  }, [viewSlate, strategy, minOdds, maxLegs]);
 
   const handleChangeDate = (nextDate: string) => {
     setSelectedDate(nextDate);
@@ -596,11 +626,11 @@ export default function App() {
   const handleChangeStrategy = (nextStrategy: AccaStrategy) => {
     setStrategy(nextStrategy);
     setSlipOrigin('slate');
-    if (slate && slate.fixtures.length > 0) {
+    if (viewSlate && viewSlate.fixtures.length > 0) {
       const locked = selectedLegs.filter((l) => l.locked);
       const rebuilt = guardLegs(
         completeAccaToTargetOdds(
-          slate.fixtures,
+          viewSlate.fixtures,
           locked,
           minOdds,
           nextStrategy,
@@ -616,10 +646,10 @@ export default function App() {
   const handleChangeMinOdds = (nextMinOdds: number) => {
     setMinOdds(nextMinOdds);
     setSlipOrigin('slate');
-    if (slate && slate.fixtures.length > 0) {
+    if (viewSlate && viewSlate.fixtures.length > 0) {
       const updated = guardLegs(
         completeAccaToTargetOdds(
-          slate.fixtures,
+          viewSlate.fixtures,
           selectedLegs,
           nextMinOdds,
           strategy,
@@ -634,10 +664,10 @@ export default function App() {
     const cappedMaxLegs = Math.min(nextMaxLegs, MAX_RECOMMENDED_LEGS);
     setMaxLegs(cappedMaxLegs);
     setSlipOrigin('slate');
-    if (slate && slate.fixtures.length > 0) {
+    if (viewSlate && viewSlate.fixtures.length > 0) {
       const updated = guardLegs(
         completeAccaToTargetOdds(
-          slate.fixtures,
+          viewSlate.fixtures,
           selectedLegs,
           minOdds,
           strategy,
@@ -655,12 +685,12 @@ export default function App() {
     setMaxLegs(cappedMaxLegs);
     setSlipOrigin('slate');
 
-    if (!slate) return;
+    if (!viewSlate) return;
     const locked = selectedLegs.filter((leg) => leg.locked);
     setSelectedLegs(
       guardLegs(
         completeAccaToTargetOdds(
-          slate.fixtures,
+          viewSlate.fixtures,
           locked,
           shape.targetOdds,
           shape.strategy,
@@ -717,12 +747,12 @@ export default function App() {
   };
 
   const handleAutoCompleteToTarget = () => {
-    if (!slate) return;
+    if (!viewSlate) return;
     setSlipOrigin('slate');
     setSelectedLegs((prev) =>
       guardLegs(
         completeAccaToTargetOdds(
-          slate.fixtures,
+          viewSlate.fixtures,
           prev,
           minOdds,
           strategy,
@@ -733,7 +763,7 @@ export default function App() {
   };
 
   const handleRebuildUnlocked = () => {
-    if (!slate) return;
+    if (!viewSlate) return;
     setSlipOrigin('slate');
     const locked = selectedLegs.filter((l) => l.locked);
     const unlockedIds = new Set(
@@ -742,8 +772,8 @@ export default function App() {
 
     // Rotate fixtures so unlocked picks try fresh matches first
     const rotatedFixtures = [
-      ...slate.fixtures.filter((f) => !unlockedIds.has(f.id)),
-      ...slate.fixtures.filter((f) => unlockedIds.has(f.id)),
+      ...viewSlate.fixtures.filter((f) => !unlockedIds.has(f.id)),
+      ...viewSlate.fixtures.filter((f) => unlockedIds.has(f.id)),
     ];
 
     setSelectedLegs(
@@ -760,16 +790,16 @@ export default function App() {
   };
 
   const handleResetRecommended = () => {
-    if (!slate) return;
+    if (!viewSlate) return;
     setSlipOrigin('slate');
     const recommended = buildLegsFromRefs(
-      slate.fixtures,
-      slate.recommendedLegIds
+      viewSlate.fixtures,
+      viewSlate.recommendedLegIds
     );
     setSelectedLegs(
       guardLegs(
         completeAccaToTargetOdds(
-          slate.fixtures,
+          viewSlate.fixtures,
           recommended,
           minOdds,
           strategy,
@@ -802,9 +832,9 @@ export default function App() {
    */
   const handleApplyAiTicket = useCallback(
     (legs: AiTicketLeg[]) => {
-      if (!slate || legs.length === 0) return;
+      if (!viewSlate || legs.length === 0) return;
       const built = buildLegsFromRefs(
-        slate.fixtures,
+        viewSlate.fixtures,
         legs.map((leg) => ({ fixtureId: leg.fixtureId, marketId: leg.marketId }))
       );
       if (built.length === 0) return;
@@ -812,7 +842,7 @@ export default function App() {
       setSelectedLegs((prev) => mergeResearchLegs(prev, built));
       navigate('slate');
     },
-    [slate, navigate]
+    [viewSlate, navigate]
   );
 
   /**
@@ -836,7 +866,7 @@ export default function App() {
     // Never save a slip containing a match that has already started: the
     // price is no longer available and the settlement would be meaningless.
     const hasStartedLeg = selectedLegs.some((leg) => {
-      const fixture = slate?.fixtures.find((entry) => entry.id === leg.fixtureId);
+      const fixture = viewSlate?.fixtures.find((entry) => entry.id === leg.fixtureId);
       return fixture ? !isPreMatchFixture(fixture) : false;
     });
     if (hasStartedLeg) return false;
@@ -851,8 +881,8 @@ export default function App() {
         totalOdds,
       }),
       createdAt: new Date().toISOString(),
-      date: slate?.displayDate || getClientLocalIsoDate(),
-      dateIso: slate?.date,
+      date: viewSlate?.displayDate || getClientLocalIsoDate(),
+      dateIso: viewSlate?.date,
       stake: ticketStake,
       totalOdds,
       legs: selectedLegs,
@@ -931,6 +961,7 @@ export default function App() {
   );
 
   const handleRequestDeepAnalysis = async (fixture: Fixture) => {
+    const requestedDate = viewSlate?.date ?? selectedDate;
     setAnalyzingIds((prev) => ({ ...prev, [fixture.id]: true }));
     setAnalysisErrors((prev) => {
       const next = { ...prev };
@@ -947,9 +978,11 @@ export default function App() {
           homeTeam: fixture.homeTeam,
           awayTeam: fixture.awayTeam,
           competition: fixture.competition,
-          date: slate?.date || getClientLocalIsoDate(),
+          date: requestedDate,
         }),
       });
+      // A response for a date the user has left is discarded with its state.
+      if (analysisDateRef.current !== requestedDate) return;
       setDeepAnalyses((prev) => ({ ...prev, [fixture.id]: typed }));
       if (typed.sources?.length) {
         setExtraSources((prev) => {
@@ -959,20 +992,23 @@ export default function App() {
         });
       }
     } catch (err) {
+      if (analysisDateRef.current !== requestedDate) return;
       setAnalysisErrors((prev) => ({
         ...prev,
         [fixture.id]:
           err instanceof Error ? err.message : 'Unable to fetch live match report.',
       }));
     } finally {
-      setAnalyzingIds((prev) => ({ ...prev, [fixture.id]: false }));
+      if (analysisDateRef.current === requestedDate) {
+        setAnalyzingIds((prev) => ({ ...prev, [fixture.id]: false }));
+      }
     }
   };
 
   const allSources = [
-    ...(slate?.sources ?? []),
+    ...(viewSlate?.sources ?? []),
     ...extraSources.filter(
-      (es) => !(slate?.sources ?? []).some((s) => s.uri === es.uri)
+      (es) => !(viewSlate?.sources ?? []).some((s) => s.uri === es.uri)
     ),
   ];
 
@@ -985,8 +1021,23 @@ export default function App() {
   // the whole layout.
   const contentInset = 'page-inset-app';
 
+  // Research and archive views fetch their own data and can still be useful
+  // while the matchday slate is loading or failed. Slate-driven views cannot.
+  const slateIndependentTab =
+    activeTab === 'analytics' ||
+    activeTab === 'ai' ||
+    activeTab === 'positive-reads' ||
+    activeTab === 'sources' ||
+    activeTab === 'saved' ||
+    activeTab === 'activity';
+  const showGlobalSlateState = !viewSlate && (isLoading || Boolean(errorMessage));
+  const blockSlateDependentTab = showGlobalSlateState && !slateIndependentTab;
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
+      <a href="#main-content" className="skip-link">
+        Skip to main content
+      </a>
       <TopBar
         activeTab={activeTab}
         onSelectTab={navigate}
@@ -1007,7 +1058,7 @@ export default function App() {
       {/* Universal Matchday Date Bar across all views */}
       <div className="sticky top-16 z-30 bg-white border-b border-slate-200 sm:ml-[var(--page-menu-width)] lg:ml-[var(--page-menu-width-lg)]">
         <div className="page-inset-guest py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
             <span className="font-semibold text-slate-900">
               Matchday Schedule
             </span>
@@ -1015,12 +1066,12 @@ export default function App() {
               ·
             </span>
             <span className="font-mono text-slate-700 tabular-nums">
-              {slate?.displayDate || selectedDate}
+              {viewSlate?.displayDate || selectedDate}
             </span>
             <span aria-hidden="true" className="text-slate-300">
               ·
             </span>
-            <span>{slate?.timezoneLabel || 'CAT (GMT+2) Kickoff Times'}</span>
+            <span>{viewSlate?.timezoneLabel || 'CAT (GMT+2) Kickoff Times'}</span>
           </div>
 
           <DateNavigator
@@ -1031,15 +1082,122 @@ export default function App() {
         </div>
       </div>
 
-      <main className={`flex-1 w-full ${contentInset} py-6 sm:py-8`}>
+      <main id="main-content" className={`flex-1 w-full ${contentInset} py-6 sm:py-8`}>
         <Suspense fallback={<LoadingState label="Loading view…" count={5} />}>
-        {activeTab === 'analytics' ? (
+          {/* One global surface before tab dispatch: no matchday slate means
+              no view may silently show fixtures from the previous date. */}
+          {showGlobalSlateState &&
+            (slateIndependentTab ? (
+              <div
+                role={errorMessage ? 'alert' : 'status'}
+                className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-sm text-amber-900"
+              >
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span>
+                    {errorMessage
+                      ? `Fixtures for ${selectedDate} could not be loaded: ${errorMessage}`
+                      : `Loading fixtures for ${selectedDate}…`}
+                  </span>
+                </div>
+                {errorMessage && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      fetchSlateForDate(selectedDate, strategy, minOdds, maxLegs, true)
+                    }
+                    className="whitespace-nowrap font-semibold underline cursor-pointer"
+                  >
+                    Retry
+                  </button>
+                )}
+              </div>
+            ) : isLoading ? (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                <div className="lg:col-span-7 space-y-4">
+                  <div className="h-8 w-72 bg-slate-200 rounded-md animate-pulse" />
+                  <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <div
+                        key={i}
+                        className="py-4 border-b last:border-b-0 border-slate-100 space-y-2.5"
+                      >
+                        <div className="h-3 w-48 bg-slate-200 rounded animate-pulse" />
+                        <div className="h-5 w-64 bg-slate-200 rounded animate-pulse" />
+                        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 pt-1">
+                          {[1, 2, 3, 4, 5].map((m) => (
+                            <div
+                              key={m}
+                              className="h-14 bg-slate-100 rounded-lg animate-pulse"
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+                  <div className="h-6 w-44 bg-slate-200 rounded animate-pulse" />
+                  <div className="h-16 bg-slate-100 rounded-lg animate-pulse" />
+                  {[1, 2, 3, 4].map((i) => (
+                    <div
+                      key={i}
+                      className="h-14 bg-slate-100 rounded-lg animate-pulse"
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <ErrorState
+                className="max-w-xl mx-auto"
+                title={`Could not load fixtures for ${selectedDate}`}
+                description={
+                  <>
+                    {errorMessage}
+                    <span className="mt-3 flex justify-center">
+                      <DatePickerControl
+                        value={selectedDate}
+                        onChange={handleChangeDate}
+                        label="Pick another date"
+                        variant="field"
+                      />
+                    </span>
+                  </>
+                }
+                onRetry={() =>
+                  fetchSlateForDate(selectedDate, strategy, minOdds, maxLegs, true)
+                }
+                retryLabel="Retry Loading Slate"
+              />
+            ))}
+          {!blockSlateDependentTab && (
+            <>
+              {viewSlate && errorMessage && (
+                <div
+                  role="alert"
+                  className="mb-6 flex items-center justify-between gap-3 p-3.5 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700"
+                >
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" aria-hidden="true" />
+                    <span>{errorMessage}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => fetchSlateForDate(selectedDate, strategy, minOdds, maxLegs, true)}
+                    className="font-semibold underline whitespace-nowrap cursor-pointer"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+              {activeTab === 'analytics' ? (
           <AnalyticsView
             strategy={strategy}
             strategyName={strategyCopy.title}
             minOdds={minOdds}
             maxLegs={maxLegs}
             todayDate={todayDate}
+            selectedDate={selectedDate}
             activeSection={activeSection}
             onSectionChange={selectSection}
             onGoToSlate={() => navigate('slate')}
@@ -1047,11 +1205,11 @@ export default function App() {
         ) : activeTab === 'ai' ? (
           <AiView
             selectedDate={selectedDate}
-            displayDate={slate?.displayDate || selectedDate}
+            displayDate={viewSlate?.displayDate || selectedDate}
             strategy={strategy}
             minOdds={minOdds}
             maxLegs={maxLegs}
-            canApplyTicket={Boolean(slate)}
+            canApplyTicket={Boolean(viewSlate)}
             onGoToSlate={() => navigate('slate')}
             onApplyTicket={handleApplyAiTicket}
           />
@@ -1060,7 +1218,7 @@ export default function App() {
             <PositiveReadMatches
               strategy={strategy}
               todayDate={todayDate}
-              refreshKey={0}
+              refreshKey={slateRefreshKey}
               mode="build"
               selectedDate={selectedDate}
               onAddPicks={handleAddPositiveReadPicks}
@@ -1070,7 +1228,7 @@ export default function App() {
               <PositiveRoiView
                 strategy={strategy}
                 selectedDate={selectedDate}
-                displayDate={slate?.displayDate || selectedDate}
+                displayDate={viewSlate?.displayDate || selectedDate}
                 activeSection={activeSection}
                 onSectionChange={selectSection}
                 onGoToSlate={() => navigate('slate')}
@@ -1080,9 +1238,10 @@ export default function App() {
         ) : activeTab === 'saved' ? (
           <SavedSlipsView
             savedTickets={savedTickets}
-            fixtures={slate?.fixtures ?? []}
+            fixtures={viewSlate?.fixtures ?? []}
             fixtureSnapshots={fixtureSnapshots}
             todayDate={todayDate}
+            selectedDate={selectedDate}
             hasCurrentTicket={selectedLegs.length > 0}
             onLoadTicket={handleLoadTicket}
             onDeleteTicket={handleDeleteTicket}
@@ -1094,111 +1253,39 @@ export default function App() {
         ) : activeTab === 'activity' ? (
           <MyActivityView
             savedTickets={savedTickets}
-            fixtures={slate?.fixtures ?? []}
+            fixtures={viewSlate?.fixtures ?? []}
             fixtureSnapshots={fixtureSnapshots}
             todayDate={todayDate}
+            selectedDate={selectedDate}
             onGoToSlate={() => navigate('slate')}
           />
         ) : activeTab === 'sources' ? (
           <SourcesView
             sources={allSources}
-            displayDate={slate?.displayDate ?? selectedDate}
-            cachedAt={slate?.cachedAt ?? ''}
+            displayDate={viewSlate?.displayDate ?? selectedDate}
+            cachedAt={viewSlate?.cachedAt ?? ''}
             onGoToSlate={() => navigate('slate')}
           />
         ) : activeTab === 'pick-guide' ? (
           <PickGuideView
-            fixtures={slate?.fixtures ?? []}
+            fixtures={viewSlate?.fixtures ?? []}
             strategy={strategy}
-            slateGuard={slate?.ticketGuard}
+            slateGuard={viewSlate?.ticketGuard}
             onGoToSlate={() => navigate('slate')}
             onApplyLegs={handleApplyPickGuideLegs}
           />
-        ) : isLoading && !slate ? (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            <div className="lg:col-span-7 space-y-4">
-              <div className="h-8 w-72 bg-slate-200 rounded-md animate-pulse" />
-              <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div
-                    key={i}
-                    className="py-4 border-b last:border-b-0 border-slate-100 space-y-2.5"
-                  >
-                    <div className="h-3 w-48 bg-slate-200 rounded animate-pulse" />
-                    <div className="h-5 w-64 bg-slate-200 rounded animate-pulse" />
-                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 pt-1">
-                      {[1, 2, 3, 4, 5].map((m) => (
-                        <div
-                          key={m}
-                          className="h-14 bg-slate-100 rounded-lg animate-pulse"
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-5 space-y-4">
-              <div className="h-6 w-44 bg-slate-200 rounded animate-pulse" />
-              <div className="h-16 bg-slate-100 rounded-lg animate-pulse" />
-              {[1, 2, 3, 4].map((i) => (
-                <div
-                  key={i}
-                  className="h-14 bg-slate-100 rounded-lg animate-pulse"
-                />
-              ))}
-            </div>
-          </div>
-        ) : errorMessage && !slate ? (
-          <ErrorState
-            className="max-w-xl mx-auto"
-            title={`Could not load fixtures for ${selectedDate}`}
-            description={
-              <>
-                {errorMessage}
-                <span className="mt-3 flex justify-center">
-                  <DatePickerControl
-                    value={selectedDate}
-                    onChange={handleChangeDate}
-                    label="Pick another date"
-                    variant="field"
-                  />
-                </span>
-              </>
-            }
-            onRetry={() =>
-              fetchSlateForDate(selectedDate, strategy, minOdds, maxLegs, true)
-            }
-            retryLabel="Retry Loading Slate"
-          />
-        ) : slate ? (
+        ) : viewSlate ? (
           <>
-            {errorMessage && (
-              <div className="mb-6 flex items-center justify-between gap-3 p-3.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700">
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0" aria-hidden="true" />
-                  <span>{errorMessage}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => fetchSlateForDate(selectedDate, strategy, minOdds, maxLegs, true)}
-                  className="font-semibold underline whitespace-nowrap cursor-pointer"
-                >
-                  Retry
-                </button>
-              </div>
-            )}
-
             {activeTab === 'slate' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                 <div className="lg:col-span-7 min-w-0">
                   <FixtureBoard
-                    fixtures={slate.fixtures}
+                    fixtures={viewSlate.fixtures}
                     selectedDate={selectedDate}
                     todayDate={todayDate}
-                    dataProvider={slate.dataProvider || 'API-Football Pro'}
-                    slateSource={slate.slateSource}
-                    capturedAt={slate.capturedAt}
+                    dataProvider={viewSlate.dataProvider || 'API-Football Pro'}
+                    slateSource={viewSlate.slateSource}
+                    capturedAt={viewSlate.capturedAt}
                     isFetchingDate={isLoading}
                     isRecapturing={isRecapturing}
                     onRecapturePrices={handleRecapturePrices}
@@ -1220,11 +1307,11 @@ export default function App() {
                 <div className="lg:col-span-5 min-w-0">
                   <AccaTicketSlip
                     legs={selectedLegs}
-                    fixtures={slate.fixtures}
+                    fixtures={viewSlate.fixtures}
                     minOdds={minOdds}
                     maxLegs={maxLegs}
                     strategy={strategy}
-                    displayDate={slate.displayDate}
+                    displayDate={viewSlate.displayDate}
                     stake={stake}
                     onChangeStake={setStake}
                     onChangeStrategy={handleChangeStrategy}
@@ -1252,10 +1339,10 @@ export default function App() {
                 strategyName={strategyCopy.title}
                 strategySummary={strategyCopy.summary}
                 selectedDate={selectedDate}
-                displayDate={slate.displayDate}
+                displayDate={viewSlate.displayDate}
                 isFetchingDate={isLoading}
                 legs={selectedLegs}
-                fixtures={slate.fixtures}
+                fixtures={viewSlate.fixtures}
                 savedTickets={savedTickets}
                 fixtureSnapshots={fixtureSnapshots}
                 todayDate={todayDate}
@@ -1269,13 +1356,15 @@ export default function App() {
               />
             )}
 
-          </>
-        ) : null}
+            </>
+          ) : null}
+            </>
+          )}
         </Suspense>
       </main>
 
       <footer className="border-t border-slate-200 bg-white mt-12">
-        <div className={`${contentInset} py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500`}>
+        <div className={`${contentInset} py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-slate-500`}>
           <span>MatchSlip · Built on evidence, not hunches.</span>
           <span>
             18+ only · Bet responsibly · Verify odds and kickoff times with your

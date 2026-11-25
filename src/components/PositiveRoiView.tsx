@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AccaStrategy, SettlementStatus } from '../types/fixtures.ts';
 import type {
   QualifiedPicksResponse,
@@ -14,6 +14,7 @@ import {
   type SortState,
 } from '../utils/tableSort.ts';
 import { ErrorState, LoadingState } from './ui/States.tsx';
+import { CombinationRoiView } from './CombinationRoiView.tsx';
 import {
   PositiveRoiOverview,
   PositiveRoiSectionNav,
@@ -71,9 +72,24 @@ export function PositiveRoiView({
   } | null>(null);
   const [pickFilter, setPickFilter] = useState<PickFilter>('all');
   const [sort, setSort] = useState<SortState>({ key: null, direction: SORT_ASC });
+  const [studyRefreshKey, setStudyRefreshKey] = useState(0);
+  const [studyForce, setStudyForce] = useState(false);
   const onSort = makeSortHandler(setSort);
+  // Keep a slow response for an older date/strategy from overwriting the new one.
+  const loadRequestRef = useRef(0);
+  const generateRequestRef = useRef(0);
+  useEffect(
+    () => () => {
+      loadRequestRef.current += 1;
+      generateRequestRef.current += 1;
+    },
+    []
+  );
 
   const load = useCallback(async () => {
+    const requestId = ++loadRequestRef.current;
+    generateRequestRef.current += 1;
+    setBuilding(false);
     setLoading(true);
     setError(null);
     try {
@@ -89,48 +105,54 @@ export function PositiveRoiView({
           body: JSON.stringify({ strategy }),
         }),
       ]);
+      if (requestId !== loadRequestRef.current) return;
       setQualified(picks);
       setRegistry(reg.entries);
       setTicket(null);
     } catch (err) {
+      if (requestId !== loadRequestRef.current) return;
       setError({
         scope: 'load',
         message: err instanceof Error ? err.message : 'Could not load ROI research data.',
       });
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestRef.current) setLoading(false);
     }
   }, [selectedDate, strategy]);
 
   useEffect(() => {
+    // The combination study owns its own data; avoid a redundant research fetch.
+    if (currentSection === 'combination-roi') return;
     void load();
-  }, [load]);
+  }, [currentSection, load]);
 
-  const generate = async () => {
+  const generate = useCallback(async () => {
+    const requestId = ++generateRequestRef.current;
     setBuilding(true);
     setError(null);
     try {
-      setTicket(
-        await apiFetch<RoiAccaResponse>('/api/analytics/roi-acca', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            dateIso: selectedDate,
-            strategy,
-            targetOdds: 5,
-            maxLegs: 5,
-          }),
-        })
-      );
+      const built = await apiFetch<RoiAccaResponse>('/api/analytics/roi-acca', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          dateIso: selectedDate,
+          strategy,
+          targetOdds: 5,
+          maxLegs: 5,
+        }),
+      });
+      if (requestId !== generateRequestRef.current) return;
+      setTicket(built);
     } catch (err) {
+      if (requestId !== generateRequestRef.current) return;
       setError({
         scope: 'generate',
         message: err instanceof Error ? err.message : 'Could not build the ROI accumulator.',
       });
     } finally {
-      setBuilding(false);
+      if (requestId === generateRequestRef.current) setBuilding(false);
     }
-  };
+  }, [selectedDate, strategy]);
 
   const promoted = registry.filter((entry) => entry.status === 'promoted');
   const filterCounts = useMemo(() => {
@@ -164,6 +186,26 @@ export function PositiveRoiView({
       reason: (row) => row.reason,
     });
   }, [qualified, pickFilter, sort]);
+
+  if (currentSection === 'combination-roi') {
+    return (
+      <section aria-label="Combination ROI research" className="space-y-6">
+        <PositiveRoiSectionNav
+          activeId={currentSection}
+          onSelect={onSectionChange}
+        />
+        <CombinationRoiView
+          strategy={strategy}
+          refreshKey={studyRefreshKey}
+          force={studyForce}
+          onReload={() => {
+            setStudyRefreshKey((key) => key + 1);
+            setStudyForce(true);
+          }}
+        />
+      </section>
+    );
+  }
 
   return (
     <section aria-label="Positive ROI research" className="space-y-6">

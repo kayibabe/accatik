@@ -6,6 +6,7 @@ import type {
   RoiPromotionResult,
   RoiRegistryEntry,
 } from '../../src/types/analytics.ts';
+import { writeJsonAtomic } from './atomicWrite.ts';
 import { computePickAnalytics } from './pickAnalytics.ts';
 import {
   applyRoiPromotion,
@@ -30,11 +31,9 @@ async function readJson<T>(file: string, fallback: T): Promise<T> {
   }
 }
 
-async function writeJsonAtomic(file: string, value: unknown): Promise<void> {
+async function saveRegistry(file: string, value: unknown): Promise<void> {
   await fs.mkdir(path.dirname(file), { recursive: true });
-  const temp = `${file}.${process.pid}.tmp`;
-  await fs.writeFile(temp, JSON.stringify(value), 'utf8');
-  await fs.rename(temp, file);
+  await saveRegistry(file, value);
 }
 
 export async function readRoiRegistry(
@@ -65,7 +64,7 @@ export async function writeRoiRegistry(
   for (const entry of entries) {
     byKey.set(registryKey(entry.strategy, entry.source, entry.selectionKey), entry);
   }
-  await writeJsonAtomic(file, [...byKey.values()]);
+  await saveRegistry(file, [...byKey.values()]);
 }
 
 /**

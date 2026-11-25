@@ -79,10 +79,10 @@ export function SlipMarketTypesTable({
   return (
     <div className="space-y-2">
       <div className="px-1">
-        <h3 className="text-xs font-semibold text-slate-700">
+        <h3 className="text-sm font-semibold text-slate-700">
           Leg hit rate by market
         </h3>
-        <p className="mt-0.5 text-[11px] text-slate-400">
+        <p className="mt-0.5 text-xs text-slate-600">
           Every leg on a saved slip, settled independently.
         </p>
       </div>
@@ -95,23 +95,23 @@ export function SlipMarketTypesTable({
         minWidth="min-w-[460px]"
         compact
         details={(row) => (
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
             <div>
-              <dt className="text-slate-400">Legs</dt>
+              <dt className="text-slate-600">Legs</dt>
               <dd className="font-mono text-slate-700">{row.legs}</dd>
             </div>
             <div>
-              <dt className="text-slate-400">Record (W-L-V)</dt>
+              <dt className="text-slate-600">Record (W-L-V)</dt>
               <dd className="font-mono text-slate-700">
                 {recordLabel(row.won, row.lost, row.voided)}
               </dd>
             </div>
             <div>
-              <dt className="text-slate-400">Open</dt>
+              <dt className="text-slate-600">Open</dt>
               <dd className="font-mono text-slate-700">{row.open}</dd>
             </div>
             <div>
-              <dt className="text-slate-400">Hit rate</dt>
+              <dt className="text-slate-600">Hit rate</dt>
               <dd className="font-mono text-slate-700">{fmtPercent(row.hitRate)}</dd>
             </div>
           </dl>

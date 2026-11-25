@@ -26,6 +26,7 @@ import type {
 import type {
   AiAccumulatorResponse,
   AiBriefingResponse,
+  AiPerformanceResponse,
   AiRiskMode,
 } from '../src/types/ai.ts';
 import type { LedgerSummary } from '../src/types/ledger.ts';
@@ -55,7 +56,12 @@ import {
 import { refreshAnalyticsArchives } from './lib/analyticsRefresh.ts';
 import { computePickRecords } from './lib/pickRecord.ts';
 import { buildAiAccumulator, buildBriefing } from './lib/aiBriefing.ts';
+import {
+  recordAiAccumulator,
+  recordAiBriefing,
+} from './lib/aiDeskArchive.ts';
 import { buildNarratives } from './lib/aiNarrative.ts';
+import { computeAiPerformance } from './lib/aiPerformance.ts';
 import { buildQualifiedPicksResponse } from './lib/qualifiedPicks.ts';
 import {
   attachFrameworkAssessments,
@@ -96,6 +102,10 @@ import {
   writeArchivedSlate,
   type ArchivedSlate,
 } from './lib/slateArchive.ts';
+import {
+  clearStandingsCache,
+  enrichWithStandings,
+} from './lib/standings.ts';
 import {
   isAwaitingFeedResult,
   mapFixtureStatus,
@@ -811,7 +821,7 @@ async function enrichWithPredictions(
   return performance.now() - started;
 }
 
-const SOURCE_LINKS = (dateIso: string): GroundingSource[] => [
+export const SOURCE_LINKS = (dateIso: string): GroundingSource[] => [
   {
     title: `API-Football Pro v3 — Fixtures Schedule (${dateIso})`,
     uri: 'https://www.api-football.com/documentation-v3#tag/Fixtures',
@@ -823,6 +833,10 @@ const SOURCE_LINKS = (dateIso: string): GroundingSource[] => [
   {
     title: 'API-Football Pro v3 — Match Predictions & Form Comparison',
     uri: 'https://www.api-football.com/documentation-v3#tag/Predictions',
+  },
+  {
+    title: 'API-Football Pro v3 — League Standings',
+    uri: 'https://www.api-football.com/documentation-v3#tag/Standings',
   },
 ];
 
@@ -976,6 +990,7 @@ export async function getTodayFixtures(
       // predictions and results rather than the TTL-cached copies.
       predictionCache.clear();
       resultCache.clear();
+      clearStandingsCache();
     }
 
     const loaded = await getSlate(requestedDate, forceRefresh, recapturePrices);
@@ -1034,6 +1049,7 @@ export async function getTodayFixtures(
     // Sealed matchdays skip the prediction feed entirely: the match is over.
     // A stale archive served by SWR reuses the model data captured with it.
     const hadModelData = fixtures.map((fixture) => Boolean(fixture.modelDataAt));
+    const hadStandings = fixtures.map((fixture) => Boolean(fixture.standingsAt));
     if (!isSlateSettled(fixtures, Date.now())) {
       timings.predictionsMs = await enrichWithPredictions(
         fixtures,
@@ -1041,14 +1057,23 @@ export async function getTodayFixtures(
         forceRefresh
       );
     }
-    // An archive hit can still gain model data. Persist those markers so the
-    // next visit (or a fresh server process) reuses them instead of paying for
-    // another upstream /predictions call.
-    const needsModelPersist = fixtures.some(
-      (fixture, index) => fixture.modelDataAt && !hadModelData[index]
+    // League positions are fetched once per competition, with the leagues that
+    // carry a recommended pick served first when quota is tight. Failures only
+    // leave the position blank; they never hold up the slate.
+    await enrichWithStandings(
+      fixtures,
+      new Set(legs.map((leg) => leg.fixtureId)),
+      forceRefresh
+    );
+    // An archive hit can still gain model data or standings. Persist those
+    // markers so later visits reuse them instead of paying for upstream calls.
+    const needsEnrichmentPersist = fixtures.some(
+      (fixture, index) =>
+        (fixture.modelDataAt && !hadModelData[index]) ||
+        (fixture.standingsAt && !hadStandings[index])
     );
     // Keep the in-memory cache in step with the durable copy so a burst of
-    // requests does not re-enter the prediction path before the archive write.
+    // requests does not re-enter the enrichment paths before the archive write.
     loaded.fixtures = fixtures;
 
     // Bookkeeping is deliberately not awaited: the slate is served as soon as
@@ -1056,7 +1081,7 @@ export async function getTodayFixtures(
     // scheduleBackground is a final guard against an unhandled rejection.
     const bookkeeping: Promise<void>[] = [];
     let recapturePersist: Promise<void> | undefined;
-    if (loaded.needsArchive || needsModelPersist) {
+    if (loaded.needsArchive || needsEnrichmentPersist) {
       const persistStart = performance.now();
       const persist = persistSlate(
         requestedDate,
@@ -1865,6 +1890,24 @@ function readAiRequest(body: unknown): AiSharedInput {
   };
 }
 
+function aiArchiveScope(request: AiSharedInput) {
+  return {
+    dateIso: request.dateIso,
+    strategy: request.strategy,
+    marketFilter: request.marketFilter,
+    competitionFilter: request.competitionFilter,
+  };
+}
+
+/** Archiving is a reference side-effect: a disk failure must not fail a briefing. */
+async function safelyArchiveAi(task: () => Promise<void>, label: string): Promise<void> {
+  try {
+    await task();
+  } catch (error) {
+    console.error(`Could not archive ${label}:`, error);
+  }
+}
+
 /**
  * One archive-backed read across the whole workbench: slate, analytics, ROI
  * registry, daily qualified table, shadow ledger and provenance. The only
@@ -1937,6 +1980,10 @@ export function getAiBriefing(body: unknown): Promise<ApiResult<AiBriefingRespon
       }
       result.narrativeProvider = narrative.provider;
       result.narrativeNote = narrative.note;
+      await safelyArchiveAi(
+        () => recordAiBriefing(aiArchiveScope(request), result),
+        'AI briefing snapshot'
+      );
       aiBriefingCache.set(key, result);
       return ok(result);
     } catch (error) {
@@ -1965,17 +2012,54 @@ export async function getAiAccumulator(
       return fail(briefingResult.status, 'Could not load the picks needed for an accumulator.');
     }
     const briefing = briefingResult.body as AiBriefingResponse;
-    const ticket = buildAiAccumulator({
-      dateIso: request.dateIso,
-      picks: briefing.picks,
-      targetOdds,
-      maxLegs,
-      riskMode: request.riskMode,
+    const ticket: AiAccumulatorResponse = {
+      ...buildAiAccumulator({
+        dateIso: request.dateIso,
+        picks: briefing.picks,
+        targetOdds,
+        maxLegs,
+        riskMode: request.riskMode,
+        minScore,
+      }),
       minScore,
-    });
+    };
+    await safelyArchiveAi(
+      () =>
+        recordAiAccumulator(
+          aiArchiveScope(request),
+          briefing.modelVersion,
+          { riskMode: request.riskMode, targetOdds, maxLegs, minScore },
+          ticket
+        ),
+      'AI accumulator snapshot'
+    );
     return ok(ticket);
   } catch (error) {
     console.error('Error building AI accumulator:', error);
     return fail(500, errorMessage(error, 'Could not build the AI accumulator.'));
+  }
+}
+
+/** Settled hit rate and flat-stake ROI for archived AI Desk picks. */
+export async function getAiPerformance(
+  query: unknown
+): Promise<ApiResult<AiPerformanceResponse | ErrorBody>> {
+  const source = asRecord(query);
+  const singleDate = asDateIso(source.dateIso);
+  const modelVersion =
+    typeof source.modelVersion === 'string' && source.modelVersion.trim()
+      ? source.modelVersion.trim().slice(0, 80)
+      : undefined;
+  try {
+    return ok(
+      await computeAiPerformance({
+        fromDateIso: singleDate ?? asDateIso(source.from ?? source.fromDateIso),
+        toDateIso: singleDate ?? asDateIso(source.to ?? source.toDateIso),
+        modelVersion,
+      })
+    );
+  } catch (error) {
+    console.error('Error computing AI Desk performance:', error);
+    return fail(500, errorMessage(error, 'Could not compute AI Desk performance.'));
   }
 }

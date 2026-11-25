@@ -4,6 +4,18 @@
   --font-display: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
   --font-sans: "DM Sans", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /*
+   * Legibility floor. Body copy is 16px; compact labels and table cells are
+   * 14px. Nothing that carries meaning is rendered below 14px. Previously the
+   * UI used 9–12px for most content, which is unreadable for many users.
+   */
+  --text-xs: 0.875rem;
+  --text-xs--line-height: 1.25rem;
+  --text-sm: 1rem;
+  --text-sm--line-height: 1.5rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
 }
 
 /*
@@ -93,13 +105,55 @@
 @layer base {
   html {
     font-family: var(--font-sans);
+    font-size: 16px;
     background-color: #f8fafc;
     color: #0f172a;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
+  body {
+    line-height: 1.5;
+  }
+
   h1, h2, h3, h4 {
     font-family: var(--font-display);
+    line-height: 1.25;
+  }
+
+  /* One visible focus treatment for every keyboard-operable control. */
+  :focus-visible {
+    outline: 2px solid #047857;
+    outline-offset: 2px;
+  }
+}
+
+/* Skip link: first focusable element, visible only when focused. */
+.skip-link {
+  position: absolute;
+  left: 0.75rem;
+  top: -4rem;
+  z-index: 100;
+  border-radius: 0.5rem;
+  background: #047857;
+  padding: 0.625rem 1rem;
+  color: #fff;
+  font-weight: 600;
+  transition: top 120ms ease-out;
+}
+
+.skip-link:focus-visible {
+  top: 0.75rem;
+  color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }

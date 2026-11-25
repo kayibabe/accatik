@@ -66,6 +66,39 @@ test('screen-reader-only table text stays inside the clipping scroll wrapper', a
   }
 });
 
+test('legacy right-aligned columns render left-aligned headers and cells', async () => {
+  const alignedColumns: DataTableColumn<Row>[] = [
+    {
+      key: 'name',
+      header: 'Name',
+      cell: (row) => row.name,
+      align: 'right',
+    },
+    {
+      key: 'score',
+      header: 'Score',
+      cell: () => '3.15',
+      align: 'right',
+      sortValue: (row) => row.name.length,
+    },
+  ];
+  const container = await renderTable({ columns: alignedColumns });
+  const headerCells = [...container.querySelectorAll('thead th')];
+  const bodyCells = [...container.querySelectorAll('tbody tr:first-child td')];
+
+  assert.equal(headerCells.length, 2);
+  assert.equal(bodyCells.length, 2);
+  for (const cell of [...headerCells, ...bodyCells]) {
+    assert.ok(cell.classList.contains('text-left'), 'cells must be left-aligned');
+    assert.ok(!cell.classList.contains('text-right'), 'cells must not be right-aligned');
+  }
+
+  const sortButton = container.querySelector('thead button');
+  assert.ok(sortButton, 'expected a sortable header');
+  assert.ok(sortButton.classList.contains('justify-start'));
+  assert.ok(!sortButton.classList.contains('justify-end'));
+});
+
 test('the card-view variant keeps the same guarded scroll wrapper', async () => {
   const container = await renderTable({
     renderCard: (row: Row) => h('div', null, row.name),

@@ -41,6 +41,7 @@ export function TopBar({
         <button
           type="button"
           onClick={() => onSelectTab('slate')}
+          title="Go to Matchday Slate"
           className="text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
         >
           MatchSlip
@@ -49,12 +50,12 @@ export function TopBar({
         <div className="hidden flex-1 sm:block" />
 
         <div className="ml-auto flex items-center gap-2 shrink-0">
-          <div className="hidden sm:flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs">
+          <div className="hidden sm:flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-sm">
             <UserRound className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
             <span className="max-w-[140px] truncate text-slate-700" title={LOCAL_USER.name}>
               {LOCAL_USER.name}
             </span>
-            <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-800">
+            <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-semibold uppercase text-emerald-800">
               {LOCAL_PROFILE.role}
             </span>
           </div>
@@ -63,15 +64,17 @@ export function TopBar({
             type="button"
             onClick={onRefresh}
             disabled={isLoading}
-            aria-label={isLoading ? 'Loading slate' : 'Refresh slate'}
-            className="inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold text-white bg-emerald-700 rounded-lg hover:bg-emerald-800 disabled:opacity-60 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 sm:px-4"
+            aria-label={
+              isLoading ? 'Loading Matchday Slate' : 'Refresh Matchday Slate'
+            }
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-semibold text-white bg-emerald-700 rounded-lg hover:bg-emerald-800 disabled:opacity-60 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 sm:px-4"
           >
             <RefreshCw
               className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`}
               aria-hidden="true"
             />
             <span className="hidden sm:inline">
-              {isLoading ? 'Loading Slate' : 'Refresh Slate'}
+              {isLoading ? 'Loading Matchday Slate' : 'Refresh Matchday Slate'}
             </span>
           </button>
         </div>

@@ -12,9 +12,12 @@ interface SortableThProps {
   onSort: (key: string, defaultDirection?: SortDirection) => void;
   /** Direction the first click on this column applies. */
   defaultDirection?: SortDirection;
+  /** Legacy hint; headers are always left-aligned to match their cells. */
   align?: 'left' | 'right';
   className?: string;
   title?: string;
+  /** Optional accessible name; the visible label is used when omitted. */
+  ariaLabel?: string;
   /**
    * Render only the sort button for placement inside an existing `<th>`.
    * `DataTable` owns the header cell, so a second `<th>` would be invalid HTML.
@@ -34,9 +37,9 @@ export function SortableTh({
   sort,
   onSort,
   defaultDirection = SORT_ASC,
-  align = 'left',
   className = '',
   title,
+  ariaLabel,
   bare = false,
 }: SortableThProps) {
   const isActive = sort.key === columnKey;
@@ -65,16 +68,18 @@ export function SortableTh({
       type="button"
       ref={bare ? setParentSort : undefined}
       onClick={() => onSort(columnKey, defaultDirection)}
-      className={`group inline-flex items-center gap-1 cursor-pointer transition-colors hover:text-slate-900 ${
+      aria-label={ariaLabel}
+      title={title}
+      className={`group inline-flex min-h-11 items-center justify-start gap-1.5 rounded-md px-2 text-sm transition-colors hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 cursor-pointer ${
         isActive ? 'text-slate-900' : ''
-      } ${align === 'right' ? 'w-full justify-end' : ''} ${bare ? className : ''}`}
+      } ${bare ? className : ''}`}
     >
       <span>{label}</span>
       <Icon
-        className={`w-3 h-3 shrink-0 transition-colors ${
+        className={`h-3.5 w-3.5 shrink-0 transition-colors ${
           isActive
-            ? 'text-emerald-600'
-            : 'text-slate-300 group-hover:text-slate-500'
+            ? 'text-emerald-700'
+            : 'text-slate-500 group-hover:text-slate-800'
         }`}
         aria-hidden="true"
       />
@@ -87,7 +92,7 @@ export function SortableTh({
     <th
       scope="col"
       aria-sort={ariaSort}
-      className={align === 'right' ? `text-right ${className}` : className}
+      className={`text-left ${className}`}
       title={title}
     >
       {button}

@@ -133,6 +133,8 @@ export interface RawApiFixture {
     id: number;
     name: string;
     country: string;
+    /** API-Football uses the season's starting year. */
+    season?: number;
     round?: string;
   };
   teams: {
@@ -207,6 +209,35 @@ function formatApiErrors(
   return (readable.length > 0 ? readable : values).join('; ');
 }
 
+/** Transient DNS/proxy failure: distinct so only these get a short retry. */
+class ApiFootballNetworkError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ApiFootballNetworkError';
+  }
+}
+
+const NETWORK_RETRY_ATTEMPTS = 2;
+const NETWORK_RETRY_BASE_MS = 250;
+
+async function withNetworkRetry<T>(work: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await work();
+    } catch (error) {
+      if (
+        !(error instanceof ApiFootballNetworkError) ||
+        attempt >= NETWORK_RETRY_ATTEMPTS
+      ) {
+        throw error;
+      }
+      await new Promise((resolve) =>
+        setTimeout(resolve, NETWORK_RETRY_BASE_MS * (attempt + 1))
+      );
+    }
+  }
+}
+
 /**
  * Calls API-Football v3, transparently falling back between the api-sports.io
  * host and the RapidAPI host on an auth failure, then remembering the winner.
@@ -251,7 +282,7 @@ export async function fetchApiFootball<T>(
       const timedOut =
         error instanceof Error &&
         (error.name === 'TimeoutError' || error.name === 'AbortError');
-      throw new Error(
+      throw new ApiFootballNetworkError(
         timedOut
           ? `API-Football did not respond within ${
               REQUEST_TIMEOUT_MS / 1000
@@ -271,8 +302,10 @@ export async function fetchApiFootball<T>(
 
   type CallResult = Awaited<ReturnType<typeof callProvider>>;
 
+  const callWithRetry = (baseUrl: string): Promise<CallResult> =>
+    withNetworkRetry(() => callProvider(baseUrl));
   const callBuiltIn = (provider: ApiProvider): Promise<CallResult> =>
-    callProvider(PROVIDER_BASE_URLS[provider]);
+    callWithRetry(PROVIDER_BASE_URLS[provider]);
 
   let res: CallResult['res'];
   let json: CallResult['json'];
@@ -280,7 +313,7 @@ export async function fetchApiFootball<T>(
   if (customBaseUrl) {
     // An operator-configured host wins outright: no failover, so the key is
     // only ever sent to the API they nominated.
-    ({ res, json } = await callProvider(customBaseUrl));
+    ({ res, json } = await callWithRetry(customBaseUrl));
   } else {
     const primaryProvider: ApiProvider = detectedProvider ?? 'apisports';
     ({ res, json } = await callBuiltIn(primaryProvider));

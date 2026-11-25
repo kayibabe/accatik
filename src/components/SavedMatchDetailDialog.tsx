@@ -13,6 +13,7 @@ import {
   sortRows,
   type SortState,
 } from '../utils/tableSort.ts';
+import { FormGuide } from './fixtures/FormGuide.tsx';
 import { SettlementLabel } from './SettlementLabel.tsx';
 import { SortableTh } from './SortableTh.tsx';
 
@@ -58,23 +59,57 @@ export function SavedMatchDetailDialog({
   onClose,
 }: SavedMatchDetailDialogProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
   const [marketSort, setMarketSort] = useState<SortState>({
     key: null,
     direction: SORT_DESC,
   });
   const handleMarketSort = makeSortHandler(setMarketSort, SORT_DESC);
 
+  // Focus is handed back to whatever opened the dialog. This runs only on
+  // mount so a changing onClose callback cannot overwrite the saved opener.
+  useEffect(() => {
+    openerRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    closeButtonRef.current?.focus({ preventScroll: true });
+    return () => {
+      const opener = openerRef.current;
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
+    };
+  }, []);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+
+      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (!focusable || focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      const outside = !dialogRef.current?.contains(active);
+      if (event.shiftKey && (active === first || outside)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (active === last || outside)) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener('keydown', onKeyDown);
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    // Keeping the button focus without letting the browser scroll the panel
-    // means the dialog always opens on its outcome header.
-    closeButtonRef.current?.focus({ preventScroll: true });
 
     return () => {
       document.removeEventListener('keydown', onKeyDown);
@@ -134,6 +169,7 @@ export function SavedMatchDetailDialog({
       />
 
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="saved-match-detail-title"
@@ -141,7 +177,7 @@ export function SavedMatchDetailDialog({
       >
         <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur">
           <div className="min-w-0">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
               Match detail · {matchDay} · {leg.kickoffTime}
             </p>
             <h2
@@ -150,7 +186,7 @@ export function SavedMatchDetailDialog({
             >
               {homeTeam} vs {awayTeam}
             </h2>
-            <p className="mt-0.5 text-xs text-slate-500">
+            <p className="mt-0.5 text-sm text-slate-500">
               {competition}
               {country ? ` · ${country}` : ''}
               {detailSource?.venue ? ` · ${detailSource.venue}` : ''}
@@ -161,7 +197,7 @@ export function SavedMatchDetailDialog({
             type="button"
             onClick={onClose}
             aria-label="Close match detail"
-            className="shrink-0 rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
+            className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
           >
             <X className="w-4 h-4" aria-hidden="true" />
           </button>
@@ -170,7 +206,7 @@ export function SavedMatchDetailDialog({
         <div className="space-y-5 px-5 py-5">
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
             <div>
-              <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
                 Final outcome
               </p>
               <div className="mt-1 flex items-baseline gap-2">
@@ -184,13 +220,13 @@ export function SavedMatchDetailDialog({
                   </span>
                 )}
                 {statusFixture?.statusShort && (
-                  <span className="text-[11px] font-mono text-slate-500">
+                  <span className="text-xs font-mono text-slate-500">
                     {statusFixture.statusShort}
                   </span>
                 )}
               </div>
               {statusFixture && (
-                <p className="mt-0.5 text-[11px] font-mono text-slate-500 tabular-nums">
+                <p className="mt-0.5 text-xs font-mono text-slate-500 tabular-nums">
                   {getFixtureMatchResultSummary(statusFixture)}
                 </p>
               )}
@@ -202,13 +238,13 @@ export function SavedMatchDetailDialog({
 
           <section className="space-y-2 rounded-xl border border-emerald-200 bg-emerald-50/50 px-4 py-3.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800">
+              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">
                 {legs.length > 1
                   ? `Your ${legs.length} picks on the day`
                   : 'Your pick on the day'}
               </p>
               {legs.length === 1 && (
-                <p className="text-[11px] font-mono text-emerald-900 tabular-nums">
+                <p className="text-xs font-mono text-emerald-900 tabular-nums">
                   @ {(pickedMarket?.odds ?? leg.odds).toFixed(2)}
                 </p>
               )}
@@ -243,12 +279,12 @@ export function SavedMatchDetailDialog({
                       </p>
                       <span className="flex items-center gap-2">
                         <SettlementLabel status={pickStatus} />
-                        <span className="font-mono text-[11px] font-semibold text-emerald-900 tabular-nums">
+                        <span className="font-mono text-xs font-semibold text-emerald-900 tabular-nums">
                           @ {pickOdds.toFixed(2)}
                         </span>
                       </span>
                     </div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-mono text-slate-600 tabular-nums">
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs font-mono text-slate-600 tabular-nums">
                       {typeof pickFair === 'number' && (
                         <span>Fair probability {pickFair.toFixed(1)}%</span>
                       )}
@@ -259,7 +295,7 @@ export function SavedMatchDetailDialog({
                       {pickBookmaker && <span>Book {pickBookmaker}</span>}
                     </div>
                     {pickRationale && (
-                      <p className="text-xs leading-relaxed text-slate-600">
+                      <p className="text-sm leading-relaxed text-slate-600">
                         {pickRationale}
                       </p>
                     )}
@@ -267,31 +303,34 @@ export function SavedMatchDetailDialog({
                 );
               })}
             </div>
-            <p className="text-[11px] text-slate-500">
+            <p className="text-xs text-slate-500">
               Picked from the {matchDay} matchday
               {savedAt ? ` · slip saved ${savedAt} CAT` : ''}
             </p>
           </section>
 
           {isLoading && (
-            <p className="text-xs text-slate-500">
+            <p className="text-sm text-slate-500">
               Loading the archived matchday…
             </p>
           )}
 
           {error && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
               {error}
             </div>
           )}
 
           {markets.length > 0 ? (
             <section className="space-y-2">
-              <h3 className="text-xs font-semibold text-slate-900">
+              <h3 className="text-sm font-semibold text-slate-900">
                 Prices as quoted that day
               </h3>
               <div className="overflow-x-auto rounded-lg border border-slate-200">
-                <table className="w-full text-left text-xs border-collapse">
+                <table className="w-full text-left text-sm border-collapse">
+                  <caption className="sr-only">
+                    Market prices and results for {homeTeam} versus {awayTeam}
+                  </caption>
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50 text-slate-500">
                       <SortableTh
@@ -306,7 +345,6 @@ export function SavedMatchDetailDialog({
                         columnKey="odds"
                         sort={marketSort}
                         onSort={handleMarketSort}
-                        align="right"
                         className="px-3 py-2 font-medium"
                       />
                       <SortableTh
@@ -314,7 +352,6 @@ export function SavedMatchDetailDialog({
                         columnKey="fair"
                         sort={marketSort}
                         onSort={handleMarketSort}
-                        align="right"
                         className="px-3 py-2 font-medium"
                       />
                       <SortableTh
@@ -346,15 +383,15 @@ export function SavedMatchDetailDialog({
                               {market.label}
                             </span>
                             {isPicked && (
-                              <span className="ml-2 rounded border border-emerald-300 bg-white px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800">
+                              <span className="ml-2 rounded border border-emerald-300 bg-white px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-emerald-800">
                                 Your pick
                               </span>
                             )}
                           </td>
-                          <td className="px-3 py-2 text-right font-mono font-semibold text-slate-900 tabular-nums">
+                          <td className="px-3 py-2 text-left font-mono font-semibold text-slate-900 tabular-nums">
                             {market.odds.toFixed(2)}
                           </td>
-                          <td className="px-3 py-2 text-right font-mono text-slate-600 tabular-nums">
+                          <td className="px-3 py-2 text-left font-mono text-slate-600 tabular-nums">
                             {typeof market.fairProbability === 'number'
                               ? `${market.fairProbability.toFixed(1)}%`
                               : '—'}
@@ -383,7 +420,7 @@ export function SavedMatchDetailDialog({
             </section>
           ) : (
             !isLoading && (
-              <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
                 The archived price list for this match isn&apos;t available yet.
                 The saved pick and its result above are still authoritative.
               </p>
@@ -392,22 +429,23 @@ export function SavedMatchDetailDialog({
 
           {(detailSource?.tacticalSummary || showForm || model) && (
             <section className="space-y-2 border-t border-slate-200 pt-4">
-              <h3 className="text-xs font-semibold text-slate-900">
+              <h3 className="text-sm font-semibold text-slate-900">
                 What the board said that day
               </h3>
               {showForm && (
-                <p className="font-mono text-[11px] text-slate-600">
-                  Form: {hasValue(formHome) ? formHome : '—'} home ·{' '}
-                  {hasValue(formAway) ? formAway : '—'} away
+                <p className="flex flex-wrap items-center gap-1 font-mono text-xs text-slate-600">
+                  Form:
+                  <FormGuide value={hasValue(formHome) ? formHome : null} /> home ·{' '}
+                  <FormGuide value={hasValue(formAway) ? formAway : null} /> away
                 </p>
               )}
               {detailSource?.tacticalSummary && (
-                <p className="text-xs leading-relaxed text-slate-600">
+                <p className="text-sm leading-relaxed text-slate-600">
                   {detailSource.tacticalSummary}
                 </p>
               )}
               {model && (
-                <p className="text-[11px] text-slate-600">
+                <p className="text-xs text-slate-600">
                   <span className="font-semibold text-slate-900">
                     API-Football model:{' '}
                   </span>
@@ -419,7 +457,7 @@ export function SavedMatchDetailDialog({
                 </p>
               )}
               {pricedAt && (
-                <p className="text-[10px] text-slate-400">
+                <p className="text-xs text-slate-600">
                   Prices captured {pricedAt} CAT. Kicked-off prices stay frozen
                   unless this date is explicitly recaptured. The odds the slip
                   was built from remain recorded on the ticket.
@@ -429,7 +467,7 @@ export function SavedMatchDetailDialog({
           )}
 
           {!detailSource && !isLoading && (
-            <p className="flex items-start gap-1.5 text-[11px] text-slate-400">
+            <p className="flex items-start gap-1.5 text-xs text-slate-600">
               <MapPin className="mt-0.5 w-3 h-3 shrink-0" aria-hidden="true" />
               <span>
                 No fixture archive is stored for this matchday. Showing the

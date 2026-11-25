@@ -190,3 +190,34 @@ test('upstream quota headers are captured for /health without an extra request',
     }
   }
 });
+
+test('a transient network failure is retried before the slate fails', async () => {
+  const envNames = [...new Set([...KEY_ENV_NAMES, ...BASE_URL_ENV_NAMES])];
+  const savedEnv = envNames.map((name) => [name, process.env[name]] as const);
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+
+  try {
+    for (const name of envNames) delete process.env[name];
+    process.env.API_FOOTBALL_KEY = 'unit-test-key';
+    process.env.API_FOOTBALL_BASE_URL = 'https://gateway.example.com';
+    globalThis.fetch = (async () => {
+      calls += 1;
+      if (calls < 3) throw new TypeError('fetch failed');
+      return new Response(JSON.stringify({ response: [{ ok: true }] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const result = await fetchApiFootball('/status', {});
+    assert.equal(calls, 3);
+    assert.deepEqual(result.response, [{ ok: true }]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    for (const [name, value] of savedEnv) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+});

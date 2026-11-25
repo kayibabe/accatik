@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import type { DailySlateResponse } from '../types/fixtures.ts';
+import type { AccaStrategy, DailySlateResponse } from '../types/fixtures.ts';
 import {
   deleteCachedSlate,
   getCachedSlateOwner,
   readCachedSlate,
   setCachedSlateOwner,
   writeCachedSlate,
+  type SlateCacheControls,
 } from './slateClientCache.ts';
 import { makeFixture } from './testFactories.ts';
 
@@ -59,14 +60,28 @@ function useStorage<T>(run: (storage: MemoryStorage) => T): T {
   }
 }
 
-function response(dateIso: string): DailySlateResponse {
+function cacheControls(
+  overrides: Partial<SlateCacheControls> = {}
+): SlateCacheControls {
+  return {
+    strategy: (overrides.strategy ?? 'balanced') as AccaStrategy,
+    minOdds: overrides.minOdds ?? 2.8,
+    maxLegs: overrides.maxLegs ?? 3,
+  };
+}
+
+function response(
+  dateIso: string,
+  controls: SlateCacheControls = cacheControls()
+): DailySlateResponse {
+  const resolved = cacheControls(controls);
   return {
     date: dateIso,
     displayDate: dateIso,
     timezoneLabel: 'CAT (GMT+2) Kickoff Times',
     dataProvider: 'API-Football Pro',
-    strategy: 'balanced',
-    minOdds: 2.8,
+    strategy: resolved.strategy,
+    minOdds: resolved.minOdds,
     strategyName: 'Balanced',
     strategySummary: 'Balanced summary',
     fixtures: [makeFixture({ id: `fixture-${dateIso}` })],
@@ -76,13 +91,41 @@ function response(dateIso: string): DailySlateResponse {
   };
 }
 
-test('slates are cached by match date only', () => {
+test('slates are cached per matchday and control combination', () => {
   useStorage(() => {
-    const slate = response('2026-11-20');
-    writeCachedSlate('2026-11-20', slate);
+    const balanced = cacheControls();
+    const favorites = cacheControls({ strategy: 'favorites', minOdds: 3.5, maxLegs: 4 });
+    writeCachedSlate('2026-11-20', response('2026-11-20', balanced), balanced);
+    writeCachedSlate('2026-11-20', response('2026-11-20', favorites), favorites);
 
-    assert.deepEqual(readCachedSlate('2026-11-20'), slate);
-    assert.equal(readCachedSlate('2026-11-21'), null);
+    assert.deepEqual(readCachedSlate('2026-11-20', balanced), response('2026-11-20', balanced));
+    assert.deepEqual(readCachedSlate('2026-11-20', favorites), response('2026-11-20', favorites));
+    assert.equal(readCachedSlate('2026-11-21', balanced), null);
+    assert.equal(
+      readCachedSlate('2026-11-20', cacheControls({ strategy: 'goals' })),
+      null
+    );
+    assert.equal(readCachedSlate('2026-11-20', cacheControls({ minOdds: 4 })), null);
+    assert.equal(readCachedSlate('2026-11-20', cacheControls({ maxLegs: 5 })), null);
+  });
+});
+
+test('a cached response whose controls do not match the request is rejected', () => {
+  useStorage((storage) => {
+    const balanced = cacheControls();
+    const cached = response('2026-11-20', balanced);
+    storage.setItem(
+      'matchslip_slate_cache_v1',
+      JSON.stringify({
+        '2026-11-20|favorites|2.8|3': { storedAt: Date.now(), response: cached },
+      })
+    );
+    assert.equal(
+      readCachedSlate('2026-11-20', cacheControls({ strategy: 'favorites' })),
+      null
+    );
+    // The mismatched entry is dropped even though its storage key existed.
+    assert.deepEqual(JSON.parse(storage.getItem('matchslip_slate_cache_v1') ?? '{}'), {});
   });
 });
 
@@ -98,7 +141,7 @@ test('an expired entry is dropped instead of reused', () => {
   });
 });
 
-test('the cache keeps only the eight most recent matchdays', () => {
+test('the cache keeps only the eight most recent entries', () => {
   useStorage(() => {
     const originalNow = Date.now;
     let now = Date.UTC(2026, 10, 1, 12, 0);
@@ -117,6 +160,22 @@ test('the cache keeps only the eight most recent matchdays', () => {
     } finally {
       Date.now = originalNow;
     }
+  });
+});
+
+test('deleting one date clears every control variant for that matchday', () => {
+  useStorage(() => {
+    const balanced = cacheControls();
+    const favorites = cacheControls({ strategy: 'favorites' });
+    writeCachedSlate('2026-11-20', response('2026-11-20', balanced), balanced);
+    writeCachedSlate('2026-11-20', response('2026-11-20', favorites), favorites);
+    writeCachedSlate('2026-11-21', response('2026-11-21', balanced), balanced);
+
+    deleteCachedSlate('2026-11-20');
+
+    assert.equal(readCachedSlate('2026-11-20', balanced), null);
+    assert.equal(readCachedSlate('2026-11-20', favorites), null);
+    assert.ok(readCachedSlate('2026-11-21', balanced));
   });
 });
 

@@ -128,7 +128,7 @@ export function TicketReplayPanel({
 
   if (unavailable) {
     return (
-      <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-3 text-xs text-slate-500">
+      <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-3 text-sm text-slate-500">
         <p className="font-semibold text-slate-700">Accumulator ticket replay unavailable</p>
         <p className="mt-1">
           Inception-to-date ticket replay is not available on the connected API
@@ -143,7 +143,7 @@ export function TicketReplayPanel({
           <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
           Retry
         </button>
-        {error && <p className="mt-1 text-[11px] text-slate-400">{error}</p>}
+        {error && <p className="mt-1 text-xs text-slate-600">{error}</p>}
       </div>
     );
   }
@@ -184,7 +184,7 @@ export function TicketReplayPanel({
             >
               {row.label}
             </button>
-            <span className="ml-2 text-[10px] text-slate-400">
+            <span className="ml-2 text-xs text-slate-600">
               {fmtOdds(row.targetOdds)}+ · {row.maxLegs} legs
             </span>
           </>
@@ -276,7 +276,7 @@ export function TicketReplayPanel({
       cell: (row) => (
         <span
           className={`font-semibold ${
-            row.summary.roi === null ? 'text-slate-400' : pnlTone(row.summary.roi)
+            row.summary.roi === null ? 'text-slate-600' : pnlTone(row.summary.roi)
           }`}
         >
           {fmtSignedPercent(row.summary.roi)}
@@ -312,10 +312,10 @@ export function TicketReplayPanel({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-1.5 text-sm font-bold uppercase tracking-wide text-slate-500">
-            <Layers3 className="h-4 w-4 text-slate-400" aria-hidden="true" />
+            <Layers3 className="h-4 w-4 text-slate-600" aria-hidden="true" />
             Accumulator ticket replay
           </h2>
-          <p className="mt-0.5 text-[11px] text-slate-400">
+          <p className="mt-0.5 text-xs text-slate-600">
             One reconstructed ticket per matchday since data collection began ·
             pre-match prices only
           </p>
@@ -323,8 +323,8 @@ export function TicketReplayPanel({
         {loading && <InlineLoading label="Updating…" />}
       </div>
 
-      <div className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs leading-relaxed text-slate-600">
-        <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+      <div className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-relaxed text-slate-600">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-600" aria-hidden="true" />
         <p>
           {data.firstDateIso && data.lastDateIso
             ? `${fmtShortDate(data.firstDateIso)} – ${fmtShortDate(data.lastDateIso)} · `
@@ -395,7 +395,7 @@ export function TicketReplayPanel({
           detail={`Max drawdown ${fmtFixed(highlightSummary.maxDrawdown, 2, { suffix: 'u' })}`}
           tone={
             highlightSummary.roi === null
-              ? 'text-slate-400'
+              ? 'text-slate-600'
               : pnlTone(highlightSummary.roi)
           }
           infoKey="roi"
@@ -405,10 +405,10 @@ export function TicketReplayPanel({
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
           <div>
-            <h3 className="text-xs font-bold uppercase tracking-wide text-slate-600">
+            <h3 className="text-sm font-bold uppercase tracking-wide text-slate-600">
               Replay by control
             </h3>
-            <p className="mt-0.5 text-[11px] text-slate-400">
+            <p className="mt-0.5 text-xs text-slate-600">
               {TABS.find((item) => item.id === tab)?.hint}
             </p>
           </div>
@@ -422,7 +422,7 @@ export function TicketReplayPanel({
                   setSelectedId(null);
                 }}
                 aria-pressed={tab === item.id}
-                className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
+                className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
                   tab === item.id
                     ? 'bg-white text-emerald-700 shadow-sm'
                     : 'text-slate-500 hover:text-slate-800'
@@ -441,7 +441,7 @@ export function TicketReplayPanel({
           minWidth="min-w-[1080px]"
           compact
           details={(row) => (
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] sm:grid-cols-3">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
               {[
                 ['Tickets', fmtCount(row.summary.tickets)],
                 ['W-L-V', recordLabel(row.summary.wins, row.summary.losses, row.summary.voids, '-')],
@@ -456,7 +456,7 @@ export function TicketReplayPanel({
                 ['L streak', fmtCount(row.summary.longestLossStreak)],
               ].map(([label, value]) => (
                 <div key={label}>
-                  <dt className="text-slate-400">{label}</dt>
+                  <dt className="text-slate-600">{label}</dt>
                   <dd className="font-mono text-slate-700">{value}</dd>
                 </div>
               ))}
@@ -477,16 +477,16 @@ export function TicketReplayPanel({
                 <span className="flex items-center justify-between gap-2">
                   <span className="font-semibold text-slate-800">{row.label}</span>
                   <span
-                    className={`font-mono text-xs font-bold ${
+                    className={`font-mono text-sm font-bold ${
                       row.summary.roi === null
-                        ? 'text-slate-400'
+                        ? 'text-slate-600'
                         : pnlTone(row.summary.roi)
                     }`}
                   >
                     {fmtSignedPercent(row.summary.roi)}
                   </span>
                 </span>
-                <span className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-[10px] text-slate-500">
+                <span className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-xs text-slate-500">
                   <span>{fmtOdds(row.targetOdds)}+ · {row.maxLegs} legs</span>
                   <span>{fmtCount(row.summary.tickets)} tickets</span>
                   <span>
@@ -517,11 +517,11 @@ export function TicketReplayPanel({
         />
         {selected && (
           <div className="border-t border-slate-100 px-4 py-3">
-            <p className="text-[11px] font-semibold text-slate-600">
+            <p className="text-xs font-semibold text-slate-600">
               Matchday tickets · {selected.label}
             </p>
             {selected.daily.length === 0 ? (
-              <p className="mt-1 text-[11px] text-slate-400">
+              <p className="mt-1 text-xs text-slate-600">
                 No matchday produced a settleable ticket for this combination.
               </p>
             ) : (
@@ -530,7 +530,7 @@ export function TicketReplayPanel({
                   <span
                     key={day.dateIso}
                     title={`${day.dateIso}: ${day.status} at ${fmtOdds(day.odds)} with ${day.legs} legs${day.targetMet ? ' (target met)' : ''}`}
-                    className={`rounded border px-1.5 py-0.5 font-mono text-[10px] tabular-nums ${settlementTone(day.status)}`}
+                    className={`rounded border px-1.5 py-0.5 font-mono text-xs tabular-nums ${settlementTone(day.status)}`}
                   >
                     {fmtShortDate(day.dateIso)} · {day.status} · {fmtOdds(day.odds)}
                   </span>
@@ -539,7 +539,7 @@ export function TicketReplayPanel({
             )}
           </div>
         )}
-        <p className="border-t border-slate-100 px-4 py-2 text-[11px] leading-relaxed text-slate-400">
+        <p className="border-t border-slate-100 px-4 py-2 text-xs leading-relaxed text-slate-600">
           Replay uses the frozen pre-match prices and the same builder as the
           slip. Manual Reset Pick / Clear edits and saved ledger slips are not
           included. Short tickets are kept in the record and counted against

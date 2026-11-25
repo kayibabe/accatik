@@ -6,8 +6,9 @@ export const ANALYTICS_SECTIONS = [
   { id: 'markets', label: 'Markets' },
   { id: 'replay', label: 'Replay' },
   { id: 'grade-filter', label: 'Grade filter' },
-  { id: 'positive-reads', label: 'Qualifying reads' },
-  { id: 'research', label: 'Research' },
+  { id: 'positive-reads', label: 'Positive Reads' },
+  // The id stays stable for existing deep links; the copy names the study.
+  { id: 'research', label: 'Combination ROI' },
 ] as const;
 
 export type AnalyticsSectionId = (typeof ANALYTICS_SECTIONS)[number]['id'];

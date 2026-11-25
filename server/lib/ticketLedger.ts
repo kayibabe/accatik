@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { writeJsonAtomic } from './atomicWrite.ts';
 import type {
   AccaLeg,
   AccaStrategy,
@@ -85,9 +86,7 @@ async function writeLedgerFile(ledger: LedgerFile): Promise<void> {
   ledger.updatedAt = new Date().toISOString();
   const target = ledgerFile();
   await fs.mkdir(path.dirname(target), { recursive: true });
-  const temp = `${target}.${process.pid}.tmp`;
-  await fs.writeFile(temp, JSON.stringify(ledger), 'utf8');
-  await fs.rename(temp, target);
+  await writeJsonAtomic(target, ledger);
 }
 
 let mutationQueue: Promise<unknown> = Promise.resolve();

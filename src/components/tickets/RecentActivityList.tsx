@@ -17,6 +17,7 @@ interface RecentActivityListProps {
   rows: RecentActivityRow[];
   total: number;
   todayDate: string;
+  selectedDate: string;
 }
 
 /** Compact personal ledger: the newest saved slips and their settlement. */
@@ -24,6 +25,7 @@ export function RecentActivityList({
   rows,
   total,
   todayDate,
+  selectedDate,
 }: RecentActivityListProps) {
   const groups = useMemo(
     () => groupRowsByDate(rows, (row) => ticketDateIso(row.ticket)),
@@ -35,7 +37,7 @@ export function RecentActivityList({
       labelledBy="recent-activity-title"
       title={
         <span className="inline-flex items-center gap-2">
-          <History className="h-4 w-4 text-slate-400" aria-hidden="true" />
+          <History className="h-4 w-4 text-slate-600" aria-hidden="true" />
           <span>Recent Activity</span>
         </span>
       }
@@ -45,9 +47,10 @@ export function RecentActivityList({
       <DateGroups
         groups={groups}
         todayDate={todayDate}
+        focusDate={selectedDate}
         idPrefix="recent-activity"
         empty={
-          <p className="py-4 text-center text-xs text-slate-500">
+          <p className="py-4 text-center text-sm text-slate-500">
             No saved slips in this range.
           </p>
         }
@@ -65,7 +68,7 @@ export function RecentActivityList({
                   >
                     {ticket.name}
                   </p>
-                  <p className="mt-0.5 text-[11px] text-slate-500">
+                  <p className="mt-0.5 text-xs text-slate-500">
                     {ticket.date || fmtShortDate(ticket.dateIso)} ·{' '}
                     {ticket.legs.length}{' '}
                     {ticket.legs.length === 1 ? 'leg' : 'legs'} ·{' '}
@@ -74,7 +77,7 @@ export function RecentActivityList({
                   </p>
                 </div>
                 <span
-                  className={`inline-flex w-fit shrink-0 items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${settlementTone(status)}`}
+                  className={`inline-flex w-fit shrink-0 items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${settlementTone(status)}`}
                 >
                   {status}
                 </span>

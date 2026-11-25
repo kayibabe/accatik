@@ -23,8 +23,8 @@ export function AnalyticsSummaryCards({
       <h2 id="analytics-summary-title" className="sr-only">
         Archive summary
       </h2>
-      <div className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs leading-relaxed text-slate-600">
-        <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+      <div className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-relaxed text-slate-600">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-600" aria-hidden="true" />
         <p>
           Rebuilt from {fmtCount(data.sampleDates)} archived matchdays and{' '}
           {fmtCount(data.sampleFixtures)} finished priced fixtures. Every pick is
@@ -78,7 +78,7 @@ export function AnalyticsSummaryCards({
           infoKey="roi"
         />
       </MetricGrid>
-      <p className="flex items-center gap-1 text-[11px] text-slate-400">
+      <p className="flex items-center gap-1 text-xs text-slate-600">
         Flat-stake research record, not real money. Closing line value is
         tracked in the shadow ledger, not in this archive.
         <InfoHint infoKey="clv" /> {researchCopy.verifyPrices}

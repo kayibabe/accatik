@@ -43,6 +43,13 @@ test('public fixture projection exposes only guest-safe fields', () => {
     ],
     modelAdvice: 'Home win',
     modelProbabilities: { home: 52, draw: 26, away: 22 },
+    leagueId: 123,
+    leagueSeason: 2026,
+    homeTeamId: 10,
+    awayTeamId: 11,
+    positionHome: 3,
+    positionAway: 8,
+    standingsAt: '2026-11-21T07:00:00.000Z',
   } as unknown as Fixture;
 
   assert.deepEqual(toPublicFixture(full), {
@@ -66,6 +73,8 @@ test('public fixture projection exposes only guest-safe fields', () => {
     'form',
     'recommended',
     'venue',
+    'position',
+    'standings',
   ]) {
     assert.equal(serialized.includes(leaked), false, `leaked ${leaked}`);
   }

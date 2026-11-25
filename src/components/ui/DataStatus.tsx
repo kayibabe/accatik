@@ -46,11 +46,11 @@ export function DataStatus({
 
   return (
     <div
-      className={`flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600 ${className}`}
+      className={`flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 ${className}`}
     >
       {source && (
         <span className="inline-flex items-center gap-1.5">
-          <Database className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+          <Database className="h-3.5 w-3.5 text-slate-600" aria-hidden="true" />
           <span className="font-semibold text-slate-700">{source}</span>
         </span>
       )}
@@ -62,7 +62,7 @@ export function DataStatus({
       )}
       {capturedAt && (
         <span className="inline-flex items-center gap-1.5 font-mono tabular-nums">
-          <Clock3 className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+          <Clock3 className="h-3.5 w-3.5 text-slate-600" aria-hidden="true" />
           Captured {captureLabel(capturedAt, timezone)}
         </span>
       )}
@@ -95,7 +95,7 @@ export function SectionNav({
       aria-label={label}
       className="sticky top-16 z-20 -mx-1 flex flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-white/95 px-2 py-1.5 shadow-sm backdrop-blur"
     >
-      <span className="px-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+      <span className="px-1.5 text-xs font-bold uppercase tracking-wide text-slate-600">
         {label}
       </span>
       {items.map((item) => (
@@ -103,7 +103,7 @@ export function SectionNav({
           key={item.id}
           href={`#${item.id}`}
           data-section-link=""
-          className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
+          className="rounded-md px-2.5 py-1 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
         >
           {item.label}
         </a>

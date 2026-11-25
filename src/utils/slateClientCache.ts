@@ -1,18 +1,47 @@
-import type { DailySlateResponse } from '../types/fixtures.ts';
+import type { AccaStrategy, DailySlateResponse } from '../types/fixtures.ts';
 
 /**
- * Cross-reload slate cache, keyed by matchday only.
- *
- * Strategy, odds and legs are recomputed locally by `applySlateResponse`, so
- * the exact same server response is valid for every control combination. That
- * makes a date-keyed cache safe and lets a revisited matchday render with zero
- * network traffic. The durable server archive remains the source of truth.
+ * Cross-reload slate cache, keyed by matchday *and* the controls that shape the
+ * response. DailySlateResponse carries control-derived fields (strategy,
+ * minOdds, recommendedLegIds, ticketGuard), so a date-only key can hand a
+ * different control combination to the UI. Revisiting a matchday with the same
+ * controls still renders with zero network traffic; the durable server archive
+ * remains the source of truth.
  */
 
 const STORAGE_KEY = 'matchslip_slate_cache_v1';
 const OWNER_KEY = 'matchslip_slate_cache_owner_v1';
 const TTL_MS = 1000 * 60 * 30;
 const MAX_DATES = 8;
+
+export interface SlateCacheControls {
+  strategy: AccaStrategy;
+  minOdds: number;
+  maxLegs?: number;
+}
+
+const DEFAULT_CONTROLS: Required<SlateCacheControls> = {
+  strategy: 'balanced',
+  minOdds: 2.8,
+  maxLegs: 3,
+};
+
+function normalizeControls(controls?: SlateCacheControls): Required<SlateCacheControls> {
+  return {
+    strategy: controls?.strategy ?? DEFAULT_CONTROLS.strategy,
+    minOdds: controls?.minOdds ?? DEFAULT_CONTROLS.minOdds,
+    maxLegs: controls?.maxLegs ?? DEFAULT_CONTROLS.maxLegs,
+  };
+}
+
+/** Storage key for one matchday under one set of slate controls. */
+export function slateCacheKey(
+  dateIso: string,
+  controls?: SlateCacheControls
+): string {
+  const { strategy, minOdds, maxLegs } = normalizeControls(controls);
+  return `${dateIso}|${strategy}|${minOdds}|${maxLegs}`;
+}
 
 interface CachedSlate {
   storedAt: number;
@@ -63,24 +92,35 @@ function writeAll(cache: SlateCache): void {
   }
 }
 
-function isValid(dateIso: string, entry: CachedSlate | undefined): boolean {
+function isValid(
+  dateIso: string,
+  controls: Required<SlateCacheControls>,
+  entry: CachedSlate | undefined
+): boolean {
   if (!entry || typeof entry.storedAt !== 'number') return false;
   if (Date.now() - entry.storedAt > TTL_MS) return false;
   const response = entry.response;
   return (
     Boolean(response) &&
     response.date === dateIso &&
+    response.strategy === controls.strategy &&
+    response.minOdds === controls.minOdds &&
     Array.isArray(response.fixtures) &&
+    Array.isArray(response.recommendedLegIds) &&
     typeof response.cachedAt === 'string'
   );
 }
 
-export function readCachedSlate(dateIso: string): DailySlateResponse | null {
+export function readCachedSlate(
+  dateIso: string,
+  controls?: SlateCacheControls
+): DailySlateResponse | null {
+  const key = slateCacheKey(dateIso, controls);
   const cache = readAll();
-  const entry = cache[dateIso];
-  if (isValid(dateIso, entry)) return entry.response;
+  const entry = cache[key];
+  if (isValid(dateIso, normalizeControls(controls), entry)) return entry.response;
   if (entry) {
-    delete cache[dateIso];
+    delete cache[key];
     writeAll(cache);
   }
   return null;
@@ -88,15 +128,16 @@ export function readCachedSlate(dateIso: string): DailySlateResponse | null {
 
 export function writeCachedSlate(
   dateIso: string,
-  response: DailySlateResponse
+  response: DailySlateResponse,
+  controls?: SlateCacheControls
 ): void {
   const cache = readAll();
-  cache[dateIso] = { storedAt: Date.now(), response };
+  cache[slateCacheKey(dateIso, controls)] = { storedAt: Date.now(), response };
 
-  const dates = Object.keys(cache).sort(
+  const keys = Object.keys(cache).sort(
     (a, b) => cache[b].storedAt - cache[a].storedAt
   );
-  for (const stale of dates.slice(MAX_DATES)) delete cache[stale];
+  for (const stale of keys.slice(MAX_DATES)) delete cache[stale];
   writeAll(cache);
 }
 
@@ -117,7 +158,7 @@ export function setCachedSlateOwner(owner: string): void {
   }
 }
 
-/** Clears one date, or the whole cache (including its owner) when no date is supplied. */
+/** Clears every control variant of one date, or the whole cache (including its owner) when no date is supplied. */
 export function deleteCachedSlate(dateIso?: string): void {
   if (!dateIso) {
     const store = storage();
@@ -126,7 +167,12 @@ export function deleteCachedSlate(dateIso?: string): void {
     return;
   }
   const cache = readAll();
-  if (!(dateIso in cache)) return;
-  delete cache[dateIso];
-  writeAll(cache);
+  let removed = false;
+  for (const key of Object.keys(cache)) {
+    if (key === dateIso || key.startsWith(`${dateIso}|`)) {
+      delete cache[key];
+      removed = true;
+    }
+  }
+  if (removed) writeAll(cache);
 }

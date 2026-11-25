@@ -15,6 +15,7 @@ export interface DataTableColumn<T> {
   key: string;
   header: ReactNode;
   cell: (row: T, index: number) => ReactNode;
+  /** Legacy hint; every column renders left-aligned so headers and cells line up. */
   align?: 'left' | 'right';
   /** Primary columns stay on phones; secondary appear at sm, tertiary at lg. */
   priority?: 'primary' | 'secondary' | 'tertiary';
@@ -67,7 +68,7 @@ export function DataTable<T,>({
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [sort, setSort] = useState<SortState>({ key: null, direction: SORT_ASC });
   const onSort = makeSortHandler(setSort);
-  const cellPadding = compact ? 'px-3 py-2' : 'px-4 py-3';
+  const cellPadding = compact ? 'px-3 py-3' : 'px-4 py-3.5';
 
   const sortableAccessors = useMemo(() => {
     const accessors: Record<string, (row: T) => SortValue> = {};
@@ -96,9 +97,9 @@ export function DataTable<T,>({
         </div>
       )}
       <div className={`relative overflow-x-auto rounded-xl border border-slate-200 bg-white ${renderCard ? 'hidden sm:block' : ''}`}>
-        <table className={`w-full ${minWidth} border-collapse text-left text-xs`}>
+        <table className={`w-full ${minWidth} border-collapse text-left text-sm`}>
           <caption className="sr-only">{caption}</caption>
-          <thead className="border-b border-slate-200 bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
+          <thead className="border-b border-slate-200 bg-slate-50 text-sm font-semibold text-slate-600">
             <tr>
               {columns.map((column) => {
                 const ariaSort =
@@ -114,8 +115,8 @@ export function DataTable<T,>({
                     key={column.key}
                     scope="col"
                     aria-sort={ariaSort}
-                    className={`${cellPadding} ${PRIORITY_CLASS[column.priority ?? 'primary']} ${
-                      column.align === 'right' ? 'text-right' : ''
+                    className={`${cellPadding} text-left ${
+                      PRIORITY_CLASS[column.priority ?? 'primary']
                     } ${column.className ?? ''}`}
                   >
                     {column.sortValue ? (
@@ -128,7 +129,6 @@ export function DataTable<T,>({
                         defaultDirection={
                           column.defaultSortDirection ?? SORT_ASC
                         }
-                        align={column.align ?? 'left'}
                         className="font-semibold"
                       />
                     ) : (
@@ -154,10 +154,8 @@ export function DataTable<T,>({
                     {columns.map((column) => (
                       <td
                         key={column.key}
-                        className={`${cellPadding} align-middle ${PRIORITY_CLASS[column.priority ?? 'primary']} ${
-                          column.align === 'right'
-                            ? 'text-right font-mono tabular-nums'
-                            : ''
+                        className={`${cellPadding} align-middle text-left ${
+                          PRIORITY_CLASS[column.priority ?? 'primary']
                         } ${column.className ?? ''}`}
                       >
                         {column.cell(row, index)}
@@ -174,12 +172,12 @@ export function DataTable<T,>({
                               [key]: !current[key],
                             }))
                           }
-                          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
+                          className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
                         >
                           {isExpanded ? (
-                            <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+                            <ChevronDown className="h-4 w-4" aria-hidden="true" />
                           ) : (
-                            <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                            <ChevronRight className="h-4 w-4" aria-hidden="true" />
                           )}
                           Details
                         </button>

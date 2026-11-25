@@ -39,7 +39,7 @@ export function DataCard({
               </h2>
             )}
             {subtitle && (
-              <p className="mt-0.5 text-[11px] text-slate-400">{subtitle}</p>
+              <p className="mt-0.5 text-xs text-slate-600">{subtitle}</p>
             )}
           </div>
           {actions && <div className="ml-auto flex flex-wrap gap-2">{actions}</div>}
@@ -80,12 +80,12 @@ export function InfoHint({ infoKey, label, definition, source }: InfoHintProps) 
       </button>
       <span
         role="tooltip"
-        className="pointer-events-none absolute bottom-full left-1/2 z-50 hidden w-64 -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-[11px] font-normal normal-case leading-relaxed text-slate-600 shadow-lg group-hover:block group-focus-within:block"
+        className="pointer-events-none absolute bottom-full left-1/2 z-50 hidden w-64 -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs font-normal normal-case leading-relaxed text-slate-600 shadow-lg group-hover:block group-focus-within:block"
       >
         <strong className="block text-slate-800">{resolvedLabel}</strong>
         {resolvedDefinition}
         {resolvedSource && (
-          <span className="mt-1 block text-[10px] text-slate-400">
+          <span className="mt-1 block text-xs text-slate-600">
             {resolvedSource}
           </span>
         )}
@@ -94,38 +94,55 @@ export function InfoHint({ infoKey, label, definition, source }: InfoHintProps) 
   );
 }
 
-interface MetricCardProps {
-  label: string;
-  value: string;
+interface MetricCellProps {
+  label: ReactNode;
+  value: ReactNode;
   detail?: ReactNode;
   tone?: string;
   infoKey?: string;
   className?: string;
+  /** `card` is the standalone KPI; `plain` fits inside a divided KPI strip. */
+  variant?: 'card' | 'plain';
 }
 
-/** Top-level KPI. Info hints make provenance discoverable without clutter. */
-export function MetricCard({
+/**
+ * Shared KPI surface. Info hints make provenance discoverable without clutter,
+ * and the plain variant keeps a strip of cells consistent with standalone ones.
+ */
+export function MetricCell({
   label,
   value,
   detail,
   tone = 'text-slate-900',
   infoKey,
   className = '',
-}: MetricCardProps) {
+  variant = 'card',
+}: MetricCellProps) {
+  const surface =
+    variant === 'card'
+      ? 'rounded-xl border border-slate-200 bg-white px-4 py-3'
+      : 'px-4 py-3';
   return (
-    <div
-      className={`rounded-xl border border-slate-200 bg-white px-4 py-3 ${className}`}
-    >
-      <p className="flex items-center text-[11px] font-medium text-slate-500">
+    <div className={`${surface} ${className}`}>
+      <p className="flex items-center text-xs font-medium text-slate-500">
         {label}
         {infoKey && <InfoHint infoKey={infoKey} />}
       </p>
       <p className={`mt-1 font-mono text-xl font-bold tabular-nums ${tone}`}>
         {value}
       </p>
-      {detail && <p className="mt-1 text-[11px] text-slate-400">{detail}</p>}
+      {detail && <p className="mt-1 text-xs text-slate-600">{detail}</p>}
     </div>
   );
+}
+
+interface MetricCardProps extends Omit<MetricCellProps, 'value' | 'variant'> {
+  value: string;
+}
+
+/** Top-level KPI with the same props as before, backed by MetricCell. */
+export function MetricCard({ value, ...props }: MetricCardProps) {
+  return <MetricCell {...props} value={value} />;
 }
 
 export function MetricGrid({ children }: { children: ReactNode }) {

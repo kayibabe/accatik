@@ -84,7 +84,7 @@ export function TicketReviewLegTable({
       subtitle="Ticket order is preserved; sort only changes how the legs are displayed."
       actions={
         <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-1.5 text-[11px] text-slate-500 xl:hidden">
+          <label className="flex items-center gap-1.5 text-xs text-slate-500 xl:hidden">
             Sort
             <select
               aria-label="Sort legs"
@@ -94,7 +94,7 @@ export function TicketReviewLegTable({
                   ? onRestoreOrder()
                   : onSort(event.target.value)
               }
-              className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 cursor-pointer"
+              className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 cursor-pointer"
             >
               <option value="index">Ticket order</option>
               <option value="fixture">Fixture</option>
@@ -110,12 +110,12 @@ export function TicketReviewLegTable({
             <button
               type="button"
               onClick={onRestoreOrder}
-              className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 cursor-pointer"
+              className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 cursor-pointer"
             >
               Restore ticket order
             </button>
           ) : (
-            <span className="hidden text-[11px] text-slate-400 xl:inline">
+            <span className="hidden text-xs text-slate-600 xl:inline">
               Click a column header to sort
             </span>
           )}
@@ -131,7 +131,7 @@ export function TicketReviewLegTable({
             className="space-y-2 rounded-lg border border-slate-200 p-3"
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="font-mono text-[11px] text-slate-400">
+              <span className="font-mono text-xs text-slate-600">
                 #{String(index + 1).padStart(2, '0')}
               </span>
               <SettlementLabel status={status} />
@@ -140,9 +140,9 @@ export function TicketReviewLegTable({
               <p className="font-semibold text-slate-900">
                 {leg.homeTeam} vs {leg.awayTeam}
               </p>
-              <p className="text-[11px] text-slate-500">{leg.competition}</p>
+              <p className="text-xs text-slate-500">{leg.competition}</p>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-[11px]">
+            <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
                 <span className="block text-slate-500">Selection</span>
                 <span className="font-semibold text-emerald-800">
@@ -154,7 +154,7 @@ export function TicketReviewLegTable({
                 <span className="font-mono font-bold text-slate-900">
                   {fmtOdds(leg.odds)}
                 </span>
-                <span className="block font-mono text-slate-400">
+                <span className="block font-mono text-slate-600">
                   {leg.fairProbability
                     ? fmtPercent(leg.fairProbability)
                     : '—'}
@@ -173,7 +173,7 @@ export function TicketReviewLegTable({
               </div>
             </div>
             {leg.rationale && (
-              <p className="border-t border-slate-100 pt-2 text-[11px] text-slate-600">
+              <p className="border-t border-slate-100 pt-2 text-xs text-slate-600">
                 {leg.rationale}
               </p>
             )}
@@ -183,9 +183,9 @@ export function TicketReviewLegTable({
 
       {/* Wide screens: the full sortable ledger. */}
       <div className="hidden xl:block">
-        <table className="w-full min-w-[920px] border-collapse text-left text-xs">
+        <table className="w-full min-w-[920px] border-collapse text-left text-sm">
           <caption className="sr-only">Selected accumulator legs</caption>
-          <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
+          <thead className="border-b border-slate-200 bg-slate-50 text-sm font-semibold text-slate-600">
             <tr>
               <SortableTh
                 label="#"
@@ -228,7 +228,6 @@ export function TicketReviewLegTable({
                 sort={legSort}
                 onSort={onSort}
                 defaultDirection="desc"
-                align="right"
                 className="py-3 px-4"
               />
               <SortableTh
@@ -250,34 +249,34 @@ export function TicketReviewLegTable({
           <tbody className="divide-y divide-slate-200">
             {rows.map(({ leg, index, status, matchDate, resultText }) => (
               <tr key={leg.fixtureId} className="hover:bg-slate-50/70">
-                <td className="py-3.5 px-4 font-mono text-xs text-slate-400 tabular-nums">
+                <td className="py-3.5 px-4 font-mono text-sm text-slate-600 tabular-nums">
                   {String(index + 1).padStart(2, '0')}
                 </td>
                 <td className="py-3.5 px-4">
                   <p className="font-semibold text-slate-900">
                     {leg.homeTeam} vs {leg.awayTeam}
                   </p>
-                  <p className="text-xs text-slate-500">{leg.competition}</p>
+                  <p className="text-sm text-slate-500">{leg.competition}</p>
                 </td>
-                <td className="py-3.5 px-4 font-mono text-xs text-slate-600 tabular-nums whitespace-nowrap">
+                <td className="py-3.5 px-4 font-mono text-sm text-slate-600 tabular-nums whitespace-nowrap">
                   <p className="font-semibold text-slate-800">{matchDate}</p>
                   <p>{leg.kickoffTime}</p>
                 </td>
-                <td className="py-3.5 px-4 font-mono text-xs text-slate-700 tabular-nums whitespace-nowrap">
+                <td className="py-3.5 px-4 font-mono text-sm text-slate-700 tabular-nums whitespace-nowrap">
                   {resultText}
                 </td>
                 <td className="py-3.5 px-4">
                   <p className="font-semibold text-emerald-800">
                     {leg.marketLabel}
                   </p>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-sm text-slate-500">
                     {leg.marketType}
                     {leg.bookmaker ? ` · ${leg.bookmaker}` : ''}
                   </p>
                 </td>
-                <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-900 tabular-nums whitespace-nowrap">
+                <td className="py-3.5 px-4 text-left font-mono font-bold text-slate-900 tabular-nums whitespace-nowrap">
                   {fmtOdds(leg.odds)}
-                  <span className="block text-[11px] font-medium text-slate-400">
+                  <span className="block text-xs font-medium text-slate-600">
                     {leg.fairProbability
                       ? fmtPercent(leg.fairProbability)
                       : '—'}
@@ -286,7 +285,7 @@ export function TicketReviewLegTable({
                 <td className="py-3.5 px-4 whitespace-nowrap">
                   <SettlementLabel status={status} />
                 </td>
-                <td className="py-3.5 px-4 text-xs text-slate-600 max-w-sm">
+                <td className="py-3.5 px-4 text-sm text-slate-600 max-w-sm">
                   {leg.rationale}
                 </td>
               </tr>

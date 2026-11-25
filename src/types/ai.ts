@@ -140,6 +140,7 @@ export interface AiAccumulatorResponse {
   riskMode: AiRiskMode;
   targetOdds: number;
   maxLegs: number;
+  minScore?: number;
   legs: AiTicketLeg[];
   totalOdds: number;
   /** Product of leg decision probabilities (fraction). */
@@ -155,4 +156,44 @@ export interface AiAccumulatorResponse {
   risks: string[];
   rejected: Array<{ fixtureId: string; marketId: string; reason: string }>;
   disclaimer: string;
+}
+
+/** One row of settled AI Desk performance, graded with a flat one-unit stake. */
+export interface AiPerformanceRow {
+  key: string;
+  label: string;
+  settled: number;
+  wins: number;
+  losses: number;
+  voids: number;
+  /** Percentage of decided picks that won; null until one settles. */
+  hitRate: number | null;
+  /** Flat-stake ROI in percentage points; null until one settles. */
+  roiPct: number | null;
+  /** Flat-stake profit in units (wins pay quoted odds, losers cost one unit). */
+  profitUnits: number;
+  avgOdds: number | null;
+  avgAiScore: number | null;
+}
+
+export interface AiPerformanceResponse {
+  generatedAt: string;
+  fromDateIso: string | null;
+  toDateIso: string | null;
+  modelVersion: string | null;
+  sample: {
+    snapshots: number;
+    dates: number;
+    archivedPicks: number;
+    dedupedPicks: number;
+    settled: number;
+    wins: number;
+    losses: number;
+    voids: number;
+    pending: number;
+    /** Snapshots replayed by the backfill rather than captured live. */
+    reconstructed: number;
+  };
+  /** Overall row first, then one row per model-score band. */
+  rows: AiPerformanceRow[];
 }

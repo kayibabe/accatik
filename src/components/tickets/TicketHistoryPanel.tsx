@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Archive, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import type { Fixture, SavedTicket, SettlementStatus } from '../../types/fixtures.ts';
 import {
@@ -18,6 +18,8 @@ import { SettlementLabel } from '../SettlementLabel.tsx';
 import { DateGroups, useDateGroupExpansion } from '../ui/DateGroups.tsx';
 import { DataCard } from '../ui/DataCard.tsx';
 import { EmptyState } from '../ui/States.tsx';
+import { SlipDaySummary } from './SlipDaySummary.tsx';
+import { usePendingResultRefresh } from './usePendingResultRefresh.ts';
 
 type HistoryRange = 'all' | 'week' | 'yesterday';
 
@@ -25,12 +27,13 @@ interface TicketHistoryPanelProps {
   savedTickets: SavedTicket[];
   liveFixtures: Fixture[];
   fixtureSnapshots: FixtureSnapshots;
+  /** CAT calendar date, used for "Today"/"Yesterday" labels. */
   todayDate: string;
+  /** Matchday selected in the date bar, whose group opens by default. */
+  selectedDate: string;
   onOpenArchive: () => void;
   onRefreshResults: (fixtureIds: string[]) => Promise<Fixture[]>;
 }
-
-const REFRESH_BATCH = 20;
 
 /**
  * Read-only reference of previously saved tickets, settled from the same
@@ -42,14 +45,12 @@ export function TicketHistoryPanel({
   liveFixtures,
   fixtureSnapshots,
   todayDate,
+  selectedDate,
   onOpenArchive,
   onRefreshResults,
 }: TicketHistoryPanelProps) {
   const [range, setRange] = useState<HistoryRange>('all');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [refreshing, setRefreshing] = useState(false);
-  const [refreshError, setRefreshError] = useState<string | null>(null);
-  const requestedResultsRef = useRef<Set<string>>(new Set());
 
   const activity = useMemo(
     () => buildSlipActivityData(savedTickets, liveFixtures, fixtureSnapshots),
@@ -68,79 +69,30 @@ export function TicketHistoryPanel({
   }, [savedTickets, todayDate, range]);
 
   const groups = useMemo(() => groupTicketsByDate(tickets), [tickets]);
-  // Older ranges have no "today" row, so open their newest date instead of
-  // showing an archive that looks empty behind closed accordions.
-  const defaultExpandedDate =
-    tickets.length === 0 ||
-    tickets.some((ticket) => ticketDateIso(ticket) === todayDate)
-      ? todayDate
-      : ticketDateIso(tickets[0]);
-  const expansion = useDateGroupExpansion(groups, defaultExpandedDate);
+  const expansion = useDateGroupExpansion(groups, selectedDate);
 
-  const pendingFixtureIds = useMemo(() => {
-    const nowMs = Date.now();
-    const ids = new Set<string>();
-
-    for (const ticket of savedTickets) {
-      const pool = activity.settlements.get(ticket.id)?.pool ?? [];
-      const byId = new Map(pool.map((fixture) => [fixture.id, fixture]));
-
-      for (const leg of ticket.legs) {
-        const fixture = byId.get(leg.fixtureId);
-        if (!fixture) {
-          ids.add(leg.fixtureId);
-          continue;
-        }
-        const status = evaluateMarketSettlement(fixture, {
-          id: leg.marketId,
-          label: leg.marketLabel,
-          marketType: leg.marketType,
-        });
-        if (status !== 'Pending' && status !== 'Live') continue;
-        if (
-          fixture.status === 'Scheduled' &&
-          typeof fixture.kickoffTimestamp === 'number' &&
-          fixture.kickoffTimestamp > nowMs
-        ) {
-          continue;
-        }
-        ids.add(leg.fixtureId);
-      }
-    }
-
-    return [...ids].slice(0, REFRESH_BATCH);
-  }, [savedTickets, activity]);
-
-  // Settle finished legs without making the user hunt for the old matchday.
-  // IDs are remembered so a silent feed cannot trigger a refresh loop.
-  useEffect(() => {
-    const batch = pendingFixtureIds
-      .filter((id) => !requestedResultsRef.current.has(id))
-      .slice(0, REFRESH_BATCH);
-    if (batch.length === 0) return;
-
-    for (const id of batch) requestedResultsRef.current.add(id);
-    void onRefreshResults(batch).catch(() => {
-      // Manual refresh stays available if this automatic fetch fails.
-    });
-  }, [pendingFixtureIds, onRefreshResults]);
+  const {
+    pendingFixtureIds,
+    isRefreshing: refreshing,
+    refreshError,
+    refreshPending,
+    clearError,
+  } = usePendingResultRefresh({
+    tickets: savedTickets,
+    settlements: activity.settlements,
+    onRefreshResults,
+    batchSize: 20,
+  });
 
   const handleRefresh = async () => {
     if (refreshing || pendingFixtureIds.length === 0) return;
-    setRefreshing(true);
-    setRefreshError(null);
-    try {
-      await onRefreshResults(pendingFixtureIds);
-    } catch (error) {
-      setRefreshError(
-        error instanceof Error ? error.message : 'Could not refresh results.'
-      );
-    } finally {
-      setRefreshing(false);
-    }
+    clearError();
+    await refreshPending();
   };
 
-  const defaultOpenTicketId = tickets[0]?.id;
+  const defaultOpenTicketId =
+    tickets.find((ticket) => ticketDateIso(ticket) === selectedDate)?.id ??
+    tickets[0]?.id;
   const isExpanded = (ticketId: string) =>
     expanded[ticketId] ?? ticketId === defaultOpenTicketId;
   const toggle = (ticketId: string) =>
@@ -153,7 +105,7 @@ export function TicketHistoryPanel({
       subtitle="Saved slips stay here for reference, with every leg settled from captured scores."
       actions={
         <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-1.5 text-[11px] text-slate-500">
+          <label className="flex items-center gap-1.5 text-xs text-slate-500">
             Show
             <select
               aria-label="Past ticket date range"
@@ -162,7 +114,7 @@ export function TicketHistoryPanel({
                 setRange(event.target.value as HistoryRange);
                 setExpanded({});
               }}
-              className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 cursor-pointer"
+              className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 cursor-pointer"
             >
               <option value="all">All saved</option>
               <option value="week">Last 7 days</option>
@@ -174,7 +126,7 @@ export function TicketHistoryPanel({
               type="button"
               onClick={() => void handleRefresh()}
               disabled={refreshing}
-              className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 cursor-pointer"
+              className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 cursor-pointer"
             >
               <RefreshCw
                 className={`h-3 w-3 ${refreshing ? 'animate-spin' : ''}`}
@@ -186,7 +138,7 @@ export function TicketHistoryPanel({
           <button
             type="button"
             onClick={onOpenArchive}
-            className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 cursor-pointer"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800 cursor-pointer"
           >
             <Archive className="h-3 w-3" aria-hidden="true" />
             Full archive
@@ -195,7 +147,7 @@ export function TicketHistoryPanel({
       }
     >
       {refreshError && (
-        <p role="alert" className="mb-2 text-[11px] text-red-600">
+        <p role="alert" className="mb-2 text-xs text-red-600">
           {refreshError}
         </p>
       )}
@@ -211,41 +163,12 @@ export function TicketHistoryPanel({
             description="Save a pre-match slip on the fixture board and its result will appear here alongside its leg-by-leg settlement."
           />
         }
-        daySummary={(dayTickets) => {
-          const statuses = dayTickets.map(
-            (ticket) =>
-              activity.settlements.get(ticket.id)?.settlement.status ?? 'Pending'
-          );
-          const won = statuses.filter((status) => status === 'Win').length;
-          const lost = statuses.filter((status) => status === 'Lost').length;
-          const open = statuses.filter(
-            (status) => status === 'Pending' || status === 'Live'
-          ).length;
-
-          return (
-            <span className="flex items-center gap-3">
-              <span className="font-mono text-slate-500 tabular-nums">
-                {fmtCount(dayTickets.length)}{' '}
-                {dayTickets.length === 1 ? 'slip' : 'slips'}
-              </span>
-              {won > 0 && (
-                <span className="font-semibold text-emerald-700">
-                  {fmtCount(won)} won
-                </span>
-              )}
-              {lost > 0 && (
-                <span className="font-semibold text-red-600">
-                  {fmtCount(lost)} lost
-                </span>
-              )}
-              {open > 0 && (
-                <span className="font-semibold text-slate-500">
-                  {fmtCount(open)} pending
-                </span>
-              )}
-            </span>
-          );
-        }}
+        daySummary={(dayTickets) => (
+          <SlipDaySummary
+            tickets={dayTickets}
+            settlements={activity.settlements}
+          />
+        )}
         renderDay={(dayTickets) => (
           <div className="divide-y divide-slate-200">
             {dayTickets.map((ticket) => {
@@ -265,10 +188,10 @@ export function TicketHistoryPanel({
                     className="flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-slate-50 cursor-pointer"
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-xs font-semibold text-slate-900">
+                      <span className="block truncate text-sm font-semibold text-slate-900">
                         {ticket.name}
                       </span>
-                      <span className="block text-[11px] text-slate-500">
+                      <span className="block text-xs text-slate-500">
                         {fmtCount(ticket.legs.length)}{' '}
                         {ticket.legs.length === 1 ? 'leg' : 'legs'} ·{' '}
                         {fmtOdds(ticket.totalOdds)} odds · {fmtMwk(ticket.stake)} stake
@@ -276,17 +199,17 @@ export function TicketHistoryPanel({
                     </span>
                     <span className="flex shrink-0 items-center gap-2">
                       {settlement && <SettlementLabel status={settlement.status} />}
-                      <span className="font-mono text-xs font-bold text-slate-800 tabular-nums">
+                      <span className="font-mono text-sm font-bold text-slate-800 tabular-nums">
                         {settlement ? fmtMwk(settlement.settledReturn) : '—'}
                       </span>
                       {open ? (
                         <ChevronDown
-                          className="h-3.5 w-3.5 text-slate-400"
+                          className="h-3.5 w-3.5 text-slate-600"
                           aria-hidden="true"
                         />
                       ) : (
                         <ChevronRight
-                          className="h-3.5 w-3.5 text-slate-400"
+                          className="h-3.5 w-3.5 text-slate-600"
                           aria-hidden="true"
                         />
                       )}
@@ -312,9 +235,9 @@ export function TicketHistoryPanel({
                           return (
                             <li
                               key={`${leg.fixtureId}-${leg.marketId}-${legIndex}`}
-                              className="flex flex-wrap items-center gap-x-2 gap-y-1 py-2 text-xs"
+                              className="flex flex-wrap items-center gap-x-2 gap-y-1 py-2 text-sm"
                             >
-                              <span className="font-mono text-[11px] text-slate-400">
+                              <span className="font-mono text-xs text-slate-600">
                                 {String(legIndex + 1).padStart(2, '0')}
                               </span>
                               <span className="font-semibold text-slate-800">
@@ -327,7 +250,7 @@ export function TicketHistoryPanel({
                                 {fmtOdds(leg.odds)}
                               </span>
                               <SettlementLabel status={status} />
-                              <span className="font-mono text-[11px] text-slate-500">
+                              <span className="font-mono text-xs text-slate-500">
                                 {result}
                               </span>
                             </li>
@@ -335,7 +258,7 @@ export function TicketHistoryPanel({
                         })}
                       </ol>
                       {settlement && (
-                        <p className="mt-2 border-t border-slate-200 pt-2 text-[11px] text-slate-500">
+                        <p className="mt-2 border-t border-slate-200 pt-2 text-xs text-slate-500">
                           {fmtCount(settlement.winCount)}W ·{' '}
                           {fmtCount(settlement.lostCount)}L ·{' '}
                           {fmtCount(settlement.voidCount)}V ·{' '}

@@ -115,7 +115,7 @@ export function FeaturedPicksTable({
       return (
         <span className="flex items-center gap-2">
           All featured picks
-          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700">
+          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-bold uppercase tracking-wide text-emerald-700">
             overall
           </span>
         </span>
@@ -137,10 +137,10 @@ export function FeaturedPicksTable({
             aria-hidden="true"
           />
           <span>{row.data.label}</span>
-          <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-500">
+          <span className="rounded bg-slate-200 px-1.5 py-0.5 text-xs font-bold uppercase tracking-wide text-slate-500">
             {row.lineCount} lines
           </span>
-          <span className="text-[10px] font-normal text-slate-400">
+          <span className="text-xs font-normal text-slate-600">
             {row.data.settled} settled
           </span>
         </button>
@@ -252,13 +252,13 @@ export function FeaturedPicksTable({
           >
             Featured picks
           </h2>
-          <p className="mt-0.5 text-[11px] text-slate-400">
+          <p className="mt-0.5 text-xs text-slate-600">
             Model angles, alternative covers and research notes, each split
             into the selections they backed with the {strategyName} strategy.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-4">
-          <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 cursor-pointer">
+          <label className="inline-flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer">
             <input
               type="checkbox"
               checked={showEmpty}
@@ -270,11 +270,11 @@ export function FeaturedPicksTable({
           <button
             type="button"
             onClick={onToggleAll}
-            className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 cursor-pointer"
+            className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 cursor-pointer"
           >
             {allExpanded ? 'Collapse all' : 'Expand all'}
           </button>
-          <span className="text-[11px] text-slate-400">1u flat stake per pick</span>
+          <span className="text-xs text-slate-600">1u flat stake per pick</span>
         </div>
       </div>
 
@@ -304,12 +304,12 @@ export function FeaturedPicksTable({
                 <p className={`font-mono text-sm font-bold ${pnlTone(row.data.netPnl)}`}>
                   {fmtUnits(row.data.netPnl)}
                 </p>
-                <p className={`font-mono text-xs ${pnlTone(row.data.roi)}`}>
+                <p className={`font-mono text-sm ${pnlTone(row.data.roi)}`}>
                   {fmtSignedPercent(row.data.roi)} ROI
                 </p>
               </div>
             </div>
-            <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-500">
+            <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-500">
               <div>
                 <dt className="inline">Record: </dt>
                 <dd className="inline font-mono text-slate-700">
@@ -339,7 +339,7 @@ export function FeaturedPicksTable({
         )}
       />
 
-      <div className="mt-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-[11px] text-slate-400">
+      <div className="mt-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs text-slate-600">
         Roll-up rows repeat their selections&apos; totals. Selections use the
         same Home/Draw/Away, goal-line, BTTS, Double Chance and DNB identities
         as the individual-market table. Groups are collapsed by default — click

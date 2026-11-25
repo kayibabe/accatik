@@ -92,6 +92,8 @@ test('attaches a decision to every priced market and a fixture summary', () => {
   assert.notEqual(attached.framework?.status, 'INSUFFICIENT_DATA');
   assert.equal(attached.framework?.dataOk, true);
   assert.ok(attached.framework?.model);
+  assert.equal(attached.modelXgHome, attached.framework?.model?.lambdaHome);
+  assert.equal(attached.modelXgAway, attached.framework?.model?.lambdaAway);
   assert.equal(attached.markets.every((market) => market.framework), true);
 
   const counts = attached.framework!.counts;
@@ -123,6 +125,8 @@ test('stripping removes framework output without touching the prices', () => {
   const stripped = stripFrameworkFromFixture(attached);
 
   assert.equal(stripped.framework, undefined);
+  assert.equal(stripped.modelXgHome, attached.modelXgHome);
+  assert.equal(stripped.modelXgAway, attached.modelXgAway);
   assert.equal(stripped.markets.every((market) => market.framework === undefined), true);
   assert.deepEqual(
     stripped.markets.map((market) => [market.id, market.odds]),
