@@ -70,6 +70,26 @@
   }
 }
 
+@layer components {
+  /* Native input stretched over the calendar icon in DatePickerControl. Keep it
+     transparent but clickable and focusable so the picker stays accessible. */
+  .date-input-overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .date-input-field::-webkit-calendar-picker-indicator {
+    opacity: 0.6;
+    cursor: pointer;
+  }
+}
+
 @layer base {
   html {
     font-family: var(--font-sans);

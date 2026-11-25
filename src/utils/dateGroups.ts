@@ -46,6 +46,16 @@ const monthFormatter = new Intl.DateTimeFormat('en-GB', {
   month: 'long',
 });
 
+const weekdayFormatter = new Intl.DateTimeFormat('en-GB', {
+  timeZone: CAT_TIMEZONE,
+  weekday: 'short',
+});
+
+const dayNumberFormatter = new Intl.DateTimeFormat('en-GB', {
+  timeZone: CAT_TIMEZONE,
+  day: 'numeric',
+});
+
 /** `2026-11-18` when the value is a real ISO calendar date, otherwise null. */
 export function normalizeIsoDate(value: string | undefined | null): string | null {
   if (typeof value !== 'string' || !ISO_DATE.test(value)) return null;
@@ -79,6 +89,34 @@ export function formatDateDayLabel(dateIso: string, todayIso: string): string {
   if (dateIso === todayIso) return `Today · ${formatted}`;
   if (dateIso === shiftIsoDate(todayIso, -1)) return `Yesterday · ${formatted}`;
   return formatted;
+}
+
+export interface DateStripTile {
+  /** Short CAT weekday, or "Today" for the current matchday. */
+  weekday: string;
+  /** Day of the month, formatted in CAT. */
+  day: string;
+  /** Full, spoken date for screen readers and hover text. */
+  ariaLabel: string;
+}
+
+/** Labels for one tile of the compact matchday date strip. */
+export function formatDateStripTile(
+  dateIso: string,
+  todayIso: string
+): DateStripTile {
+  const parsed = new Date(`${dateIso}T12:00:00Z`);
+  const isValid = normalizeIsoDate(dateIso) !== null && !Number.isNaN(parsed.getTime());
+
+  return {
+    weekday: isValid
+      ? dateIso === todayIso
+        ? 'Today'
+        : weekdayFormatter.format(parsed)
+      : 'Unknown',
+    day: isValid ? dayNumberFormatter.format(parsed) : '?',
+    ariaLabel: formatDateDayLabel(dateIso, todayIso),
+  };
 }
 
 /** "November" — the year is already shown by the surrounding section. */

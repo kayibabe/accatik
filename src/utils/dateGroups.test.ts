@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   formatDateDayLabel,
   formatDateMonthLabel,
+  formatDateStripTile,
   groupRowsByDate,
   normalizeIsoDate,
 } from './dateGroups.ts';
@@ -63,4 +64,27 @@ test('day and month labels are safe for unknown dates', () => {
   );
   assert.equal(formatDateDayLabel('', '2026-11-18'), 'Unknown date');
   assert.equal(formatDateMonthLabel(0), 'Unknown month');
+});
+
+test('date strip tiles use CAT weekdays and mark today regardless of the host time zone', () => {
+  assert.deepEqual(formatDateStripTile('2026-11-18', '2026-11-18'), {
+    weekday: 'Today',
+    day: '18',
+    ariaLabel: 'Today · Wednesday, 18 November 2026',
+  });
+  assert.deepEqual(formatDateStripTile('2026-11-17', '2026-11-18'), {
+    weekday: 'Tue',
+    day: '17',
+    ariaLabel: 'Yesterday · Tuesday, 17 November 2026',
+  });
+  assert.deepEqual(formatDateStripTile('2026-12-01', '2026-11-18'), {
+    weekday: 'Tue',
+    day: '1',
+    ariaLabel: 'Tuesday, 1 December 2026',
+  });
+  assert.deepEqual(formatDateStripTile('', '2026-11-18'), {
+    weekday: 'Unknown',
+    day: '?',
+    ariaLabel: 'Unknown date',
+  });
 });

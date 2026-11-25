@@ -1,4 +1,9 @@
-import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { DatePickerControl } from './DatePickerControl.tsx';
+import { formatDateStripTile, shiftIsoDate } from '../utils/dateGroups.ts';
+
+// Re-exported for existing callers that import the helper from here.
+export { shiftIsoDate };
 
 interface DateNavigatorProps {
   selectedDate: string;
@@ -6,94 +11,111 @@ interface DateNavigatorProps {
   onChangeDate: (date: string) => void;
 }
 
-export function shiftIsoDate(isoDate: string, deltaDays: number): string {
-  const d = new Date(`${isoDate}T12:00:00Z`);
-  if (Number.isNaN(d.getTime())) return isoDate;
-  d.setUTCDate(d.getUTCDate() + deltaDays);
-  return d.toISOString().slice(0, 10);
-}
+const STRIP_OFFSETS = [-2, -1, 0, 1, 2] as const;
 
+/**
+ * Qwantej-style matchday strip: a five-day window centred on the selection,
+ * step arrows, a Today reset that appears only when needed, and a compact
+ * native calendar for any other date.
+ *
+ * Date controls stay enabled while a slate loads. fetchSlateForDate aborts
+ * the previous request and ignores stale responses, so rapid clicks are safe
+ * and feel immediate instead of being swallowed by a disabled state.
+ */
 export function DateNavigator({
   selectedDate,
   todayDate,
   onChangeDate,
 }: DateNavigatorProps) {
-  const yesterdayDate = shiftIsoDate(todayDate, -1);
-  const tomorrowDate = shiftIsoDate(todayDate, 1);
   const isToday = selectedDate === todayDate;
+  const stripDates = STRIP_OFFSETS.map((offset) =>
+    shiftIsoDate(selectedDate, offset)
+  );
 
-  // Date controls stay enabled while a slate loads. fetchSlateForDate aborts
-  // the previous request and ignores stale responses, so rapid clicks are safe
-  // and feel immediate instead of being swallowed by a disabled state.
+  const arrowClass =
+    'grid h-8 w-7 shrink-0 place-items-center rounded-lg text-slate-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 cursor-pointer';
+
   return (
-    <div className="flex flex-wrap items-center gap-2 shrink-0">
-      <div className="inline-flex items-center gap-1 p-1 bg-white border border-slate-200 rounded-lg">
+    <div className="flex max-w-full shrink-0 flex-wrap items-center gap-2">
+      <div className="inline-flex max-w-full items-center gap-0.5 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1">
         <button
           type="button"
           onClick={() => onChangeDate(shiftIsoDate(selectedDate, -1))}
           aria-label="Previous day"
-          className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
+          className={arrowClass}
         >
-          <ChevronLeft className="w-4 h-4" aria-hidden="true" />
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
         </button>
-        <button
-          type="button"
-          onClick={() => onChangeDate(yesterdayDate)}
-          className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
-            selectedDate === yesterdayDate
-              ? 'bg-slate-900 text-white'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
+
+        <div
+          role="group"
+          aria-label="Choose match date"
+          className="inline-flex shrink-0 items-center gap-0.5"
         >
-          Yesterday
-        </button>
-        <button
-          type="button"
-          onClick={() => onChangeDate(todayDate)}
-          className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
-            isToday
-              ? 'bg-emerald-700 text-white'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          Today
-        </button>
-        <button
-          type="button"
-          onClick={() => onChangeDate(tomorrowDate)}
-          className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
-            selectedDate === tomorrowDate
-              ? 'bg-slate-900 text-white'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          Tomorrow
-        </button>
+          {stripDates.map((dateIso, index) => {
+            const tile = formatDateStripTile(dateIso, todayDate);
+            const isSelected = dateIso === selectedDate;
+            const isTodayTile = dateIso === todayDate;
+            return (
+              <button
+                key={`${dateIso}-${STRIP_OFFSETS[index]}`}
+                type="button"
+                onClick={() => onChangeDate(dateIso)}
+                aria-label={tile.ariaLabel}
+                aria-pressed={isSelected}
+                aria-current={isTodayTile ? 'date' : undefined}
+                title={tile.ariaLabel}
+                className={`grid h-8 w-10 shrink-0 place-items-center gap-0.5 rounded-lg border text-center leading-none transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 cursor-pointer ${
+                  isSelected
+                    ? 'border-emerald-700 bg-emerald-50 text-emerald-700'
+                    : 'border-transparent text-slate-500 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                <span
+                  className={`text-[10px] font-medium uppercase tracking-wide ${
+                    isTodayTile && !isSelected ? 'text-emerald-700' : ''
+                  }`}
+                >
+                  {tile.weekday}
+                </span>
+                <strong
+                  className={`text-xs font-semibold tabular-nums ${
+                    isSelected ? 'text-emerald-700' : 'text-slate-800'
+                  }`}
+                >
+                  {tile.day}
+                </strong>
+              </button>
+            );
+          })}
+        </div>
+
         <button
           type="button"
           onClick={() => onChangeDate(shiftIsoDate(selectedDate, 1))}
           aria-label="Next day"
-          className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
+          className={arrowClass}
         >
-          <ChevronRight className="w-4 h-4" aria-hidden="true" />
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
 
-      <label className="relative inline-flex items-center">
-        <Calendar
-          className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 pointer-events-none"
-          aria-hidden="true"
-        />
-        <input
-          type="date"
+      <div className="inline-flex items-center gap-1.5">
+        {!isToday && (
+          <button
+            type="button"
+            onClick={() => onChangeDate(todayDate)}
+            className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 transition-colors hover:border-emerald-700 hover:bg-emerald-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 cursor-pointer"
+          >
+            Today
+          </button>
+        )}
+        <DatePickerControl
           value={selectedDate}
-          onChange={(e) => {
-            if (e.target.value) onChangeDate(e.target.value);
-          }}
-          aria-label="Select any match date"
-          className="h-9 pl-8 pr-2.5 text-xs font-mono font-medium text-slate-800 bg-white border border-slate-200 rounded-lg tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700 cursor-pointer"
+          onChange={onChangeDate}
+          label="Select any match date"
         />
-      </label>
+      </div>
     </div>
   );
 }

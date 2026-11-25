@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BarChart3, Calendar, Filter, RefreshCw } from 'lucide-react';
+import { BarChart3, Filter, RefreshCw } from 'lucide-react';
+import { DatePickerControl } from './DatePickerControl.tsx';
 import type { LedgerBreakdownRow, LedgerSummary } from '../types/ledger.ts';
 import { apiFetch } from '../utils/api.ts';
 import {
@@ -307,19 +308,14 @@ export function ShadowLedgerPanel() {
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/60 px-4 py-2.5">
         <div className="flex flex-wrap items-center gap-2">
-          <label className="relative inline-flex items-center">
-            <Calendar
-              className="h-3.5 w-3.5 text-slate-500 absolute left-2.5 pointer-events-none"
-              aria-hidden="true"
-            />
-            <input
-              type="date"
-              value={selectedDateIso}
-              onChange={(event) => setSelectedDateIso(event.target.value)}
-              aria-label="Filter ledger by matchday"
-              className="h-8 pl-8 pr-2.5 text-xs font-mono font-medium text-slate-800 bg-white border border-slate-200 rounded-lg tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700 cursor-pointer"
-            />
-          </label>
+          <DatePickerControl
+            value={selectedDateIso}
+            onChange={setSelectedDateIso}
+            label="Filter ledger by matchday"
+            variant="field"
+            size="sm"
+            allowEmpty
+          />
           <button
             type="button"
             onClick={() => setSelectedDateIso('')}

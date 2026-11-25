@@ -4,6 +4,7 @@ import { TopBar } from './components/TopBar.tsx';
 import type { ActiveTab } from './types/navigation.ts';
 import { SideMenu } from './components/SideMenu.tsx';
 import { DateNavigator } from './components/DateNavigator.tsx';
+import { DatePickerControl } from './components/DatePickerControl.tsx';
 import { FixtureBoard } from './components/FixtureBoard.tsx';
 import { AccaTicketSlip } from './components/AccaTicketSlip.tsx';
 import { ErrorState, LoadingState } from './components/ui/States.tsx';
@@ -1156,14 +1157,11 @@ export default function App() {
               <>
                 {errorMessage}
                 <span className="mt-3 flex justify-center">
-                  <input
-                    type="date"
+                  <DatePickerControl
                     value={selectedDate}
-                    onChange={(e) => {
-                      if (e.target.value) handleChangeDate(e.target.value);
-                    }}
-                    aria-label="Pick another date"
-                    className="h-9 px-3 text-xs font-mono text-slate-800 bg-white border border-slate-200 rounded-lg"
+                    onChange={handleChangeDate}
+                    label="Pick another date"
+                    variant="field"
                   />
                 </span>
               </>
