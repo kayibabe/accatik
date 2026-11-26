@@ -9,6 +9,7 @@ import {
   type SortState,
 } from '../../utils/tableSort.ts';
 import { DataTable, type DataTableColumn } from '../ui/DataTable.tsx';
+import { MarketLabelText } from '../ui/MarketLabel.tsx';
 import { EmptyState } from '../ui/States.tsx';
 import { recordLabel } from './format.ts';
 import { SortHeaderButton, SortStatus } from './SortHeaderButton.tsx';
@@ -43,7 +44,9 @@ export function SlipMarketTypesTable({
       header: (
         <SortHeaderButton label="Market" columnKey="marketType" sort={sort} onSort={onSort} />
       ),
-      cell: (row) => <span className="font-medium text-slate-800">{row.marketType}</span>,
+      cell: (row) => (
+        <MarketLabelText label={row.marketType} marketType={row.marketType} />
+      ),
       priority: 'primary',
     },
     {

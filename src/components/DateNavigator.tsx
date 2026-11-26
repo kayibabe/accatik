@@ -56,9 +56,9 @@ export function DateNavigator({
             const tile = formatDateStripTile(dateIso, todayDate);
             const isSelected = dateIso === selectedDate;
             const isTodayTile = dateIso === todayDate;
-            // Weekday labels are now 14px and may read "Today", so each tile
-            // needs room to wrap without clipping. An inset ring keeps the
-            // selection edge off the text, and the accessible name repeats the
+            // Weekday labels stay a step below page copy at 13px and may read
+            // "Today", so each tile needs room to wrap without clipping. An
+            // inset ring keeps the selection edge off the text, and the accessible name repeats the
             // visible label in the same upper case and line break so
             // voice-control users can say what they see and WCAG 2.5.3 is met.
             const accessibleLabel = `${tile.weekday.toUpperCase()}\n${tile.day} · ${tile.ariaLabel}`;
@@ -78,7 +78,7 @@ export function DateNavigator({
                 }`}
               >
                 <span
-                  className={`whitespace-pre-line text-center text-sm font-semibold tabular-nums leading-tight tracking-wide ${
+                  className={`whitespace-pre-line text-center text-xs font-semibold tabular-nums leading-tight tracking-wide ${
                     isSelected
                       ? 'text-emerald-700'
                       : isTodayTile

@@ -107,6 +107,10 @@ test('the selection ring stays clear of the stacked weekday label', async () => 
     tiles.every((tile) => tile.classList.contains('py-1.5')),
     'every tile needs vertical padding so its edge never clips the weekday text'
   );
+  assert.ok(
+    tiles.every((tile) => tile.querySelector('span')?.classList.contains('text-xs')),
+    'date strip labels stay a step below page copy'
+  );
 
   const selected = tiles.find(
     (tile) => tile.getAttribute('aria-pressed') === 'true'

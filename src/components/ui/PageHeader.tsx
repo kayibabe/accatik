@@ -81,7 +81,7 @@ export function PageHeader({
             {scope && <ScopeBadge scope={scope} />}
           </div>
         )}
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">
           {title}
         </h1>
         {meta && <div className="text-sm text-slate-500">{meta}</div>}

@@ -14,6 +14,7 @@ import type { MarketAnalyticsRow } from '../../types/analytics.ts';
 import { InfoHint } from '../ui/DataCard.tsx';
 import { DataTable, type DataTableColumn } from '../ui/DataTable.tsx';
 import { FilterChip } from '../ui/Filters.tsx';
+import { MarketLabelText } from '../ui/MarketLabel.tsx';
 import { EmptyState } from '../ui/States.tsx';
 import { SortableTh } from '../SortableTh.tsx';
 import { HitRateCell } from './HitRateCell.tsx';
@@ -147,7 +148,7 @@ export function MarketAnalyticsTable({
             }`}
             aria-hidden="true"
           />
-          <span>{row.data.label}</span>
+          <MarketLabelText label={row.data.label} marketType={row.data.marketType} />
           <span className="rounded bg-slate-200 px-1.5 py-0.5 text-xs font-bold uppercase tracking-wide text-slate-500">
             {row.lineCount} lines
           </span>
@@ -160,7 +161,7 @@ export function MarketAnalyticsTable({
           className="ml-3 h-1 w-1 shrink-0 rounded-full bg-slate-300"
           aria-hidden="true"
         />
-        {row.data.label}
+        <MarketLabelText label={row.data.label} marketType={row.data.marketType} />
       </span>
     );
   };
@@ -284,13 +285,25 @@ export function MarketAnalyticsTable({
             {insight && (
               <p className="mt-1 text-xs text-slate-500">
                 Best ROI (min 20 picks):{' '}
-                <span className="font-semibold text-emerald-700">
-                  {insight.best.label} {fmtSignedPercent(insight.best.roi)}
+                <span className="font-semibold">
+                  <MarketLabelText
+                    label={insight.best.label}
+                    marketType={insight.best.marketType}
+                  />{' '}
+                  <span className="text-emerald-700">
+                    {fmtSignedPercent(insight.best.roi)}
+                  </span>
                 </span>
                 <span className="mx-1.5 text-slate-300">·</span>
                 Weakest:{' '}
-                <span className="font-semibold text-red-600">
-                  {insight.worst.label} {fmtSignedPercent(insight.worst.roi)}
+                <span className="font-semibold">
+                  <MarketLabelText
+                    label={insight.worst.label}
+                    marketType={insight.worst.marketType}
+                  />{' '}
+                  <span className="text-red-600">
+                    {fmtSignedPercent(insight.worst.roi)}
+                  </span>
                 </span>
               </p>
             )}

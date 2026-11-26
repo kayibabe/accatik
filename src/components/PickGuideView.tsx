@@ -7,7 +7,10 @@ import type {
   SettlementStatus,
   TicketGuardSummary,
 } from '../types/fixtures.ts';
-import { evaluateMarketSettlement } from '../utils/accaMath.ts';
+import {
+  evaluateMarketSettlement,
+  getFixtureMatchResultSummary,
+} from '../utils/accaMath.ts';
 import {
   buildPickSelection,
   GRADE_PLAN,
@@ -36,6 +39,7 @@ import {
 import { SettlementLabel } from './SettlementLabel.tsx';
 import { SortableTh } from './SortableTh.tsx';
 import { DataCard, InfoHint } from './ui/DataCard.tsx';
+import { MarketLabelText } from './ui/MarketLabel.tsx';
 import { DataTable, type DataTableColumn } from './ui/DataTable.tsx';
 import { PageHeader } from './ui/PageHeader.tsx';
 import { EmptyState } from './ui/States.tsx';
@@ -79,6 +83,53 @@ const SETTLEMENT_SORT_RANK: Record<SettlementStatus, number> = {
   Void: 2,
   Lost: 1,
 };
+
+const MATCH_RESULT_SORT_RANK: Record<Fixture['status'], number> = {
+  Finished: 4,
+  Live: 3,
+  Void: 2,
+  Scheduled: 1,
+};
+
+interface MatchResultInfo {
+  label: string;
+  note: string;
+  title: string;
+  rank: number;
+}
+
+/** Compact result-cell copy; the full feed summary stays in the hover title. */
+function matchResultInfo(fixture: Fixture | undefined): MatchResultInfo {
+  if (!fixture) {
+    return { label: '—', note: 'No fixture data', title: 'No fixture data', rank: 0 };
+  }
+  const title = getFixtureMatchResultSummary(fixture);
+  const rank = MATCH_RESULT_SORT_RANK[fixture.status];
+  const home = fixture.score?.home;
+  const away = fixture.score?.away;
+  const hasScore = typeof home === 'number' && typeof away === 'number';
+
+  if (fixture.status === 'Void') {
+    return { label: 'Void', note: 'Match void', title, rank };
+  }
+  if (!hasScore) {
+    return {
+      label: fixture.status === 'Live' ? 'Live' : '—',
+      note: fixture.awaitingResult ? 'Score unconfirmed' : fixture.status,
+      title,
+      rank,
+    };
+  }
+  if (fixture.status === 'Live') {
+    return { label: `${home} - ${away}`, note: 'Live score', title, rank };
+  }
+  return {
+    label: `${home} - ${away}`,
+    note: home > away ? 'Home win' : home < away ? 'Away win' : 'Draw',
+    title,
+    rank,
+  };
+}
 
 type DecisionKind = 'use' | 'hold' | 'idle' | 'reject';
 
@@ -243,6 +294,8 @@ function CandidateTable({
       framework: (candidate) =>
         FRAMEWORK_SORT_RANK[candidate.frameworkStatus ?? 'NO_DECISION'],
       status: (candidate) => SETTLEMENT_SORT_RANK[statusFor(candidate)],
+      result: (candidate) =>
+        matchResultInfo(fixtureById.get(candidate.fixtureId)).rank,
       value: (candidate) => candidate.edgePts,
       decision: (candidate) => decisionFor(candidate, selectedIds, heldReason).rank,
     }),
@@ -308,7 +361,12 @@ function CandidateTable({
       header: sortHeader('Recommended angle', 'angle'),
       cell: (candidate) => (
         <div>
-          <p className="font-medium text-slate-900">{candidate.market.label}</p>
+          <p>
+            <MarketLabelText
+              label={candidate.market.label}
+              marketType={candidate.market.marketType}
+            />
+          </p>
           <p className="mt-0.5 font-mono tabular-nums text-slate-600">
             {fmtOdds(candidate.market.odds)} · {fmtPercent(candidate.probability, 0)}{' '}
             fair
@@ -352,6 +410,22 @@ function CandidateTable({
       priority: 'primary',
     },
     {
+      key: 'result',
+      header: sortHeader('Match Results', 'result', SORT_DESC),
+      cell: (candidate) => {
+        const result = matchResultInfo(fixtureById.get(candidate.fixtureId));
+        return (
+          <div className="min-w-0" title={result.title}>
+            <span className="font-mono font-semibold tabular-nums text-slate-900">
+              {result.label}
+            </span>
+            <p className="mt-0.5 text-xs text-slate-500">{result.note}</p>
+          </div>
+        );
+      },
+      priority: 'primary',
+    },
+    {
       key: 'value',
       header: sortHeader('Model edge (pp) / EV % / stress', 'value', SORT_DESC),
       cell: (candidate) => (
@@ -387,7 +461,7 @@ function CandidateTable({
       rows={rows}
       rowKey={(candidate) => candidate.fixtureId}
       caption="Recommended Angle cards graded against the pick-selection filters"
-      minWidth="min-w-[940px]"
+      minWidth="min-w-[1060px]"
       details={(candidate) => {
         const failed = candidate.checks.filter((check) => !check.passed);
         return (

@@ -208,7 +208,7 @@ export function PositiveRoiView({
   }
 
   return (
-    <section aria-label="Positive ROI research" className="space-y-6">
+    <section aria-label="Promoted ROI research" className="space-y-6">
       <PositiveRoiSectionNav
         activeId={currentSection}
         onSelect={onSectionChange}

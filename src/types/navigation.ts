@@ -4,6 +4,7 @@ export type ActiveTab =
   | 'pick-guide'
   | 'acca'
   | 'positive-reads'
+  | 'roi-research'
   | 'saved'
   | 'activity'
   | 'analytics'
@@ -15,6 +16,7 @@ export const ACTIVE_TABS: readonly ActiveTab[] = [
   'pick-guide',
   'acca',
   'positive-reads',
+  'roi-research',
   'saved',
   'activity',
   'analytics',
@@ -64,6 +66,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     description: 'Read-only studies and data provenance.',
     items: [
       { id: 'positive-reads', label: 'Positive Reads' },
+      { id: 'roi-research', label: 'Promoted ROI Picks' },
       { id: 'ai', label: 'AI Desk' },
       { id: 'sources', label: 'Sources' },
     ],

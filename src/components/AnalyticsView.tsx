@@ -53,8 +53,10 @@ interface AnalyticsViewProps {
   activeSection?: string;
   onSectionChange: (id: string) => void;
   onGoToSlate: () => void;
-  /** Opens the top-level tab that owns daily reads and the ROI study. */
+  /** Opens the top-level tab that owns daily qualifying picks. */
   onGoToPositiveReads?: () => void;
+  /** Opens the standalone Research page for all promoted ROI studies. */
+  onGoToRoiResearch?: (section?: string) => void;
 }
 
 export function AnalyticsView({
@@ -68,6 +70,7 @@ export function AnalyticsView({
   onSectionChange,
   onGoToSlate,
   onGoToPositiveReads,
+  onGoToRoiResearch,
 }: AnalyticsViewProps) {
   const currentSection = resolveAnalyticsSection(activeSection);
   const [data, setData] = useState<PickAnalyticsResponse | null>(null);
@@ -337,17 +340,26 @@ export function AnalyticsView({
 
   const refreshNow = () => void refreshTables(true);
 
-  const openPositiveReads = () => {
-    if (onGoToPositiveReads) {
-      onGoToPositiveReads();
+  const openDetailTab = (
+    tab: 'positive-reads' | 'roi-research',
+    section?: string
+  ) => {
+    if (tab === 'positive-reads') {
+      if (onGoToPositiveReads) {
+        onGoToPositiveReads();
+        return;
+      }
+    } else if (onGoToRoiResearch) {
+      onGoToRoiResearch(section);
       return;
     }
     // Fallback for callers that have not wired the callback yet: the app has no
     // router, but its popstate handler reads the tab straight from the URL.
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
-    params.set('tab', 'positive-reads');
-    params.set('section', 'combination-roi');
+    params.set('tab', tab);
+    if (section) params.set('section', section);
+    else params.delete('section');
     window.history.pushState(
       null,
       '',
@@ -360,6 +372,7 @@ export function AnalyticsView({
     currentSection === 'positive-reads' || currentSection === 'research'
       ? currentSection
       : null;
+  const isCombinationStudy = detailSection === 'research';
 
   return (
     <section aria-label="Analytics" className="space-y-6">
@@ -383,23 +396,29 @@ export function AnalyticsView({
       {detailSection && (
         <section
           id={detailSection}
-          aria-label={detailSection === 'research' ? 'Combination ROI' : 'Positive Reads'}
+          aria-label={isCombinationStudy ? 'Combination ROI' : 'Positive Reads'}
           className="rounded-xl border border-slate-200 bg-white px-4 py-4"
         >
           <h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">
-            {detailSection === 'research' ? 'Combination ROI' : 'Positive Reads'}
+            {isCombinationStudy ? 'Combination ROI' : 'Positive Reads'}
           </h2>
           <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-700">
-            Daily qualifying picks and the Combination ROI study live under the
-            top-level Positive Reads tab. Analytics here stays focused on
-            aggregate and archive views.
+            {isCombinationStudy
+              ? 'The promoted ROI picks and Combination ROI study live on the Promoted ROI Picks page under Research. Analytics here stays focused on aggregate and archive views.'
+              : 'Daily qualifying picks live under the top-level Positive Reads tab. Analytics here stays focused on aggregate and archive views.'}
           </p>
           <button
             type="button"
-            onClick={openPositiveReads}
+            onClick={() => {
+              if (isCombinationStudy) {
+                openDetailTab('roi-research', 'combination-roi');
+              } else {
+                openDetailTab('positive-reads');
+              }
+            }}
             className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
           >
-            Open Positive Reads
+            {isCombinationStudy ? 'Open Promoted ROI Picks' : 'Open Positive Reads'}
             <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
         </section>

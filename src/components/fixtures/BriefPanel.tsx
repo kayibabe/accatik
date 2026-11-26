@@ -5,8 +5,10 @@ import type { SortDirection } from '../../utils/tableSort.ts';
 import { DataTable, type DataTableColumn } from '../ui/DataTable.tsx';
 import { SortableTh } from '../SortableTh.tsx';
 import { SettlementLabel } from '../SettlementLabel.tsx';
+import { MarketLabelText } from '../ui/MarketLabel.tsx';
 import { evaluateMarketSettlement } from '../../utils/accaMath.ts';
 import { marketProbability } from '../../utils/probability.ts';
+import { marketTypeFromLabel } from '../../utils/marketLabelTone.ts';
 import { fmtOdds, fmtPercent } from '../../utils/format.ts';
 import type { ModelComparisonRow } from './types.ts';
 import {
@@ -47,7 +49,7 @@ export function BriefPanel({
         />
       ),
       cell: (market) => (
-        <span className="font-medium text-slate-900">{market.label}</span>
+        <MarketLabelText label={market.label} marketType={market.marketType} />
       ),
       priority: 'primary',
     },
@@ -217,7 +219,11 @@ export function BriefPanel({
             Book vs model · 1X2
             {fixture.modelAdvice && (
               <span className="ml-2 font-normal text-slate-500">
-                model favours {fixture.modelAdvice}
+                model favours{' '}
+                <MarketLabelText
+                  label={fixture.modelAdvice}
+                  marketType={marketTypeFromLabel(fixture.modelAdvice)}
+                />
               </span>
             )}
           </p>

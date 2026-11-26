@@ -26,7 +26,7 @@ const MyActivityView = lazy(() =>
 const AnalyticsView = lazy(() =>
   import('./components/AnalyticsView.tsx').then((m) => ({ default: m.AnalyticsView }))
 );
-const PositiveRoiView = lazy(() =>
+const RoiResearchView = lazy(() =>
   import('./components/PositiveRoiView.tsx').then((m) => ({ default: m.PositiveRoiView }))
 );
 const PositiveReadMatches = lazy(() =>
@@ -1027,6 +1027,7 @@ export default function App() {
     activeTab === 'analytics' ||
     activeTab === 'ai' ||
     activeTab === 'positive-reads' ||
+    activeTab === 'roi-research' ||
     activeTab === 'sources' ||
     activeTab === 'saved' ||
     activeTab === 'activity';
@@ -1214,27 +1215,24 @@ export default function App() {
             onApplyTicket={handleApplyAiTicket}
           />
         ) : activeTab === 'positive-reads' ? (
-          <div className="space-y-10">
-            <PositiveReadMatches
-              strategy={strategy}
-              todayDate={todayDate}
-              refreshKey={slateRefreshKey}
-              mode="build"
-              selectedDate={selectedDate}
-              onAddPicks={handleAddPositiveReadPicks}
-              onOpenTicket={() => navigate('acca')}
-            />
-            <div className="border-t border-slate-200 pt-10">
-              <PositiveRoiView
-                strategy={strategy}
-                selectedDate={selectedDate}
-                displayDate={viewSlate?.displayDate || selectedDate}
-                activeSection={activeSection}
-                onSectionChange={selectSection}
-                onGoToSlate={() => navigate('slate')}
-              />
-            </div>
-          </div>
+          <PositiveReadMatches
+            strategy={strategy}
+            todayDate={todayDate}
+            refreshKey={slateRefreshKey}
+            mode="build"
+            selectedDate={selectedDate}
+            onAddPicks={handleAddPositiveReadPicks}
+            onOpenTicket={() => navigate('acca')}
+          />
+        ) : activeTab === 'roi-research' ? (
+          <RoiResearchView
+            strategy={strategy}
+            selectedDate={selectedDate}
+            displayDate={viewSlate?.displayDate || selectedDate}
+            activeSection={activeSection}
+            onSectionChange={selectSection}
+            onGoToSlate={() => navigate('slate')}
+          />
         ) : activeTab === 'saved' ? (
           <SavedSlipsView
             savedTickets={savedTickets}

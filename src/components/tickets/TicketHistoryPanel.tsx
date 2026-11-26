@@ -15,6 +15,7 @@ import {
 } from '../../utils/savedTicketGroups.ts';
 import { buildSlipActivityData } from '../../utils/slipActivity.ts';
 import { SettlementLabel } from '../SettlementLabel.tsx';
+import { MarketLabelText } from '../ui/MarketLabel.tsx';
 import { DateGroups, useDateGroupExpansion } from '../ui/DateGroups.tsx';
 import { DataCard } from '../ui/DataCard.tsx';
 import { EmptyState } from '../ui/States.tsx';
@@ -243,9 +244,11 @@ export function TicketHistoryPanel({
                               <span className="font-semibold text-slate-800">
                                 {leg.homeTeam} vs {leg.awayTeam}
                               </span>
-                              <span className="text-slate-500">
-                                · {leg.marketLabel}
-                              </span>
+                              <span className="text-slate-500">·</span>
+                              <MarketLabelText
+                                label={leg.marketLabel}
+                                marketType={leg.marketType}
+                              />
                               <span className="font-mono text-slate-700">
                                 {fmtOdds(leg.odds)}
                               </span>

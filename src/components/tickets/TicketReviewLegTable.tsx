@@ -7,6 +7,7 @@ import { fmtOdds, fmtPercent } from '../../utils/format.ts';
 import type { SortDirection, SortState } from '../../utils/tableSort.ts';
 import { SORT_ASC, sortRows } from '../../utils/tableSort.ts';
 import { SettlementLabel } from '../SettlementLabel.tsx';
+import { MarketLabelText } from '../ui/MarketLabel.tsx';
 import { SortableTh } from '../SortableTh.tsx';
 import { DataCard } from '../ui/DataCard.tsx';
 
@@ -145,9 +146,10 @@ export function TicketReviewLegTable({
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
                 <span className="block text-slate-500">Selection</span>
-                <span className="font-semibold text-emerald-800">
-                  {leg.marketLabel}
-                </span>
+                <MarketLabelText
+                  label={leg.marketLabel}
+                  marketType={leg.marketType}
+                />
               </div>
               <div>
                 <span className="block text-slate-500">Odds / Prob</span>
@@ -266,8 +268,11 @@ export function TicketReviewLegTable({
                   {resultText}
                 </td>
                 <td className="py-3.5 px-4">
-                  <p className="font-semibold text-emerald-800">
-                    {leg.marketLabel}
+                  <p>
+                    <MarketLabelText
+                      label={leg.marketLabel}
+                      marketType={leg.marketType}
+                    />
                   </p>
                   <p className="text-sm text-slate-500">
                     {leg.marketType}

@@ -14,6 +14,22 @@ test('dates are validated and fall back to the supplied default', () => {
   assert.equal(parseAppUrlState('?date=javascript:alert', '2026-11-21').date, '2026-11-21');
 });
 
+test('ROI research deep links keep their section under the new Research page', () => {
+  assert.equal(parseAppUrlState('?tab=roi-research').tab, 'roi-research');
+  for (const section of ['overview', 'cards', 'table', 'combination-roi']) {
+    const state = parseAppUrlState(`?tab=positive-reads&section=${section}`);
+    assert.equal(state.tab, 'roi-research');
+    assert.equal(state.section, section);
+  }
+  assert.equal(parseAppUrlState('?tab=positive-reads').tab, 'positive-reads');
+});
+
+test('interim combination ROI links open the new Research page', () => {
+  const state = parseAppUrlState('?tab=combination-roi');
+  assert.equal(state.tab, 'roi-research');
+  assert.equal(state.section, 'combination-roi');
+});
+
 test('search round-trips tab, date, preset and section', () => {
   const state = {
     tab: 'analytics' as const,

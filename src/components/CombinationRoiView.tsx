@@ -9,6 +9,7 @@ import type {
 } from '../types/analytics.ts';
 import { apiFetch } from '../utils/api.ts';
 import { FEATURED_SOURCE_LABELS } from '../utils/featuredPickLabels.ts';
+import { marketTypeFromSelectionKey } from '../utils/marketLabelTone.ts';
 import {
   fmtCount,
   fmtFixed,
@@ -26,6 +27,7 @@ import {
 } from '../utils/tableSort.ts';
 import { angleTone, pnlTone } from '../utils/uiTone.ts';
 import { DataTable, type DataTableColumn } from './ui/DataTable.tsx';
+import { MarketLabelText } from './ui/MarketLabel.tsx';
 import { DataStatus } from './ui/DataStatus.tsx';
 import { MetricCard } from './ui/DataCard.tsx';
 import { EmptyState, InlineLoading } from './ui/States.tsx';
@@ -233,8 +235,11 @@ function RoiTable({
       key: 'market',
       header: sortable('Market', 'market', 'left'),
       cell: (row) => (
-        <span className="font-semibold text-slate-800 whitespace-nowrap">
-          {row.marketLabel}
+        <span className="whitespace-nowrap">
+          <MarketLabelText
+            label={row.marketLabel}
+            marketType={marketTypeFromSelectionKey(row.marketKey)}
+          />
           {row.marketKey.startsWith('DNB-') && (
             <span
               className="ml-1.5 text-xs font-medium text-amber-600"
@@ -537,7 +542,7 @@ export function CombinationRoiView({
           </p>
           <h2 className="mt-1 flex items-center gap-2 text-xl font-bold tracking-tight text-slate-900">
             <FlaskConical className="h-5 w-5 text-emerald-700" aria-hidden="true" />
-            Combination ROI study
+            Study tables
           </h2>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-600">
             Section × confidence band × market, rebuilt from every archived

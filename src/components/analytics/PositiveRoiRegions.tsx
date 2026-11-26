@@ -7,6 +7,7 @@ import {
   fmtShortDate,
   fmtSignedPercent,
 } from '../../utils/format.ts';
+import { FEATURED_SOURCE_TONE } from '../../utils/featuredPickLabels.ts';
 import { frameworkStatusLabel } from '../../utils/frameworkCopy.ts';
 import { researchCopy, shadowLedgerNote } from '../../utils/researchCopy.ts';
 import { frameworkTone } from '../../utils/uiTone.ts';
@@ -27,6 +28,7 @@ import { InfoHint, MetricCard, MetricGrid } from '../ui/DataCard.tsx';
 import { PageHeader } from '../ui/PageHeader.tsx';
 import { DataTable, type DataTableColumn } from '../ui/DataTable.tsx';
 import { FilterChip } from '../ui/Filters.tsx';
+import { MarketLabelText } from '../ui/MarketLabel.tsx';
 import { EmptyState, InlineLoading } from '../ui/States.tsx';
 import { SettlementLabel } from '../SettlementLabel.tsx';
 import { SortableTh } from '../SortableTh.tsx';
@@ -257,7 +259,7 @@ export function ResearchTicketCard({
       key: 'selection',
       header: 'Selection',
       cell: (leg) => (
-        <span className="font-semibold text-emerald-800">{leg.marketLabel}</span>
+        <MarketLabelText label={leg.marketLabel} marketType={leg.marketType} />
       ),
       sortValue: (leg) => leg.marketLabel,
       priority: 'primary',
@@ -312,8 +314,11 @@ export function ResearchTicketCard({
                 <p className="text-sm font-semibold text-slate-900">
                   {leg.homeTeam} vs {leg.awayTeam}
                 </p>
-                <p className="text-sm font-semibold text-emerald-800">
-                  {leg.marketLabel}
+                <p className="text-sm">
+                  <MarketLabelText
+                    label={leg.marketLabel}
+                    marketType={leg.marketType}
+                  />
                 </p>
               </div>
               <p className="font-mono text-sm tabular-nums text-slate-700">
@@ -396,7 +401,11 @@ export function QualifiedPicksTable({
       key: 'source',
       header: sortHeader('Card', 'source'),
       cell: (row) => (
-        <span className="text-sm text-slate-700">
+        <span
+          className={`rounded border px-1.5 py-0.5 text-xs font-semibold ${
+            FEATURED_SOURCE_TONE[row.source]
+          }`}
+        >
           {SOURCE_LABELS[row.source] ?? row.source}
         </span>
       ),
@@ -406,9 +415,10 @@ export function QualifiedPicksTable({
       key: 'selection',
       header: sortHeader('Selection', 'selection'),
       cell: (row) => (
-        <span className="font-semibold text-emerald-800">
-          {row.selectionLabel}
-        </span>
+        <MarketLabelText
+          label={row.selectionLabel}
+          marketType={row.marketType}
+        />
       ),
       priority: 'primary',
     },
@@ -542,7 +552,14 @@ export function QualifiedPicksTable({
                   {row.homeTeam} vs {row.awayTeam}
                 </p>
                 <p className="text-xs text-slate-500">
-                  {SOURCE_LABELS[row.source] ?? row.source} · {row.kickoffCat}
+                  <span
+                    className={`rounded border px-1 py-0.5 font-semibold ${
+                      FEATURED_SOURCE_TONE[row.source]
+                    }`}
+                  >
+                    {SOURCE_LABELS[row.source] ?? row.source}
+                  </span>{' '}
+                  · {row.kickoffCat}
                 </p>
               </div>
               <div className="text-right">
@@ -554,8 +571,11 @@ export function QualifiedPicksTable({
                 </p>
               </div>
             </div>
-            <p className="text-sm font-semibold text-emerald-800">
-              {row.selectionLabel}
+            <p className="text-sm">
+              <MarketLabelText
+                label={row.selectionLabel}
+                marketType={row.marketType}
+              />
             </p>
             <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-500">
               <div>

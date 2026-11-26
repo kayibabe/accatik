@@ -15,6 +15,7 @@ import {
 } from '../utils/tableSort.ts';
 import { FormGuide } from './fixtures/FormGuide.tsx';
 import { SettlementLabel } from './SettlementLabel.tsx';
+import { MarketLabelText } from './ui/MarketLabel.tsx';
 import { SortableTh } from './SortableTh.tsx';
 
 interface SavedMatchDetailDialogProps {
@@ -274,8 +275,11 @@ export function SavedMatchDetailDialog({
                     className={index > 0 ? 'border-t border-emerald-200 pt-3' : ''}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-bold text-slate-900">
-                        {pick.marketLabel}
+                      <p className="text-sm">
+                        <MarketLabelText
+                          label={pick.marketLabel}
+                          marketType={pick.marketType}
+                        />
                       </p>
                       <span className="flex items-center gap-2">
                         <SettlementLabel status={pickStatus} />
@@ -379,9 +383,10 @@ export function SavedMatchDetailDialog({
                           className={isPicked ? 'bg-emerald-50/70' : undefined}
                         >
                           <td className="px-3 py-2">
-                            <span className="font-medium text-slate-900">
-                              {market.label}
-                            </span>
+                            <MarketLabelText
+                              label={market.label}
+                              marketType={market.marketType}
+                            />
                             {isPicked && (
                               <span className="ml-2 rounded border border-emerald-300 bg-white px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-emerald-800">
                                 Your pick

@@ -24,6 +24,7 @@ import type {
 import { apiFetch } from '../utils/api.ts';
 import { fmtSignedPercent, fmtUnits } from '../utils/format.ts';
 import { DataCard, InfoHint, MetricCard, MetricGrid } from './ui/DataCard.tsx';
+import { MarketLabelText } from './ui/MarketLabel.tsx';
 import { PageHeader } from './ui/PageHeader.tsx';
 import { EmptyState, ErrorState, InlineLoading, LoadingState } from './ui/States.tsx';
 import { frameworkTone, pnlTone } from '../utils/uiTone.ts';
@@ -681,7 +682,8 @@ export function AiView({
                               {pick.homeTeam} <span className="text-slate-600">vs</span> {pick.awayTeam}
                             </p>
                             <p className="mt-0.5 text-sm text-slate-600">
-                              {pick.label} <span className="font-mono font-semibold text-slate-900">@ {pick.odds.toFixed(2)}</span>
+                              <MarketLabelText label={pick.label} marketType={pick.marketType} />{' '}
+                              <span className="font-mono font-semibold text-slate-900">@ {pick.odds.toFixed(2)}</span>
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
@@ -846,7 +848,7 @@ export function AiView({
                               {leg.homeTeam} v {leg.awayTeam}
                             </p>
                             <p className="text-xs text-slate-500">
-                              {leg.label} · <span className="font-mono">{leg.odds.toFixed(2)}</span> · {leg.band}
+                              <MarketLabelText label={leg.label} marketType={leg.marketType} /> · <span className="font-mono">{leg.odds.toFixed(2)}</span> · {leg.band}
                             </p>
                           </div>
                         </li>

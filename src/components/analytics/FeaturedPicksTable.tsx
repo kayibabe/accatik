@@ -9,6 +9,8 @@ import {
   fmtUnits,
 } from '../../utils/format.ts';
 import { pnlTone } from '../../utils/uiTone.ts';
+import { FEATURED_SOURCE_TONE } from '../../utils/featuredPickLabels.ts';
+import { marketTypeFromSelectionKey } from '../../utils/marketLabelTone.ts';
 import { SORT_DESC, type SortDirection, type SortState } from '../../utils/tableSort.ts';
 import type {
   FeaturedPickSource,
@@ -16,6 +18,7 @@ import type {
 } from '../../types/analytics.ts';
 import { InfoHint } from '../ui/DataCard.tsx';
 import { DataTable, type DataTableColumn } from '../ui/DataTable.tsx';
+import { MarketLabelText } from '../ui/MarketLabel.tsx';
 import { EmptyState } from '../ui/States.tsx';
 import { SortableTh } from '../SortableTh.tsx';
 import { HitRateCell } from './HitRateCell.tsx';
@@ -136,7 +139,11 @@ export function FeaturedPicksTable({
             }`}
             aria-hidden="true"
           />
-          <span>{row.data.label}</span>
+          <span
+            className={`rounded border px-1.5 py-0.5 text-xs font-bold ${FEATURED_SOURCE_TONE[row.source]}`}
+          >
+            {row.data.label}
+          </span>
           <span className="rounded bg-slate-200 px-1.5 py-0.5 text-xs font-bold uppercase tracking-wide text-slate-500">
             {row.lineCount} lines
           </span>
@@ -152,7 +159,10 @@ export function FeaturedPicksTable({
           className="ml-3 h-1 w-1 shrink-0 rounded-full bg-slate-300"
           aria-hidden="true"
         />
-        {row.data.label}
+        <MarketLabelText
+          label={row.data.label}
+          marketType={marketTypeFromSelectionKey(row.key.split(':').pop() ?? '')}
+        />
       </span>
     );
   };

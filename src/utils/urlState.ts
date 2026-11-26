@@ -33,15 +33,30 @@ export function parseAppUrlState(
   const rawDate = params.get(URL_PARAMS.date);
   const rawPreset = params.get(URL_PARAMS.preset);
   const rawSection = params.get(URL_PARAMS.section);
+  // The whole ROI study used to be a section of Positive Reads, and the study
+  // briefly had its own interim tab. Keep both kinds of old links working.
+  const legacyRoiSection =
+    rawTab === 'positive-reads' &&
+    ['overview', 'cards', 'table', 'combination-roi'].includes(rawSection ?? '');
+  const interimCombinationRoi = rawTab === 'combination-roi';
 
   return {
-    tab: ACTIVE_TABS.includes(rawTab as ActiveTab) ? (rawTab as ActiveTab) : 'slate',
+    tab:
+      legacyRoiSection || interimCombinationRoi
+        ? 'roi-research'
+        : ACTIVE_TABS.includes(rawTab as ActiveTab)
+          ? (rawTab as ActiveTab)
+          : 'slate',
     date: rawDate && ISO_DATE.test(rawDate) ? rawDate : fallbackDate,
     preset:
       rawPreset && /^[a-z]+$/.test(rawPreset)
         ? (rawPreset as SlateFilterPresetSelection)
         : undefined,
-    section: rawSection && /^[a-z0-9-]+$/.test(rawSection) ? rawSection : undefined,
+    section: interimCombinationRoi
+      ? 'combination-roi'
+      : rawSection && /^[a-z0-9-]+$/.test(rawSection)
+        ? rawSection
+        : undefined,
   };
 }
 

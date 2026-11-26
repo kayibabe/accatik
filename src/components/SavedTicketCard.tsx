@@ -20,6 +20,7 @@ import {
 import { groupLegsByFixture } from '../utils/savedTicketGroups.ts';
 import { settlementTone } from '../utils/uiTone.ts';
 import { SettlementLabel } from './SettlementLabel.tsx';
+import { MarketLabelText } from './ui/MarketLabel.tsx';
 
 interface SavedTicketCardProps {
   ticket: SavedTicket;
@@ -310,11 +311,11 @@ export function SavedTicketCard({
                           key={leg.marketId}
                           className="flex items-center justify-between gap-2"
                         >
-                          <span
-                            className="truncate font-medium text-slate-800"
-                            title={leg.marketLabel}
-                          >
-                            {leg.marketLabel}
+                          <span className="truncate" title={leg.marketLabel}>
+                            <MarketLabelText
+                              label={leg.marketLabel}
+                              marketType={leg.marketType}
+                            />
                           </span>
                           <span className="flex shrink-0 items-center gap-2">
                             <SettlementLabel status={legStatus} />

@@ -213,8 +213,7 @@ export function EquityCurve({ points }: EquityCurveProps) {
                     ? 'end'
                     : 'middle'
               }
-              className="fill-slate-500 font-mono"
-              fontSize="9"
+              className="fill-slate-500 font-mono text-xs"
             >
               {signedMwk(values[index])}
             </text>

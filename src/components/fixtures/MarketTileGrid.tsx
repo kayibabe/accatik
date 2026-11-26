@@ -9,6 +9,8 @@ import {
 } from '../../utils/frameworkCopy.ts';
 import { frameworkDot } from '../../utils/uiTone.ts';
 import { SettlementLabel } from '../SettlementLabel.tsx';
+import { MarketLabelText } from '../ui/MarketLabel.tsx';
+import { marketTextTone } from '../../utils/marketLabelTone.ts';
 import {
   modelPercentFor,
   marketTypeShortLabel,
@@ -67,9 +69,10 @@ export function MarketTileGrid({
             >
               <TrendingUp className="h-3 w-3 shrink-0" aria-hidden="true" />
               <span>Shortest price</span>
-              <span className="font-medium text-slate-500">
-                {shortestPrice.label}
-              </span>
+              <MarketLabelText
+                label={shortestPrice.label}
+                marketType={shortestPrice.marketType}
+              />
               <span className="font-mono font-semibold tabular-nums text-slate-500">
                 {fmtPercent(marketProbability(shortestPrice), 0)}
               </span>
@@ -130,7 +133,9 @@ export function MarketTileGrid({
               <div className="flex w-full items-center justify-between gap-1">
                 <span
                   className={`inline-flex min-w-0 items-center gap-1 text-xs font-medium ${
-                    isSelected ? 'text-emerald-100' : 'text-slate-500'
+                    isSelected
+                      ? 'text-emerald-100'
+                      : marketTextTone(market.marketType)
                   }`}
                 >
                   {isSelected && (
@@ -170,7 +175,11 @@ export function MarketTileGrid({
                 )}
               </div>
               <div className="mt-1 flex w-full items-end justify-between gap-1.5">
-                <span className="line-clamp-2 text-sm font-medium leading-snug">
+                <span
+                  className={`line-clamp-2 text-sm font-medium leading-snug ${
+                    isSelected ? '' : marketTextTone(market.marketType)
+                  }`}
+                >
                   {market.label}
                 </span>
                 <span className="shrink-0 text-right leading-tight">

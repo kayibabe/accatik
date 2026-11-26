@@ -40,6 +40,7 @@ import {
   type TicketShape,
 } from '../utils/ticketShapes.ts';
 import { SettlementLabel } from './SettlementLabel.tsx';
+import { MarketLabelText } from './ui/MarketLabel.tsx';
 
 interface AccaTicketSlipProps {
   legs: AccaLeg[];
@@ -527,8 +528,11 @@ export function AccaTicketSlip({
 
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="line-clamp-2 text-sm font-semibold leading-snug text-emerald-800">
-                      {leg.marketLabel}
+                    <span className="line-clamp-2 text-sm leading-snug">
+                      <MarketLabelText
+                        label={leg.marketLabel}
+                        marketType={leg.marketType}
+                      />
                     </span>
                     {matchedFixture && (
                       <SettlementLabel status={legStatus} />

@@ -95,18 +95,21 @@ export const INSIGHT_CARD_TONES = {
     icon: Compass,
     iconColor: 'text-emerald-600',
     labelColor: 'text-emerald-800',
+    badge: 'border-emerald-200 bg-emerald-100 text-emerald-900',
   },
   cover: {
     surface: 'border-sky-200 border-l-sky-500 bg-sky-50/70 text-sky-900',
     icon: ShieldCheck,
     iconColor: 'text-sky-600',
     labelColor: 'text-sky-800',
+    badge: 'border-sky-200 bg-sky-100 text-sky-900',
   },
   note: {
     surface: 'border-violet-200 border-l-violet-500 bg-violet-50 text-violet-900',
     icon: NotebookPen,
     iconColor: 'text-violet-600',
     labelColor: 'text-violet-700',
+    badge: 'border-violet-200 bg-violet-100 text-violet-900',
   },
 } as const;
 

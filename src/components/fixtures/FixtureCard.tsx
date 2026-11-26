@@ -28,6 +28,8 @@ import {
   MATCH_METRIC_TONE,
 } from '../../utils/uiTone.ts';
 import { SettlementLabel } from '../SettlementLabel.tsx';
+import { MarketLabelChip } from '../ui/MarketLabel.tsx';
+import { splitLeadingMarketLabel } from '../../utils/marketLabelTone.ts';
 import { BriefPanel } from './BriefPanel.tsx';
 import { FormGuide } from './FormGuide.tsx';
 import { MarketTileGrid } from './MarketTileGrid.tsx';
@@ -98,6 +100,18 @@ function PickResultChip({
   return <SettlementLabel status={status} prefix={label} />;
 }
 
+/** Provider advice often leads with a market: make that phrase scannable. */
+function ResearchNoteText({ note }: { note: string }) {
+  const { label, rest, marketType } = splitLeadingMarketLabel(note);
+  if (!marketType) return <span className="min-w-0 break-words">{note}</span>;
+  return (
+    <>
+      <MarketLabelChip label={label} marketType={marketType} />
+      {rest && <span className="min-w-0 break-words">{rest}</span>}
+    </>
+  );
+}
+
 function InsightCard({
   tone,
   label,
@@ -117,9 +131,11 @@ function InsightCard({
       className={`rounded-md border border-l-2 px-2.5 py-1.5 text-xs leading-snug ${theme.surface}`}
     >
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-        <p className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+        <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
           <Icon className={`h-3 w-3 shrink-0 ${theme.iconColor}`} aria-hidden="true" />
-          <span className={`font-semibold uppercase tracking-wide ${theme.labelColor}`}>
+          <span
+            className={`rounded border px-1.5 py-0.5 text-xs font-bold uppercase leading-none tracking-wide ${theme.badge}`}
+          >
             {label}
           </span>
           {children}
@@ -232,7 +248,7 @@ export function FixtureCard({
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0 space-y-1">
             <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-              <span className="text-base font-semibold tracking-tight text-slate-900 sm:text-lg">
+              <span className="text-lg font-semibold tracking-tight text-slate-900">
                 {fixture.homeTeam}
               </span>
               {hasScore ? (
@@ -242,7 +258,7 @@ export function FixtureCard({
               ) : (
                 <span className="text-sm font-medium text-slate-600">vs</span>
               )}
-              <span className="text-base font-semibold tracking-tight text-slate-900 sm:text-lg">
+              <span className="text-lg font-semibold tracking-tight text-slate-900">
                 {fixture.awayTeam}
               </span>
               {(fixture.status !== 'Scheduled' || fixture.awaitingResult) && (
@@ -316,9 +332,11 @@ export function FixtureCard({
               />
             }
           >
-            <span className="min-w-0 break-words font-semibold leading-snug text-slate-900">
-              {angle.market.label}
-            </span>
+            <MarketLabelChip
+              label={angle.market.label}
+              marketType={angle.market.marketType}
+              className="min-w-0 break-words"
+            />
             <span className="font-mono font-semibold tabular-nums text-slate-700">
               @ {fmtOdds(angle.market.odds)}
             </span>
@@ -366,15 +384,17 @@ export function FixtureCard({
 
         {angle?.cover && (!compact || isExpanded) && (
           <InsightCard tone="cover" label="Alternative cover">
-            <span className="min-w-0 break-words font-medium leading-snug text-slate-900">
-              {angle.cover.label}
-            </span>
+            <MarketLabelChip
+              label={angle.cover.label}
+              marketType={angle.cover.marketType}
+              className="min-w-0 break-words"
+            />
             <span className="font-mono font-semibold tabular-nums text-slate-900">
               @ {fmtOdds(angle.cover.odds)}
             </span>
             {/* The angle row above owns the price/fair/confidence numbers. The
                 cover is here to explain the safer alternative, not repeat them. */}
-            <span className="text-slate-600">
+            <span className="rounded border border-sky-200 bg-white/85 px-1.5 py-0.5 text-xs font-medium text-sky-800">
               Safer side from a different market
             </span>
             <PickResultChip status={coverOutcome} label="Cover" />
@@ -397,7 +417,7 @@ export function FixtureCard({
                 {noteBand}
               </span>
             )}
-            <span>{analystNote}</span>
+            <ResearchNoteText note={analystNote} />
           </InsightCard>
         )}
 

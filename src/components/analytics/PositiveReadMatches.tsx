@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   ArrowRight,
   CalendarDays,
@@ -39,6 +39,7 @@ import {
 } from '../../utils/positiveReadFilters.ts';
 import { DateNavigator } from '../DateNavigator.tsx';
 import { DataCard } from '../ui/DataCard.tsx';
+import { MarketLabelText } from '../ui/MarketLabel.tsx';
 import { EmptyState, ErrorState, InlineLoading, LoadingState } from '../ui/States.tsx';
 import { PositiveReadDrillDown } from './PositiveReadDrillDown.tsx';
 
@@ -106,7 +107,7 @@ function ComboChip({
     .filter(Boolean)
     .join(' · ');
 
-  const detailRows: Array<[string, string]> = [
+  const detailRows: Array<[string, ReactNode]> = [
     ['Parameter', combo.label],
     ['ROI', fmtSignedPercent(combo.roi)],
     ['95% interval', `${fmtSignedPercent(combo.roiCiLow)} to ${fmtSignedPercent(combo.roiCiHigh)}`],
@@ -118,7 +119,10 @@ function ComboChip({
     detailRows.push(['Fixtures on this matchday', fmtCount(matchCount)]);
   }
   if (pick) {
-    detailRows.push(['Market', pick.marketLabel]);
+    detailRows.push([
+      'Market',
+      <MarketLabelText label={pick.marketLabel} marketType={pick.marketType} />,
+    ]);
     detailRows.push(['Odds', fmtOdds(pick.odds)]);
     if (pick.fairProbability != null) {
       detailRows.push(['Fair probability', `${pick.fairProbability.toFixed(1)}%`]);
