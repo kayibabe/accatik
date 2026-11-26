@@ -14,6 +14,7 @@ import type {
 import { assessFixtureFramework } from '../../src/framework/assessment.ts';
 import { FRAMEWORK_VERSION } from '../../src/framework/config.ts';
 import { resolveMarketSelection } from '../../src/utils/marketSelection.ts';
+import type { TeamKeyResolver } from './frameworkHistory.ts';
 
 /**
  * Server-side bridge between the app's `Fixture` shape and the pure framework.
@@ -34,13 +35,22 @@ function toMarketInput(
   };
 }
 
-function toAssessmentInput(fixture: Fixture): AssessmentFixtureInput {
+function toAssessmentInput(
+  fixture: Fixture,
+  resolveTeamKey?: TeamKeyResolver
+): AssessmentFixtureInput {
   const all = fixture.allMarkets ?? fixture.markets;
   return {
     id: fixture.id,
     homeTeam: fixture.homeTeam,
     awayTeam: fixture.awayTeam,
     competition: fixture.competition,
+    ...(resolveTeamKey
+      ? {
+          homeTeamKey: resolveTeamKey(fixture.country, fixture.homeTeam),
+          awayTeamKey: resolveTeamKey(fixture.country, fixture.awayTeam),
+        }
+      : {}),
     country: fixture.country,
     matchDateIso: fixture.matchDateIso,
     kickoffTimestamp: fixture.kickoffTimestamp,
@@ -99,16 +109,18 @@ export function attachFrameworkAssessment(
   fixture: Fixture,
   history: TeamMatchResult[],
   nowMs: number,
-  calibration?: Record<string, MarketCalibrationRecord> | null
+  calibration?: Record<string, MarketCalibrationRecord> | null,
+  resolveTeamKey?: TeamKeyResolver
 ): Fixture {
   if (fixture.status !== 'Scheduled' || fixture.markets.length === 0) {
     return fixture;
   }
 
-  const assessment = assessFixtureFramework(toAssessmentInput(fixture), history, {
-    nowMs,
-    calibration,
-  });
+  const assessment = assessFixtureFramework(
+    toAssessmentInput(fixture, resolveTeamKey),
+    history,
+    { nowMs, calibration }
+  );
   const byMarketId = new Map(
     assessment.markets.map((market) => [market.marketId, market])
   );
@@ -140,10 +152,11 @@ export function attachFrameworkAssessments(
   fixtures: Fixture[],
   history: TeamMatchResult[],
   nowMs: number = Date.now(),
-  calibration?: Record<string, MarketCalibrationRecord> | null
+  calibration?: Record<string, MarketCalibrationRecord> | null,
+  resolveTeamKey?: TeamKeyResolver
 ): Fixture[] {
   return fixtures.map((fixture) =>
-    attachFrameworkAssessment(fixture, history, nowMs, calibration)
+    attachFrameworkAssessment(fixture, history, nowMs, calibration, resolveTeamKey)
   );
 }
 

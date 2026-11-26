@@ -53,6 +53,10 @@ export interface AssessmentFixtureInput {
   awayTeam: string;
   competition: string;
   country: string;
+  /** Optional history identity overrides: domestic keys for cross-border ties. */
+  homeTeamKey?: string;
+  awayTeamKey?: string;
+  competitionKey?: string;
   matchDateIso: string;
   kickoffTimestamp?: number;
   status: 'Scheduled' | 'Live' | 'Finished' | 'Void';
@@ -203,9 +207,11 @@ export function assessFixtureFramework(
     `${fixture.country}::${name.trim().toLowerCase()}`;
 
   const modelInput = options.modelInput ?? buildModelInput({
-    homeTeamId: teamKey(fixture.homeTeam),
-    awayTeamId: teamKey(fixture.awayTeam),
-    competitionId: `${fixture.country}::${fixture.competition.trim().toLowerCase()}`,
+    homeTeamId: fixture.homeTeamKey || teamKey(fixture.homeTeam),
+    awayTeamId: fixture.awayTeamKey || teamKey(fixture.awayTeam),
+    competitionId:
+      fixture.competitionKey ||
+      `${fixture.country}::${fixture.competition.trim().toLowerCase()}`,
     asOfIso: fixture.matchDateIso,
     results: history,
     config: cfg,

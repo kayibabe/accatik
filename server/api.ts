@@ -68,7 +68,10 @@ import {
   stripFrameworkFromFixtures,
   summarizeFrameworkSlate,
 } from './lib/frameworkAssessment.ts';
-import { getFrameworkHistory } from './lib/frameworkHistory.ts';
+import {
+  buildTeamKeyResolver,
+  getFrameworkHistory,
+} from './lib/frameworkHistory.ts';
 import { getMarketCalibration } from './lib/marketCalibration.ts';
 import { applyFrameworkSlateControls } from './lib/frameworkSlate.ts';
 import { readRoiRegistry } from './lib/roiRegistry.ts';
@@ -1003,12 +1006,14 @@ export async function getTodayFixtures(
     // legacy resolver path.
     const frameworkHistory = await getFrameworkHistory();
     const calibration = await getMarketCalibration();
+    const resolveTeamKey = buildTeamKeyResolver(frameworkHistory);
     const decisionTime = Date.now();
     fixtures = attachFrameworkAssessments(
       fixtures,
       frameworkHistory,
       decisionTime,
-      calibration
+      calibration,
+      resolveTeamKey
     );
     // Slate controller: rank, cap and record every decision before picks are
     // built, so a capped selection can never reach the recommended ticket.
@@ -1756,12 +1761,14 @@ export async function getQualifiedPicks(body: unknown): Promise<
     ]);
     const frameworkHistory = await getFrameworkHistory();
     const calibration = await getMarketCalibration();
+    const resolveTeamKey = buildTeamKeyResolver(frameworkHistory);
     const decisionTime = Date.now();
     const assessed = attachFrameworkAssessments(
       loaded.fixtures,
       frameworkHistory,
       decisionTime,
-      calibration
+      calibration,
+      resolveTeamKey
     );
     const controlled = await applyFrameworkSlateControls(
       assessed,
@@ -1809,12 +1816,14 @@ export async function buildRoiAccaTicket(body: unknown): Promise<
     ]);
     const frameworkHistory = await getFrameworkHistory();
     const calibration = await getMarketCalibration();
+    const resolveTeamKey = buildTeamKeyResolver(frameworkHistory);
     const decisionTime = Date.now();
     const assessed = attachFrameworkAssessments(
       loaded.fixtures,
       frameworkHistory,
       decisionTime,
-      calibration
+      calibration,
+      resolveTeamKey
     );
     const controlled = await applyFrameworkSlateControls(
       assessed,
@@ -1925,12 +1934,14 @@ export function getAiBriefing(body: unknown): Promise<ApiResult<AiBriefingRespon
       const loaded = await getSlate(request.dateIso, false);
       const frameworkHistory = await getFrameworkHistory();
       const calibration = await getMarketCalibration();
+      const resolveTeamKey = buildTeamKeyResolver(frameworkHistory);
       const decisionTime = Date.now();
       const assessed = attachFrameworkAssessments(
         loaded.fixtures,
         frameworkHistory,
         decisionTime,
-        calibration
+        calibration,
+        resolveTeamKey
       );
       const controlled = await applyFrameworkSlateControls(
         assessed,

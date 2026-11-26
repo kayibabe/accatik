@@ -12,7 +12,12 @@ import {
   Wand2,
   X,
 } from 'lucide-react';
-import type { AccaLeg, AccaStrategy, Fixture } from '../types/fixtures.ts';
+import type {
+  AccaLeg,
+  AccaStrategy,
+  Fixture,
+  FrameworkSlateSummary,
+} from '../types/fixtures.ts';
 import {
   calculatePotentialReturn,
   calculateTotalOdds,
@@ -26,6 +31,7 @@ import {
   formatLeaguePosition,
   LEAGUE_POSITION_TITLE,
 } from '../utils/leaguePosition.ts';
+import { noQualifiedPicksCopy } from '../utils/frameworkAvailability.ts';
 import { isPreMatchFixture } from '../utils/priceQuality.ts';
 import {
   TICKET_MAX_LEGS_OPTIONS,
@@ -49,6 +55,8 @@ interface AccaTicketSlipProps {
   maxLegs: number;
   strategy: AccaStrategy;
   displayDate: string;
+  /** Matchday framework summary, used to explain an empty auto-built slip. */
+  framework?: FrameworkSlateSummary;
   stake: number;
   onChangeStake: (stake: number) => void;
   onChangeStrategy: (strategy: AccaStrategy) => void;
@@ -81,6 +89,7 @@ export function AccaTicketSlip({
   maxLegs,
   strategy,
   displayDate,
+  framework,
   stake,
   onChangeStake,
   onChangeStrategy,
@@ -114,6 +123,7 @@ export function AccaTicketSlip({
     0;
   const breakEvenProb = totalOdds > 1 ? 100 / totalOdds : null;
   const activeShape = matchTicketShape(strategy, minOdds, maxLegs);
+  const noQualifiedCopy = noQualifiedPicksCopy(framework, fixtures);
   const startedLeg =
     legs.find((leg) => {
       const fixture = fixtureMap.get(leg.fixtureId);
@@ -434,21 +444,31 @@ export function AccaTicketSlip({
       {legs.length === 0 ? (
         <div className="p-8 text-center space-y-3">
           <p className="text-sm font-semibold text-slate-900">
-            Your ticket slip is empty
+            {noQualifiedCopy ? noQualifiedCopy.headline : 'Your ticket slip is empty'}
           </p>
           <p className="text-sm text-slate-500 leading-relaxed">
-            Click any pre-match market odd from today&apos;s fixture board or
-            auto-build a {minOdds.toFixed(2)}+ accumulator of up to {maxLegs}{' '}
-            legs.
+            {noQualifiedCopy
+              ? noQualifiedCopy.detail
+              : `Click any pre-match market odd from today's fixture board or auto-build a ${minOdds.toFixed(2)}+ accumulator of up to ${maxLegs} legs.`}
           </p>
-          <button
-            type="button"
-            onClick={onAutoCompleteToTarget}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
-          >
-            <Wand2 className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>Build {minOdds.toFixed(2)}+ Acca</span>
-          </button>
+          {noQualifiedCopy ? (
+            <p
+              role="status"
+              className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"
+            >
+              Auto-build stays off until a market qualifies. Manual picks are
+              unaffected.
+            </p>
+          ) : (
+            <button
+              type="button"
+              onClick={onAutoCompleteToTarget}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
+            >
+              <Wand2 className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Build {minOdds.toFixed(2)}+ Acca</span>
+            </button>
+          )}
         </div>
       ) : (
         <div className="divide-y divide-slate-200 max-h-[380px] overflow-y-auto">

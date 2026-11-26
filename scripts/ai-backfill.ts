@@ -13,7 +13,10 @@ import {
   recordAiBriefing,
 } from '../server/lib/aiDeskArchive.ts';
 import { attachFrameworkAssessments } from '../server/lib/frameworkAssessment.ts';
-import { getFrameworkHistory } from '../server/lib/frameworkHistory.ts';
+import {
+  buildTeamKeyResolver,
+  getFrameworkHistory,
+} from '../server/lib/frameworkHistory.ts';
 import { applyFrameworkSlateControls } from '../server/lib/frameworkSlate.ts';
 import { getMarketCalibration } from '../server/lib/marketCalibration.ts';
 import { computeCombinationRoi } from '../server/lib/combinationRoi.ts';
@@ -103,6 +106,7 @@ async function main(): Promise<void> {
     getMarketCalibration(),
     getLedgerSummary(),
   ]);
+  const resolveTeamKey = buildTeamKeyResolver(frameworkHistory);
   const workbench = await Promise.all(
     STRATEGIES.map(async (strategy) => ({
       strategy,
@@ -136,7 +140,8 @@ async function main(): Promise<void> {
             slate.fixtures.map(asPrematch),
             frameworkHistory,
             decisionMs,
-            calibration
+            calibration,
+            resolveTeamKey
           );
           // Replay must not rewrite the durable framework decision log.
           const controlled = await applyFrameworkSlateControls(

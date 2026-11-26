@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import type { FrameworkModelInput } from './model.ts';
+import type { FrameworkModelInput, TeamMatchResult } from './model.ts';
 import type { AssessmentFixtureInput } from './assessment.ts';
 import { assessFixtureFramework } from './assessment.ts';
 
@@ -28,6 +28,33 @@ const modelInput: FrameworkModelInput = {
   dataOk: true,
   providerAudited: false,
 };
+
+function crossBorderHistory(): TeamMatchResult[] {
+  const rows: TeamMatchResult[] = [];
+  for (let index = 0; index < 10; index += 1) {
+    rows.push({
+      fixtureId: `europe-${index}`,
+      teamId: 'England::home fc',
+      opponentId: 'Spain::away fc',
+      goalsFor: 2,
+      goalsAgainst: 1,
+      home: true,
+      dateIso: '2026-11-01',
+      competitionId: 'World::europe league',
+    });
+    rows.push({
+      fixtureId: `europe-${index}`,
+      teamId: 'Spain::away fc',
+      opponentId: 'England::home fc',
+      goalsFor: 1,
+      goalsAgainst: 2,
+      home: false,
+      dateIso: '2026-11-01',
+      competitionId: 'World::europe league',
+    });
+  }
+  return rows;
+}
 
 function fixture(
   overrides: Partial<AssessmentFixtureInput> = {}
@@ -81,6 +108,33 @@ test('no model input means INSUFFICIENT_DATA, not an invented probability', () =
       (market) => market.status === 'INSUFFICIENT_DATA' && market.pModel === null
     )
   );
+});
+
+test('explicit team identity keys find domestic history on a cross-border tie', () => {
+  const history = crossBorderHistory();
+  const crossBorder = {
+    country: 'World',
+    competition: 'Europe League',
+  };
+
+  const defaultLookup = assessFixtureFramework(fixture(crossBorder), history, {
+    nowMs: now,
+  });
+  assert.equal(defaultLookup.status, 'INSUFFICIENT_DATA');
+  assert.equal(defaultLookup.model, null);
+
+  const resolved = assessFixtureFramework(
+    fixture({
+      ...crossBorder,
+      homeTeamKey: 'England::home fc',
+      awayTeamKey: 'Spain::away fc',
+    }),
+    history,
+    { nowMs: now }
+  );
+  assert.equal(resolved.status !== 'INSUFFICIENT_DATA', true);
+  assert.ok(resolved.model);
+  assert.ok(Number.isFinite(resolved.model.lambdaHome));
 });
 
 test('a one-sided market is held as INCOMPLETE_MARKET', () => {

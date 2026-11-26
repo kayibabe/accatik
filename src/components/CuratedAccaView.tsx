@@ -8,7 +8,12 @@ import {
   RefreshCw,
   Wand2,
 } from 'lucide-react';
-import type { AccaLeg, Fixture, SavedTicket } from '../types/fixtures.ts';
+import type {
+  AccaLeg,
+  Fixture,
+  FrameworkSlateSummary,
+  SavedTicket,
+} from '../types/fixtures.ts';
 import type { FixtureSnapshots } from '../utils/fixtureSnapshots.ts';
 import {
   calculatePotentialReturn,
@@ -17,6 +22,7 @@ import {
   formatTicketForCopy,
 } from '../utils/accaMath.ts';
 import { fmtCount, fmtMwk, fmtOdds, fmtPercent } from '../utils/format.ts';
+import { noQualifiedPicksCopy } from '../utils/frameworkAvailability.ts';
 import { isPreMatchFixture } from '../utils/priceQuality.ts';
 import { MAX_RECOMMENDED_LEGS, guardTicket } from '../utils/ticketGuard.ts';
 import type { SortDirection, SortState } from '../utils/tableSort.ts';
@@ -41,6 +47,8 @@ interface CuratedAccaViewProps {
   savedTickets: SavedTicket[];
   fixtureSnapshots: FixtureSnapshots;
   todayDate: string;
+  /** Matchday framework summary, used to explain an empty auto-built slip. */
+  framework?: FrameworkSlateSummary;
   minOdds: number;
   stake: number;
   onGoToSlate: () => void;
@@ -69,6 +77,7 @@ export function CuratedAccaView({
   savedTickets,
   fixtureSnapshots,
   todayDate,
+  framework,
   minOdds,
   stake,
   onGoToSlate,
@@ -98,6 +107,7 @@ export function CuratedAccaView({
   const canSave = legs.length > 0 && startedLeg === null;
   const isWideSlip = legs.length > MAX_RECOMMENDED_LEGS;
   const guard = guardTicket(legs, { wideResearchSlip: isWideSlip });
+  const noQualifiedCopy = noQualifiedPicksCopy(framework, fixtures);
 
   const handleCopy = async () => {
     if (legs.length === 0) return;
@@ -252,17 +262,36 @@ export function CuratedAccaView({
       {/* Leg-by-Leg Ledger */}
       {legs.length === 0 ? (
         <EmptyState
-          title="No selections currently on the ticket"
-          description="Generate a qualifying accumulator or build one on the fixture board. This review updates whenever the selected ticket changes."
+          title={
+            noQualifiedCopy
+              ? noQualifiedCopy.headline
+              : 'No selections currently on the ticket'
+          }
+          description={
+            noQualifiedCopy
+              ? noQualifiedCopy.detail
+              : 'Generate a qualifying accumulator or build one on the fixture board. This review updates whenever the selected ticket changes.'
+          }
           action={
-            <button
-              type="button"
-              onClick={onAutoComplete}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
-            >
-              <Wand2 className="w-3.5 h-3.5" aria-hidden="true" />
-              <span>Auto-complete from slate</span>
-            </button>
+            noQualifiedCopy ? (
+              <button
+                type="button"
+                onClick={onGoToSlate}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
+              >
+                <span>Pick on the fixture board</span>
+                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onAutoComplete}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
+              >
+                <Wand2 className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>Auto-complete from slate</span>
+              </button>
+            )
           }
         />
       ) : (

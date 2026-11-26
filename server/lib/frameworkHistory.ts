@@ -34,6 +34,43 @@ export function frameworkCompetitionKey(
   return `${country}::${competition.trim().toLowerCase()}`;
 }
 
+export type TeamKeyResolver = (country: string, team: string) => string;
+
+/**
+ * Resolves the history key for a team on a fixture.
+ *
+ * Archived results record a team under its domestic country, but a European
+ * or world competition fixture carries `country: "World"`. Keying both sides
+ * by the fixture country therefore hid almost every cross-border team from the
+ * model. This resolver keeps the exact country key when history has it and
+ * otherwise falls back to the team's most frequent domestic history key.
+ *
+ * Identity only: no result is filtered or synthesised here. Every probability
+ * still comes from point-in-time results inside `buildModelInput`.
+ */
+export function buildTeamKeyResolver(
+  history: TeamMatchResult[]
+): TeamKeyResolver {
+  const byName = new Map<string, Map<string, number>>();
+  for (const row of history) {
+    const separator = row.teamId.indexOf('::');
+    const name = (separator >= 0 ? row.teamId.slice(separator + 2) : row.teamId).toLowerCase();
+    const keys = byName.get(name) ?? new Map<string, number>();
+    keys.set(row.teamId, (keys.get(row.teamId) ?? 0) + 1);
+    byName.set(name, keys);
+  }
+
+  return (country: string, team: string): string => {
+    const exact = frameworkTeamKey(country, team);
+    const candidates = byName.get(team.trim().toLowerCase());
+    if (!candidates || candidates.has(exact)) return exact;
+
+    const ranked = [...candidates.entries()].sort((a, b) => b[1] - a[1]);
+    const domestic = ranked.filter(([key]) => !key.toLowerCase().startsWith('world::'));
+    return (domestic[0] ?? ranked[0])[0];
+  };
+}
+
 function fixtureDateIso(fixture: Fixture): string | null {
   if (/^\d{4}-\d{2}-\d{2}$/.test(fixture.matchDateIso)) {
     return fixture.matchDateIso;

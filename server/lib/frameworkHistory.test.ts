@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import type { TeamMatchResult } from '../../src/framework/model.ts';
 import { makeFixture } from '../../src/utils/testFactories.ts';
-import { resultsFromFinishedFixture } from './frameworkHistory.ts';
+import {
+  buildTeamKeyResolver,
+  resultsFromFinishedFixture,
+} from './frameworkHistory.ts';
 
 test('a finished fixture becomes one home and one away result', () => {
   const fixture = makeFixture({
@@ -64,4 +68,55 @@ test('a 0-0 is real history, not a missing result', () => {
   assert.equal(rows.length, 2);
   assert.equal(rows[0].goalsFor, 0);
   assert.equal(rows[1].goalsFor, 0);
+});
+
+function historyRow(teamId: string, fixtureId: string): TeamMatchResult {
+  return {
+    fixtureId,
+    teamId,
+    opponentId: 'England::opponent fc',
+    goalsFor: 1,
+    goalsAgainst: 1,
+    home: true,
+    dateIso: '2026-11-01',
+    competitionId: 'England::league',
+  };
+}
+
+test('a team key resolver keeps an exact country key when history has one', () => {
+  const resolve = buildTeamKeyResolver([
+    historyRow('World::home fc', 'world-1'),
+    historyRow('England::home fc', 'england-1'),
+  ]);
+
+  assert.equal(resolve('World', 'Home FC'), 'World::home fc');
+  assert.equal(resolve('England', 'Home FC'), 'England::home fc');
+});
+
+test('a cross-border team resolves to its domestic history key', () => {
+  const resolve = buildTeamKeyResolver([
+    historyRow('Croatia::dinamo zagreb', 'zagreb-1'),
+    historyRow('Croatia::dinamo zagreb', 'zagreb-2'),
+  ]);
+
+  assert.equal(resolve('World', 'Dinamo Zagreb'), 'Croatia::dinamo zagreb');
+});
+
+test('an ambiguous team name prefers the most frequent domestic key', () => {
+  const resolve = buildTeamKeyResolver([
+    historyRow('World::rangers', 'world-1'),
+    historyRow('World::rangers', 'world-2'),
+    historyRow('World::rangers', 'world-3'),
+    historyRow('Scotland::rangers', 'scot-1'),
+    historyRow('Scotland::rangers', 'scot-2'),
+    historyRow('England::rangers', 'eng-1'),
+  ]);
+
+  assert.equal(resolve('Europe', 'Rangers'), 'Scotland::rangers');
+});
+
+test('a team with no history falls back to the fixture country key', () => {
+  const resolve = buildTeamKeyResolver([historyRow('England::home fc', 'fixture-1')]);
+
+  assert.equal(resolve('World', 'Unknown FC'), 'World::unknown fc');
 });

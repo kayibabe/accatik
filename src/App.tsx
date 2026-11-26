@@ -1310,6 +1310,7 @@ export default function App() {
                     maxLegs={maxLegs}
                     strategy={strategy}
                     displayDate={viewSlate.displayDate}
+                    framework={viewSlate.framework}
                     stake={stake}
                     onChangeStake={setStake}
                     onChangeStrategy={handleChangeStrategy}
@@ -1344,6 +1345,7 @@ export default function App() {
                 savedTickets={savedTickets}
                 fixtureSnapshots={fixtureSnapshots}
                 todayDate={todayDate}
+                framework={viewSlate.framework}
                 minOdds={minOdds}
                 stake={stake}
                 onGoToSlate={() => navigate('slate')}
